@@ -1,0 +1,1443 @@
+{
+  "_note": "Synthetic transactions, 19 Jul to 16 Oct 2026, keyed by customer. Provider names are fictional.",
+  "customers": {
+    "C-10042": [
+      {
+        "transaction_id": "TX-0001",
+        "date": "2026-07-20",
+        "descriptor": "HOPEWELL TRUST DD107420",
+        "amount": -10.0,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0002",
+        "date": "2026-07-21",
+        "descriptor": "FRESHWAY SUPERSTORE 2231 LEEDS",
+        "amount": -86.42,
+        "type": "CARD"
+      },
+      {
+        "transaction_id": "TX-0003",
+        "date": "2026-07-26",
+        "descriptor": "FUELSTOP HEADINGLEY",
+        "amount": -61.1,
+        "type": "CARD"
+      },
+      {
+        "transaction_id": "TX-0004",
+        "date": "2026-07-27",
+        "descriptor": "NORTHWAY BS MTG 117427",
+        "amount": -1045.3,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0005",
+        "date": "2026-07-28",
+        "descriptor": "SALARY ACME LOGISTICS",
+        "amount": 3120.0,
+        "type": "CREDIT"
+      },
+      {
+        "transaction_id": "TX-0006",
+        "date": "2026-08-01",
+        "descriptor": "TV LICENCE MBP 168401",
+        "amount": -14.95,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0007",
+        "date": "2026-08-01",
+        "descriptor": "DVLA-VEH TAX 178401",
+        "amount": -16.63,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0008",
+        "date": "2026-08-01",
+        "descriptor": "LITTLE ACORNS NURSERY SO",
+        "amount": -612.0,
+        "type": "SO"
+      },
+      {
+        "transaction_id": "TX-0009",
+        "date": "2026-08-02",
+        "descriptor": "PULSEGYM LEEDS MBR218402",
+        "amount": -39.0,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0010",
+        "date": "2026-08-02",
+        "descriptor": "THE COPPER KETTLE CAFE",
+        "amount": -14.6,
+        "type": "CARD"
+      },
+      {
+        "transaction_id": "TX-0011",
+        "date": "2026-08-03",
+        "descriptor": "BRIGHTWATT EN DD 0034X128403",
+        "amount": -112.4,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0012",
+        "date": "2026-08-05",
+        "descriptor": "NVW WATER SVCS 138405",
+        "amount": -41.75,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0013",
+        "date": "2026-08-07",
+        "descriptor": "FRESHWAY SUPERSTORE 2231 LEEDS",
+        "amount": -102.15,
+        "type": "CARD"
+      },
+      {
+        "transaction_id": "TX-0014",
+        "date": "2026-08-08",
+        "descriptor": "FIBRELY BB 148408",
+        "amount": -34.99,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0015",
+        "date": "2026-08-09",
+        "descriptor": "VOXMOBILE LTD 0771158409",
+        "amount": -22.0,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0016",
+        "date": "2026-08-12",
+        "descriptor": "SHIELDMOTOR INS POL188412",
+        "amount": -48.2,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0017",
+        "date": "2026-08-12",
+        "descriptor": "HEARTHGUARD HM INS 198412",
+        "amount": -27.1,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0018",
+        "date": "2026-08-14",
+        "descriptor": "TFR TO A MORGAN SAVINGS",
+        "amount": -300.0,
+        "type": "TRANSFER"
+      },
+      {
+        "transaction_id": "TX-0019",
+        "date": "2026-08-15",
+        "descriptor": "PAWSURE LTD 208415 PETPOL",
+        "amount": -19.85,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0020",
+        "date": "2026-08-18",
+        "descriptor": "STREAMBOX.TV 228418",
+        "amount": -10.99,
+        "type": "CARD"
+      },
+      {
+        "transaction_id": "TX-0021",
+        "date": "2026-08-19",
+        "descriptor": "PETSTOP SUPPLIES LEEDS",
+        "amount": -42.99,
+        "type": "CARD"
+      },
+      {
+        "transaction_id": "TX-0022",
+        "date": "2026-08-20",
+        "descriptor": "HOPEWELL TRUST DD238420",
+        "amount": -10.0,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0023",
+        "date": "2026-08-23",
+        "descriptor": "FUELSTOP HEADINGLEY",
+        "amount": -58.75,
+        "type": "CARD"
+      },
+      {
+        "transaction_id": "TX-0024",
+        "date": "2026-08-27",
+        "descriptor": "NORTHWAY BS MTG 258427",
+        "amount": -1045.3,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0025",
+        "date": "2026-08-28",
+        "descriptor": "SALARY ACME LOGISTICS",
+        "amount": 3120.0,
+        "type": "CREDIT"
+      },
+      {
+        "transaction_id": "TX-0026",
+        "date": "2026-09-01",
+        "descriptor": "TV LICENCE MBP 309401",
+        "amount": -14.95,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0027",
+        "date": "2026-09-01",
+        "descriptor": "DVLA-VEH TAX 319401",
+        "amount": -16.63,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0028",
+        "date": "2026-09-01",
+        "descriptor": "LITTLE ACORNS NURSERY SO",
+        "amount": -612.0,
+        "type": "SO"
+      },
+      {
+        "transaction_id": "TX-0029",
+        "date": "2026-09-02",
+        "descriptor": "PULSEGYM LEEDS MBR359402",
+        "amount": -39.0,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0030",
+        "date": "2026-09-03",
+        "descriptor": "BRIGHTWATT EN DD 0034X269403",
+        "amount": -112.4,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0031",
+        "date": "2026-09-04",
+        "descriptor": "BELLA NAPOLI RESTAURANT",
+        "amount": -64.3,
+        "type": "CARD"
+      },
+      {
+        "transaction_id": "TX-0032",
+        "date": "2026-09-05",
+        "descriptor": "NVW WATER SVCS 279405",
+        "amount": -41.75,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0033",
+        "date": "2026-09-06",
+        "descriptor": "FRESHWAY SUPERSTORE 2231 LEEDS",
+        "amount": -94.08,
+        "type": "CARD"
+      },
+      {
+        "transaction_id": "TX-0034",
+        "date": "2026-09-08",
+        "descriptor": "FIBRELY BB 289408",
+        "amount": -34.99,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0035",
+        "date": "2026-09-09",
+        "descriptor": "VOXMOBILE LTD 0771299409",
+        "amount": -22.0,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0036",
+        "date": "2026-09-12",
+        "descriptor": "SHIELDMOTOR INS POL329412",
+        "amount": -48.2,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0037",
+        "date": "2026-09-12",
+        "descriptor": "HEARTHGUARD HM INS 339412",
+        "amount": -27.1,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0038",
+        "date": "2026-09-13",
+        "descriptor": "CITYPARK LEEDS 4471",
+        "amount": -8.4,
+        "type": "CARD"
+      },
+      {
+        "transaction_id": "TX-0039",
+        "date": "2026-09-15",
+        "descriptor": "PAWSURE LTD 349415 PETPOL",
+        "amount": -19.85,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0040",
+        "date": "2026-09-18",
+        "descriptor": "STREAMBOX.TV 369418",
+        "amount": -10.99,
+        "type": "CARD"
+      },
+      {
+        "transaction_id": "TX-0041",
+        "date": "2026-09-20",
+        "descriptor": "HOPEWELL TRUST DD379420",
+        "amount": -10.0,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0042",
+        "date": "2026-09-20",
+        "descriptor": "FUELSTOP HEADINGLEY",
+        "amount": -63.2,
+        "type": "CARD"
+      },
+      {
+        "transaction_id": "TX-0043",
+        "date": "2026-09-27",
+        "descriptor": "NORTHWAY BS MTG 399427",
+        "amount": -1045.3,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0044",
+        "date": "2026-09-28",
+        "descriptor": "SALARY ACME LOGISTICS",
+        "amount": 3120.0,
+        "type": "CREDIT"
+      },
+      {
+        "transaction_id": "TX-0045",
+        "date": "2026-10-01",
+        "descriptor": "TV LICENCE MBP 4410401",
+        "amount": -14.95,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0046",
+        "date": "2026-10-01",
+        "descriptor": "DVLA-VEH TAX 4510401",
+        "amount": -16.63,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0047",
+        "date": "2026-10-01",
+        "descriptor": "LITTLE ACORNS NURSERY SO",
+        "amount": -612.0,
+        "type": "SO"
+      },
+      {
+        "transaction_id": "TX-0048",
+        "date": "2026-10-02",
+        "descriptor": "PULSEGYM LEEDS MBR4910402",
+        "amount": -39.0,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0049",
+        "date": "2026-10-03",
+        "descriptor": "BRIGHTWATT EN DD 0034X4010403",
+        "amount": -112.4,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0050",
+        "date": "2026-10-03",
+        "descriptor": "FRESHWAY SUPERSTORE 2231 LEEDS",
+        "amount": -88.91,
+        "type": "CARD"
+      },
+      {
+        "transaction_id": "TX-0051",
+        "date": "2026-10-05",
+        "descriptor": "NVW WATER SVCS 4110405",
+        "amount": -41.75,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0052",
+        "date": "2026-10-08",
+        "descriptor": "FIBRELY BB 4210408",
+        "amount": -34.99,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0053",
+        "date": "2026-10-08",
+        "descriptor": "MERIDIAN VETS LEEDS",
+        "amount": -55.0,
+        "type": "CARD"
+      },
+      {
+        "transaction_id": "TX-0054",
+        "date": "2026-10-09",
+        "descriptor": "VOXMOBILE LTD 07714310409",
+        "amount": -22.0,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0055",
+        "date": "2026-10-10",
+        "descriptor": "TFR TO A MORGAN SAVINGS",
+        "amount": -300.0,
+        "type": "TRANSFER"
+      },
+      {
+        "transaction_id": "TX-0056",
+        "date": "2026-10-12",
+        "descriptor": "SHIELDMOTOR INS POL4610412",
+        "amount": -48.2,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0057",
+        "date": "2026-10-12",
+        "descriptor": "HEARTHGUARD HM INS 4710412",
+        "amount": -27.1,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0058",
+        "date": "2026-10-15",
+        "descriptor": "PAWSURE LTD 4810415 PETPOL",
+        "amount": -19.85,
+        "type": "DD"
+      }
+    ],
+    "C-20001": [
+      {
+        "transaction_id": "TX-0001-001",
+        "date": "2026-07-20",
+        "descriptor": "TALKMORE MOBILE 107720",
+        "amount": -15.0,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0001-002",
+        "date": "2026-07-24",
+        "descriptor": "FRESHWAY SUPERSTORE HALIFAX",
+        "amount": -54.2,
+        "type": "CARD"
+      },
+      {
+        "transaction_id": "TX-0001-003",
+        "date": "2026-07-27",
+        "descriptor": "SKIPTON RD BS MTG 114727",
+        "amount": -812.4,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0001-004",
+        "date": "2026-08-01",
+        "descriptor": "TV LICENCE MBP 149801",
+        "amount": -14.95,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0001-005",
+        "date": "2026-08-02",
+        "descriptor": "NORTHGATE ENERGY DD 121802",
+        "amount": -96.2,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0001-006",
+        "date": "2026-08-03",
+        "descriptor": "INVOICE PAYMENT CLIENT CO",
+        "amount": 2400.0,
+        "type": "CREDIT"
+      },
+      {
+        "transaction_id": "TX-0001-007",
+        "date": "2026-08-05",
+        "descriptor": "YOGAFLOW HALIFAX",
+        "amount": -45.0,
+        "type": "CARD"
+      },
+      {
+        "transaction_id": "TX-0001-008",
+        "date": "2026-08-06",
+        "descriptor": "PENNINE WATER 128806",
+        "amount": -38.4,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0001-009",
+        "date": "2026-08-09",
+        "descriptor": "LUMEN FIBRE 142809",
+        "amount": -29.99,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0001-010",
+        "date": "2026-08-10",
+        "descriptor": "CALDERDALE MBC CTAX 135810",
+        "amount": -142.0,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0001-011",
+        "date": "2026-08-14",
+        "descriptor": "HEARTHGUARD HM INS 156814",
+        "amount": -18.6,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0001-012",
+        "date": "2026-08-20",
+        "descriptor": "TALKMORE MOBILE 163820",
+        "amount": -15.0,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0001-013",
+        "date": "2026-08-21",
+        "descriptor": "BOOKNOOK HALIFAX",
+        "amount": -12.99,
+        "type": "CARD"
+      },
+      {
+        "transaction_id": "TX-0001-014",
+        "date": "2026-08-27",
+        "descriptor": "SKIPTON RD BS MTG 177827",
+        "amount": -812.4,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0001-015",
+        "date": "2026-09-01",
+        "descriptor": "TV LICENCE MBP 212901",
+        "amount": -14.95,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0001-016",
+        "date": "2026-09-02",
+        "descriptor": "NORTHGATE ENERGY DD 184902",
+        "amount": -96.2,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0001-017",
+        "date": "2026-09-05",
+        "descriptor": "YOGAFLOW HALIFAX",
+        "amount": -45.0,
+        "type": "CARD"
+      },
+      {
+        "transaction_id": "TX-0001-018",
+        "date": "2026-09-06",
+        "descriptor": "PENNINE WATER 191906",
+        "amount": -38.4,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0001-019",
+        "date": "2026-09-09",
+        "descriptor": "LUMEN FIBRE 205909",
+        "amount": -29.99,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0001-020",
+        "date": "2026-09-09",
+        "descriptor": "FRESHWAY SUPERSTORE HALIFAX",
+        "amount": -61.75,
+        "type": "CARD"
+      },
+      {
+        "transaction_id": "TX-0001-021",
+        "date": "2026-09-10",
+        "descriptor": "CALDERDALE MBC CTAX 198910",
+        "amount": -142.0,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0001-022",
+        "date": "2026-09-14",
+        "descriptor": "HEARTHGUARD HM INS 219914",
+        "amount": -18.6,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0001-023",
+        "date": "2026-09-20",
+        "descriptor": "TALKMORE MOBILE 226920",
+        "amount": -15.0,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0001-024",
+        "date": "2026-09-27",
+        "descriptor": "SKIPTON RD BS MTG 240927",
+        "amount": -812.4,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0001-025",
+        "date": "2026-09-30",
+        "descriptor": "TRAIN TICKETS ONLINE",
+        "amount": -48.3,
+        "type": "CARD"
+      },
+      {
+        "transaction_id": "TX-0001-026",
+        "date": "2026-10-01",
+        "descriptor": "TV LICENCE MBP 2751001",
+        "amount": -14.95,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0001-027",
+        "date": "2026-10-02",
+        "descriptor": "NORTHGATE ENERGY DD 2471002",
+        "amount": -96.2,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0001-028",
+        "date": "2026-10-05",
+        "descriptor": "YOGAFLOW HALIFAX",
+        "amount": -45.0,
+        "type": "CARD"
+      },
+      {
+        "transaction_id": "TX-0001-029",
+        "date": "2026-10-06",
+        "descriptor": "PENNINE WATER 2541006",
+        "amount": -38.4,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0001-030",
+        "date": "2026-10-08",
+        "descriptor": "FRESHWAY SUPERSTORE HALIFAX",
+        "amount": -58.1,
+        "type": "CARD"
+      },
+      {
+        "transaction_id": "TX-0001-031",
+        "date": "2026-10-09",
+        "descriptor": "LUMEN FIBRE 2681009",
+        "amount": -29.99,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0001-032",
+        "date": "2026-10-10",
+        "descriptor": "CALDERDALE MBC CTAX 2611010",
+        "amount": -142.0,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0001-033",
+        "date": "2026-10-14",
+        "descriptor": "HEARTHGUARD HM INS 2821014",
+        "amount": -18.6,
+        "type": "DD"
+      }
+    ],
+    "C-20002": [
+      {
+        "transaction_id": "TX-0002-001",
+        "date": "2026-07-25",
+        "descriptor": "CORNERSHOP BYRES RD",
+        "amount": -22.1,
+        "type": "CARD"
+      },
+      {
+        "transaction_id": "TX-0002-002",
+        "date": "2026-07-26",
+        "descriptor": "CLYDESIDE BS MTG 207726",
+        "amount": -1190.0,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0002-003",
+        "date": "2026-07-28",
+        "descriptor": "SALARY CLYDE HEALTH BOARD",
+        "amount": 2980.0,
+        "type": "CREDIT"
+      },
+      {
+        "transaction_id": "TX-0002-004",
+        "date": "2026-08-01",
+        "descriptor": "GLASGOW CITY COUNCIL CT 221801",
+        "amount": -176.3,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0002-005",
+        "date": "2026-08-01",
+        "descriptor": "TV LICENCE MBP 235801",
+        "amount": -14.95,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0002-006",
+        "date": "2026-08-01",
+        "descriptor": "DVLA-VEH TAX 242801",
+        "amount": -16.63,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0002-007",
+        "date": "2026-08-01",
+        "descriptor": "WESTEND OUT OF SCHOOL CLUB SO",
+        "amount": -180.0,
+        "type": "SO"
+      },
+      {
+        "transaction_id": "TX-0002-008",
+        "date": "2026-08-03",
+        "descriptor": "DVLA-VEH TAX 249803",
+        "amount": -24.5,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0002-009",
+        "date": "2026-08-04",
+        "descriptor": "BRIGHTWATT EN DD 0091214804",
+        "amount": -128.75,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0002-010",
+        "date": "2026-08-08",
+        "descriptor": "FIBRELY BB 228808",
+        "amount": -36.99,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0002-011",
+        "date": "2026-08-12",
+        "descriptor": "SHIELDMOTOR INS POL256812",
+        "amount": -61.3,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0002-012",
+        "date": "2026-08-12",
+        "descriptor": "FUELSTOP GREAT WESTERN RD",
+        "amount": -66.4,
+        "type": "CARD"
+      },
+      {
+        "transaction_id": "TX-0002-013",
+        "date": "2026-08-13",
+        "descriptor": "SHIELDMOTOR INS POL263813",
+        "amount": -39.8,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0002-014",
+        "date": "2026-08-15",
+        "descriptor": "PAWSURE LTD 270815 PETPOL",
+        "amount": -22.4,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0002-015",
+        "date": "2026-08-16",
+        "descriptor": "CLYDE HOME COVER 277816",
+        "amount": -24.1,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0002-016",
+        "date": "2026-08-26",
+        "descriptor": "CLYDESIDE BS MTG 291826",
+        "amount": -1190.0,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0002-017",
+        "date": "2026-08-30",
+        "descriptor": "DOGGY DAYCARE G12",
+        "amount": -35.0,
+        "type": "CARD"
+      },
+      {
+        "transaction_id": "TX-0002-018",
+        "date": "2026-09-01",
+        "descriptor": "GLASGOW CITY COUNCIL CT 305901",
+        "amount": -176.3,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0002-019",
+        "date": "2026-09-01",
+        "descriptor": "TV LICENCE MBP 319901",
+        "amount": -14.95,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0002-020",
+        "date": "2026-09-01",
+        "descriptor": "DVLA-VEH TAX 326901",
+        "amount": -16.63,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0002-021",
+        "date": "2026-09-01",
+        "descriptor": "WESTEND OUT OF SCHOOL CLUB SO",
+        "amount": -180.0,
+        "type": "SO"
+      },
+      {
+        "transaction_id": "TX-0002-022",
+        "date": "2026-09-03",
+        "descriptor": "DVLA-VEH TAX 333903",
+        "amount": -24.5,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0002-023",
+        "date": "2026-09-04",
+        "descriptor": "BRIGHTWATT EN DD 0091298904",
+        "amount": -128.75,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0002-024",
+        "date": "2026-09-08",
+        "descriptor": "FIBRELY BB 312908",
+        "amount": -36.99,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0002-025",
+        "date": "2026-09-12",
+        "descriptor": "SHIELDMOTOR INS POL340912",
+        "amount": -61.3,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0002-026",
+        "date": "2026-09-13",
+        "descriptor": "SHIELDMOTOR INS POL347913",
+        "amount": -39.8,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0002-027",
+        "date": "2026-09-15",
+        "descriptor": "PAWSURE LTD 354915 PETPOL",
+        "amount": -22.4,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0002-028",
+        "date": "2026-09-16",
+        "descriptor": "CLYDE HOME COVER 361916",
+        "amount": -24.1,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0002-029",
+        "date": "2026-09-18",
+        "descriptor": "FUELSTOP GREAT WESTERN RD",
+        "amount": -71.05,
+        "type": "CARD"
+      },
+      {
+        "transaction_id": "TX-0002-030",
+        "date": "2026-09-26",
+        "descriptor": "CLYDESIDE BS MTG 375926",
+        "amount": -1190.0,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0002-031",
+        "date": "2026-10-01",
+        "descriptor": "GLASGOW CITY COUNCIL CT 3891001",
+        "amount": -176.3,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0002-032",
+        "date": "2026-10-01",
+        "descriptor": "TV LICENCE MBP 4031001",
+        "amount": -14.95,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0002-033",
+        "date": "2026-10-01",
+        "descriptor": "DVLA-VEH TAX 4101001",
+        "amount": -16.63,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0002-034",
+        "date": "2026-10-01",
+        "descriptor": "WESTEND OUT OF SCHOOL CLUB SO",
+        "amount": -180.0,
+        "type": "SO"
+      },
+      {
+        "transaction_id": "TX-0002-035",
+        "date": "2026-10-02",
+        "descriptor": "CORNERSHOP BYRES RD",
+        "amount": -27.8,
+        "type": "CARD"
+      },
+      {
+        "transaction_id": "TX-0002-036",
+        "date": "2026-10-03",
+        "descriptor": "DVLA-VEH TAX 4171003",
+        "amount": -24.5,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0002-037",
+        "date": "2026-10-04",
+        "descriptor": "BRIGHTWATT EN DD 00913821004",
+        "amount": -128.75,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0002-038",
+        "date": "2026-10-08",
+        "descriptor": "FIBRELY BB 3961008",
+        "amount": -36.99,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0002-039",
+        "date": "2026-10-12",
+        "descriptor": "SHIELDMOTOR INS POL4241012",
+        "amount": -61.3,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0002-040",
+        "date": "2026-10-13",
+        "descriptor": "SHIELDMOTOR INS POL4311013",
+        "amount": -39.8,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0002-041",
+        "date": "2026-10-15",
+        "descriptor": "PAWSURE LTD 4381015 PETPOL",
+        "amount": -22.4,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0002-042",
+        "date": "2026-10-16",
+        "descriptor": "CLYDE HOME COVER 4451016",
+        "amount": -24.1,
+        "type": "DD"
+      }
+    ],
+    "C-20003": [
+      {
+        "transaction_id": "TX-0003-001",
+        "date": "2026-07-19",
+        "descriptor": "FLIXPLUS 307719",
+        "amount": -8.99,
+        "type": "CARD"
+      },
+      {
+        "transaction_id": "TX-0003-002",
+        "date": "2026-07-22",
+        "descriptor": "CAFE ROATH",
+        "amount": -9.4,
+        "type": "CARD"
+      },
+      {
+        "transaction_id": "TX-0003-003",
+        "date": "2026-07-28",
+        "descriptor": "TAFF BS MTG 314728",
+        "amount": -905.75,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0003-004",
+        "date": "2026-07-31",
+        "descriptor": "SALARY DATAWELL LTD",
+        "amount": 2650.0,
+        "type": "CREDIT"
+      },
+      {
+        "transaction_id": "TX-0003-005",
+        "date": "2026-08-01",
+        "descriptor": "CARDIFF COUNCIL TAX 335801",
+        "amount": -151.2,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0003-006",
+        "date": "2026-08-01",
+        "descriptor": "DVLA-VEH TAX 349801",
+        "amount": -20.0,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0003-007",
+        "date": "2026-08-05",
+        "descriptor": "TAFF VALLEY WATER 321805",
+        "amount": -44.1,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0003-008",
+        "date": "2026-08-07",
+        "descriptor": "NORTHGATE ENERGY DD 328807",
+        "amount": -88.4,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0003-009",
+        "date": "2026-08-09",
+        "descriptor": "LUMEN FIBRE 342809",
+        "amount": -32.0,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0003-010",
+        "date": "2026-08-12",
+        "descriptor": "SHIELDMOTOR INS POL356812",
+        "amount": -52.7,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0003-011",
+        "date": "2026-08-14",
+        "descriptor": "HEARTHGUARD HM INS 363814",
+        "amount": -21.3,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0003-012",
+        "date": "2026-08-16",
+        "descriptor": "FUELSTOP NEWPORT RD",
+        "amount": -55.2,
+        "type": "CARD"
+      },
+      {
+        "transaction_id": "TX-0003-013",
+        "date": "2026-08-18",
+        "descriptor": "STREAMBOX.TV 370818",
+        "amount": -10.99,
+        "type": "CARD"
+      },
+      {
+        "transaction_id": "TX-0003-014",
+        "date": "2026-08-19",
+        "descriptor": "FLIXPLUS 377819",
+        "amount": -8.99,
+        "type": "CARD"
+      },
+      {
+        "transaction_id": "TX-0003-015",
+        "date": "2026-08-28",
+        "descriptor": "TAFF BS MTG 384828",
+        "amount": -905.75,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0003-016",
+        "date": "2026-09-01",
+        "descriptor": "CARDIFF COUNCIL TAX 405901",
+        "amount": -151.2,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0003-017",
+        "date": "2026-09-01",
+        "descriptor": "DVLA-VEH TAX 419901",
+        "amount": -20.0,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0003-018",
+        "date": "2026-09-05",
+        "descriptor": "TAFF VALLEY WATER 391905",
+        "amount": -44.1,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0003-019",
+        "date": "2026-09-05",
+        "descriptor": "CAFE ROATH",
+        "amount": -11.1,
+        "type": "CARD"
+      },
+      {
+        "transaction_id": "TX-0003-020",
+        "date": "2026-09-07",
+        "descriptor": "NORTHGATE ENERGY DD 398907",
+        "amount": -88.4,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0003-021",
+        "date": "2026-09-09",
+        "descriptor": "LUMEN FIBRE 412909",
+        "amount": -32.0,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0003-022",
+        "date": "2026-09-12",
+        "descriptor": "SHIELDMOTOR INS POL426912",
+        "amount": -52.7,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0003-023",
+        "date": "2026-09-14",
+        "descriptor": "HEARTHGUARD HM INS 433914",
+        "amount": -21.3,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0003-024",
+        "date": "2026-09-18",
+        "descriptor": "STREAMBOX.TV 440918",
+        "amount": -10.99,
+        "type": "CARD"
+      },
+      {
+        "transaction_id": "TX-0003-025",
+        "date": "2026-09-19",
+        "descriptor": "FLIXPLUS 447919",
+        "amount": -8.99,
+        "type": "CARD"
+      },
+      {
+        "transaction_id": "TX-0003-026",
+        "date": "2026-09-26",
+        "descriptor": "FUELSTOP NEWPORT RD",
+        "amount": -59.9,
+        "type": "CARD"
+      },
+      {
+        "transaction_id": "TX-0003-027",
+        "date": "2026-09-28",
+        "descriptor": "TAFF BS MTG 454928",
+        "amount": -905.75,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0003-028",
+        "date": "2026-10-01",
+        "descriptor": "CARDIFF COUNCIL TAX 4751001",
+        "amount": -151.2,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0003-029",
+        "date": "2026-10-01",
+        "descriptor": "DVLA-VEH TAX 4891001",
+        "amount": -20.0,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0003-030",
+        "date": "2026-10-05",
+        "descriptor": "TAFF VALLEY WATER 4611005",
+        "amount": -44.1,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0003-031",
+        "date": "2026-10-07",
+        "descriptor": "NORTHGATE ENERGY DD 4681007",
+        "amount": -88.4,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0003-032",
+        "date": "2026-10-09",
+        "descriptor": "LUMEN FIBRE 4821009",
+        "amount": -32.0,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0003-033",
+        "date": "2026-10-11",
+        "descriptor": "MUSIC VENUE CARDIFF",
+        "amount": -28.0,
+        "type": "CARD"
+      },
+      {
+        "transaction_id": "TX-0003-034",
+        "date": "2026-10-12",
+        "descriptor": "SHIELDMOTOR INS POL4961012",
+        "amount": -52.7,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0003-035",
+        "date": "2026-10-14",
+        "descriptor": "HEARTHGUARD HM INS 5031014",
+        "amount": -21.3,
+        "type": "DD"
+      }
+    ],
+    "C-20004": [
+      {
+        "transaction_id": "TX-0004-001",
+        "date": "2026-07-20",
+        "descriptor": "TALKMORE MOBILE 407720",
+        "amount": -18.0,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0004-002",
+        "date": "2026-07-23",
+        "descriptor": "SUPERVALUE LISBURN RD",
+        "amount": -73.4,
+        "type": "CARD"
+      },
+      {
+        "transaction_id": "TX-0004-003",
+        "date": "2026-07-25",
+        "descriptor": "LAGAN BS MTG 414725",
+        "amount": -980.0,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0004-004",
+        "date": "2026-07-29",
+        "descriptor": "SALARY BELFAST TRUST",
+        "amount": 2870.0,
+        "type": "CREDIT"
+      },
+      {
+        "transaction_id": "TX-0004-005",
+        "date": "2026-08-01",
+        "descriptor": "LPS RATES 421801",
+        "amount": -118.0,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0004-006",
+        "date": "2026-08-01",
+        "descriptor": "TV LICENCE MBP 442801",
+        "amount": -14.95,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0004-007",
+        "date": "2026-08-01",
+        "descriptor": "DVLA-VEH TAX 449801",
+        "amount": -18.5,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0004-008",
+        "date": "2026-08-03",
+        "descriptor": "LITTLE STEPS CRECHE BELFAST SO",
+        "amount": -540.0,
+        "type": "SO"
+      },
+      {
+        "transaction_id": "TX-0004-009",
+        "date": "2026-08-05",
+        "descriptor": "LAGANSIDE POWER 428805",
+        "amount": -104.3,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0004-010",
+        "date": "2026-08-08",
+        "descriptor": "FIBRELY BB 435808",
+        "amount": -31.99,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0004-011",
+        "date": "2026-08-12",
+        "descriptor": "SHIELDMOTOR INS POL456812",
+        "amount": -74.9,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0004-012",
+        "date": "2026-08-14",
+        "descriptor": "HEARTHGUARD HM INS 463814",
+        "amount": -26.4,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0004-013",
+        "date": "2026-08-14",
+        "descriptor": "FUELSTOP MALONE RD",
+        "amount": -62.1,
+        "type": "CARD"
+      },
+      {
+        "transaction_id": "TX-0004-014",
+        "date": "2026-08-20",
+        "descriptor": "TALKMORE MOBILE 470820",
+        "amount": -18.0,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0004-015",
+        "date": "2026-08-25",
+        "descriptor": "LAGAN BS MTG 484825",
+        "amount": -980.0,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0004-016",
+        "date": "2026-09-01",
+        "descriptor": "LPS RATES 491901",
+        "amount": -118.0,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0004-017",
+        "date": "2026-09-01",
+        "descriptor": "TV LICENCE MBP 512901",
+        "amount": -14.95,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0004-018",
+        "date": "2026-09-01",
+        "descriptor": "DVLA-VEH TAX 519901",
+        "amount": -18.5,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0004-019",
+        "date": "2026-09-02",
+        "descriptor": "BABY BITS BELFAST",
+        "amount": -39.99,
+        "type": "CARD"
+      },
+      {
+        "transaction_id": "TX-0004-020",
+        "date": "2026-09-03",
+        "descriptor": "LITTLE STEPS CRECHE BELFAST SO",
+        "amount": -540.0,
+        "type": "SO"
+      },
+      {
+        "transaction_id": "TX-0004-021",
+        "date": "2026-09-05",
+        "descriptor": "LAGANSIDE POWER 498905",
+        "amount": -104.3,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0004-022",
+        "date": "2026-09-08",
+        "descriptor": "FIBRELY BB 505908",
+        "amount": -31.99,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0004-023",
+        "date": "2026-09-12",
+        "descriptor": "SHIELDMOTOR INS POL526912",
+        "amount": -74.9,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0004-024",
+        "date": "2026-09-14",
+        "descriptor": "HEARTHGUARD HM INS 533914",
+        "amount": -26.4,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0004-025",
+        "date": "2026-09-20",
+        "descriptor": "TALKMORE MOBILE 540920",
+        "amount": -18.0,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0004-026",
+        "date": "2026-09-24",
+        "descriptor": "SUPERVALUE LISBURN RD",
+        "amount": -81.2,
+        "type": "CARD"
+      },
+      {
+        "transaction_id": "TX-0004-027",
+        "date": "2026-09-25",
+        "descriptor": "LAGAN BS MTG 554925",
+        "amount": -980.0,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0004-028",
+        "date": "2026-10-01",
+        "descriptor": "LPS RATES 5611001",
+        "amount": -118.0,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0004-029",
+        "date": "2026-10-01",
+        "descriptor": "TV LICENCE MBP 5821001",
+        "amount": -14.95,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0004-030",
+        "date": "2026-10-01",
+        "descriptor": "DVLA-VEH TAX 5891001",
+        "amount": -18.5,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0004-031",
+        "date": "2026-10-03",
+        "descriptor": "LITTLE STEPS CRECHE BELFAST SO",
+        "amount": -540.0,
+        "type": "SO"
+      },
+      {
+        "transaction_id": "TX-0004-032",
+        "date": "2026-10-05",
+        "descriptor": "LAGANSIDE POWER 5681005",
+        "amount": -104.3,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0004-033",
+        "date": "2026-10-08",
+        "descriptor": "FIBRELY BB 5751008",
+        "amount": -31.99,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0004-034",
+        "date": "2026-10-09",
+        "descriptor": "FUELSTOP MALONE RD",
+        "amount": -58.6,
+        "type": "CARD"
+      },
+      {
+        "transaction_id": "TX-0004-035",
+        "date": "2026-10-12",
+        "descriptor": "SHIELDMOTOR INS POL5961012",
+        "amount": -74.9,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0004-036",
+        "date": "2026-10-14",
+        "descriptor": "HEARTHGUARD HM INS 6031014",
+        "amount": -26.4,
+        "type": "DD"
+      }
+    ]
+  }
+}

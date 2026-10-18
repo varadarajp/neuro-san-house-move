@@ -1,0 +1,594 @@
+{
+  "_note": "Rules checked against the cited sources on 2026-10-18. 'verified' means the obligation, legal flag, penalty note and source_url were checked. 'timing_basis' says whether the due date comes from the source ('source') or is this service's recommendation within what the source allows ('recommendation'). Re-check before any real use: rules and fines change.",
+  "_condition_format": "applies_if is a list of conditions that must all hold. An empty list means always. {\"fact\": name, \"equals\": value}, {\"fact\": name, \"in\": [values]} or {\"fact\": name, \"not_in\": [values]}. A missing fact makes the rule needs_review rather than applies. old_country and new_country come from council_lookup.",
+  "_timing_format": "anchor is completion or exchange. offset_days is signed (negative = before). working_days true counts Mon-Fri excluding bank holidays. window is before, on, on_or_after or after.",
+  "rules": [
+    {
+      "id": "dvla_licence",
+      "org": "DVLA: driving licence",
+      "category": "government",
+      "applies_if": [
+        {
+          "fact": "has_driving_licence",
+          "equals": true
+        },
+        {
+          "fact": "old_country",
+          "not_in": [
+            "Northern Ireland"
+          ]
+        }
+      ],
+      "provider_category": null,
+      "legal_requirement": true,
+      "penalty_note": "You can be fined up to £1,000 if you do not tell DVLA when your address changes. Changing the address is free.",
+      "timing": {
+        "anchor": "completion",
+        "offset_days": 0,
+        "working_days": false,
+        "window": "on_or_after"
+      },
+      "timing_basis": "source",
+      "agent": "government_agent",
+      "source_url": "https://www.gov.uk/change-address-driving-licence",
+      "verify_hint": "gov.uk: 'You must update your provisional or full driving licence when you move.' You can keep driving while you wait for the new licence.",
+      "verified": true
+    },
+    {
+      "id": "dvla_v5c",
+      "org": "DVLA: vehicle log book (V5C)",
+      "category": "government",
+      "applies_if": [
+        {
+          "fact": "has_vehicle",
+          "equals": true
+        }
+      ],
+      "provider_category": "vehicle_tax",
+      "legal_requirement": true,
+      "penalty_note": "You can be fined up to £1,000 if you do not tell DVLA when your address changes. Usually free. Only the registered keeper can do it.",
+      "timing": {
+        "anchor": "completion",
+        "offset_days": 0,
+        "working_days": false,
+        "window": "on_or_after"
+      },
+      "timing_basis": "source",
+      "agent": "government_agent",
+      "source_url": "https://www.gov.uk/change-address-v5c",
+      "verify_hint": "Needs the registration number and the log book reference. Check whether the vehicle needs taxing in the next 4 weeks first.",
+      "verified": true
+    },
+    {
+      "id": "council_tax_old",
+      "org": "Council tax: old council ({old_council})",
+      "category": "government",
+      "applies_if": [
+        {
+          "fact": "old_country",
+          "in": [
+            "England",
+            "Wales",
+            "Scotland"
+          ]
+        }
+      ],
+      "provider_category": null,
+      "legal_requirement": true,
+      "penalty_note": "Councils can charge a £70 penalty if you fail, without reasonable excuse, to notify them of a change such as moving (Local Government Finance Act 1992, Schedule 3). You pay up to the date your sale completes.",
+      "timing": {
+        "anchor": "completion",
+        "offset_days": -7,
+        "working_days": false,
+        "window": "before"
+      },
+      "timing_basis": "recommendation",
+      "agent": "government_agent",
+      "source_url": "https://www.legislation.gov.uk/ukpga/1992/14/schedule/3",
+      "verify_hint": "Each council sets its own notice window (often 2 to 4 weeks before the move). Use the old council's own move-out form. Leeds: https://www.leeds.gov.uk/council-tax/report-a-change/register-for-council-tax-or-change-your-address",
+      "verified": true
+    },
+    {
+      "id": "council_tax_new",
+      "org": "Council tax: new council ({new_council})",
+      "category": "government",
+      "applies_if": [
+        {
+          "fact": "new_country",
+          "in": [
+            "England",
+            "Wales",
+            "Scotland"
+          ]
+        }
+      ],
+      "provider_category": null,
+      "legal_requirement": true,
+      "penalty_note": "Councils can charge a £70 penalty if you fail, without reasonable excuse, to notify them of a change such as moving in (Local Government Finance Act 1992, Schedule 3). You are charged from the day you become liable.",
+      "timing": {
+        "anchor": "completion",
+        "offset_days": -7,
+        "working_days": false,
+        "window": "before"
+      },
+      "timing_basis": "recommendation",
+      "agent": "government_agent",
+      "source_url": "https://www.legislation.gov.uk/ukpga/1992/14/schedule/3",
+      "verify_hint": "Use the new council's own form. North Yorkshire: https://www.northyorks.gov.uk/council-tax/tell-us-about-council-tax-change. In Scotland this bill also collects water and sewerage charges.",
+      "verified": true
+    },
+    {
+      "id": "electoral_register",
+      "org": "Electoral register",
+      "category": "government",
+      "applies_if": [],
+      "provider_category": null,
+      "legal_requirement": false,
+      "penalty_note": "You need to register again at a new address. If you are asked to register and do not, you could be fined up to £1,000.",
+      "timing": {
+        "anchor": "completion",
+        "offset_days": 7,
+        "working_days": false,
+        "window": "after"
+      },
+      "timing_basis": "recommendation",
+      "agent": "government_agent",
+      "source_url": "https://www.gov.uk/register-to-vote",
+      "verify_hint": "Fine wording: https://www.gov.uk/electoral-register. Each adult registers separately; a National Insurance number is asked for.",
+      "verified": true
+    },
+    {
+      "id": "energy_supplier",
+      "org": "Energy supplier",
+      "category": "utilities",
+      "applies_if": [],
+      "provider_category": "energy",
+      "legal_requirement": false,
+      "penalty_note": "None, but without notice you may be billed for energy used after you leave. Give a forwarding address for the final bill.",
+      "timing": {
+        "anchor": "completion",
+        "offset_days": -2,
+        "working_days": true,
+        "window": "before"
+      },
+      "timing_basis": "source",
+      "agent": "home_utilities_agent",
+      "source_url": "https://www.citizensadvice.org.uk/consumer/energy/energy-supply/moving-home-your-energy-supply/moving-home-dealing-with-your-energy-supply/",
+      "verify_hint": "Citizens Advice: give at least 48 hours' notice. Ofgem also covers moving home: https://www.ofgem.gov.uk/information-consumers/energy-advice-households/get-energy-if-you-are-moving-home-or-business-premises",
+      "verified": true
+    },
+    {
+      "id": "energy_meter_readings",
+      "org": "Energy supplier: final meter readings",
+      "category": "utilities",
+      "applies_if": [],
+      "provider_category": "energy",
+      "legal_requirement": false,
+      "penalty_note": "None, but without readings the final bill is estimated. Keep a note of readings and dates in case of a dispute.",
+      "timing": {
+        "anchor": "completion",
+        "offset_days": 0,
+        "working_days": false,
+        "window": "on"
+      },
+      "timing_basis": "source",
+      "agent": "home_utilities_agent",
+      "source_url": "https://www.citizensadvice.org.uk/consumer/energy/energy-supply/moving-home-your-energy-supply/moving-home-dealing-with-your-energy-supply/",
+      "verify_hint": "Citizens Advice: read your meters on the day you move out.",
+      "verified": true
+    },
+    {
+      "id": "water_company",
+      "org": "Water company: old home",
+      "category": "utilities",
+      "applies_if": [
+        {
+          "fact": "old_country",
+          "in": [
+            "England",
+            "Wales"
+          ]
+        }
+      ],
+      "provider_category": "water",
+      "legal_requirement": false,
+      "penalty_note": "None, but without enough notice you could be charged for water used after you move out.",
+      "timing": {
+        "anchor": "completion",
+        "offset_days": -5,
+        "working_days": true,
+        "window": "before"
+      },
+      "timing_basis": "source",
+      "agent": "home_utilities_agent",
+      "source_url": "https://www.citizensadvice.org.uk/consumer/water/paying-your-water-bill/moving-home-and-water-bills/",
+      "verify_hint": "Citizens Advice (England): if metered, give at least 5 working days' notice for a final reading. Unmetered has no fixed period. Scotland and Northern Ireland have no separate household water account to close.",
+      "verified": true
+    },
+    {
+      "id": "scotland_water_via_council_tax",
+      "org": "Water and sewerage (collected with council tax)",
+      "category": "utilities",
+      "applies_if": [
+        {
+          "fact": "new_country",
+          "equals": "Scotland"
+        }
+      ],
+      "provider_category": null,
+      "legal_requirement": false,
+      "penalty_note": "No separate action for unmetered homes: Scottish councils collect water and sewerage charges with council tax. Metered homes are billed by Scottish Water directly.",
+      "timing": {
+        "anchor": "completion",
+        "offset_days": -7,
+        "working_days": false,
+        "window": "before"
+      },
+      "timing_basis": "recommendation",
+      "agent": "home_utilities_agent",
+      "source_url": "https://www.gov.scot/policies/water/water-charges-and-exemptions/",
+      "verify_hint": "Also https://www.mygov.scot/water-sewerage-services",
+      "verified": true
+    },
+    {
+      "id": "broadband",
+      "org": "Broadband provider",
+      "category": "utilities",
+      "applies_if": [
+        {
+          "fact": "has_broadband",
+          "equals": true
+        }
+      ],
+      "provider_category": "broadband",
+      "legal_requirement": false,
+      "penalty_note": "Early termination charges may apply if you leave mid-contract, for example when the new address is not served. Ask your provider for the figure in writing.",
+      "timing": {
+        "anchor": "completion",
+        "offset_days": -21,
+        "working_days": false,
+        "window": "before"
+      },
+      "timing_basis": "recommendation",
+      "agent": "home_utilities_agent",
+      "source_url": "https://www.ofcom.org.uk/phones-and-broadband/switching-provider/switching-broadband-provider",
+      "verify_hint": "No official lead time: 3 weeks is a practical allowance for an engineer visit. Check the provider's home-move terms.",
+      "verified": true
+    },
+    {
+      "id": "tv_licensing",
+      "org": "TV Licensing",
+      "category": "utilities",
+      "applies_if": [
+        {
+          "fact": "has_tv_licence",
+          "equals": true
+        }
+      ],
+      "provider_category": "tv_licence",
+      "legal_requirement": true,
+      "penalty_note": "A licence covers an address and does not move automatically. You can update it up to three months before you move.",
+      "timing": {
+        "anchor": "completion",
+        "offset_days": -7,
+        "working_days": false,
+        "window": "before"
+      },
+      "timing_basis": "recommendation",
+      "agent": "home_utilities_agent",
+      "source_url": "https://www.tvlicensing.co.uk/faqs/FAQ27",
+      "verify_hint": "Sign in with the licence number, surname and postcode on the licence.",
+      "verified": true
+    },
+    {
+      "id": "royal_mail_redirection",
+      "org": "Royal Mail redirection",
+      "category": "utilities",
+      "applies_if": [
+        {
+          "fact": "wants_mail_redirection",
+          "equals": true
+        }
+      ],
+      "provider_category": null,
+      "legal_requirement": false,
+      "penalty_note": "None. Optional paid service. With less than 5 working days' notice some post may still go to the old address.",
+      "timing": {
+        "anchor": "completion",
+        "offset_days": -5,
+        "working_days": true,
+        "window": "before"
+      },
+      "timing_basis": "source",
+      "agent": "home_utilities_agent",
+      "source_url": "https://help.royalmail.com/personal/s/article/Moving-home-redirection-support-hub",
+      "verify_hint": "Royal Mail needs at least 5 working days and recommends applying about 3 weeks before the move. Check current prices.",
+      "verified": true
+    },
+    {
+      "id": "bank_address",
+      "org": "Your bank (direct update)",
+      "category": "financial",
+      "applies_if": [
+        {
+          "fact": "is_bank_customer",
+          "equals": true
+        }
+      ],
+      "provider_category": null,
+      "legal_requirement": false,
+      "penalty_note": "None.",
+      "timing": {
+        "anchor": "completion",
+        "offset_days": 0,
+        "working_days": false,
+        "window": "on"
+      },
+      "timing_basis": "recommendation",
+      "agent": "financial_agent",
+      "source_url": "internal",
+      "verify_hint": "Internal: the bank updates the address directly.",
+      "verified": true
+    },
+    {
+      "id": "home_insurance",
+      "org": "Home insurance",
+      "category": "financial",
+      "applies_if": [
+        {
+          "fact": "has_home_insurance",
+          "equals": true
+        }
+      ],
+      "provider_category": "home_insurance",
+      "legal_requirement": false,
+      "penalty_note": "Not required by law, but a mortgage lender usually requires buildings cover, and you are responsible for the property from exchange.",
+      "timing": {
+        "anchor": "exchange",
+        "offset_days": 0,
+        "working_days": false,
+        "window": "on"
+      },
+      "timing_basis": "source",
+      "agent": "financial_agent",
+      "source_url": "https://www.citizensadvice.org.uk/consumer/insurance/insurance/types-of-insurance/buildings-insurance/",
+      "verify_hint": "MoneyHelper: https://www.moneyhelper.org.uk/en/blog/insurance/what-insurance-do-I-need-when-buying-a-house. Confirm the start date with the lender or conveyancer.",
+      "verified": true
+    },
+    {
+      "id": "car_insurance",
+      "org": "Car insurance",
+      "category": "financial",
+      "applies_if": [
+        {
+          "fact": "has_car_insurance",
+          "equals": true
+        }
+      ],
+      "provider_category": "car_insurance",
+      "legal_requirement": false,
+      "penalty_note": "Not a legal requirement in itself, but an address change is usually material to the policy: not telling the insurer can lead to a refused claim or cancelled cover, and driving uninsured is an offence.",
+      "timing": {
+        "anchor": "completion",
+        "offset_days": -7,
+        "working_days": false,
+        "window": "before"
+      },
+      "timing_basis": "recommendation",
+      "agent": "financial_agent",
+      "source_url": "https://www.gov.uk/vehicle-insurance",
+      "verify_hint": "Materiality of an address change: Financial Ombudsman decisions. Check the policy's 'changes you must tell us about' terms.",
+      "verified": true
+    },
+    {
+      "id": "gp_registration",
+      "org": "GP surgery",
+      "category": "health_family",
+      "applies_if": [],
+      "provider_category": null,
+      "legal_requirement": false,
+      "penalty_note": "None. A surgery may refuse registration if you live outside its area. No ID, proof of address or NHS number is needed to register.",
+      "timing": {
+        "anchor": "completion",
+        "offset_days": 14,
+        "working_days": false,
+        "window": "after"
+      },
+      "timing_basis": "recommendation",
+      "agent": "health_family_agent",
+      "source_url": "https://www.nhs.uk/nhs-services/gps/how-to-register-with-a-gp-surgery/",
+      "verify_hint": "Most people register with a surgery near where they live.",
+      "verified": true
+    },
+    {
+      "id": "pet_microchip",
+      "org": "Pet microchip database",
+      "category": "health_family",
+      "applies_if": [
+        {
+          "fact": "has_pet",
+          "equals": true
+        }
+      ],
+      "provider_category": null,
+      "legal_requirement": true,
+      "penalty_note": "Keepers are responsible for keeping microchip details up to date, for example after moving. Fines of up to £500 apply if a dog or cat is not microchipped or not registered on an approved database.",
+      "timing": {
+        "anchor": "completion",
+        "offset_days": 7,
+        "working_days": false,
+        "window": "after"
+      },
+      "timing_basis": "recommendation",
+      "agent": "health_family_agent",
+      "source_url": "https://www.gov.uk/get-your-dog-microchipped",
+      "verify_hint": "Contact the database the chip is registered on (a fee may apply). Find it from the chip number at check-a-chip.co.uk.",
+      "verified": true
+    },
+    {
+      "id": "childcare_school",
+      "org": "Nursery or school",
+      "category": "health_family",
+      "applies_if": [
+        {
+          "fact": "has_young_child",
+          "equals": true
+        }
+      ],
+      "provider_category": "childcare",
+      "legal_requirement": false,
+      "penalty_note": "None, but the nursery's contract notice period applies.",
+      "timing": {
+        "anchor": "completion",
+        "offset_days": -28,
+        "working_days": false,
+        "window": "before"
+      },
+      "timing_basis": "recommendation",
+      "agent": "health_family_agent",
+      "source_url": "contract",
+      "verify_hint": "No official rule: the notice period is in the nursery contract (4 weeks is a common default). For a new place, see the new council's admissions pages.",
+      "verified": false
+    },
+    {
+      "id": "water_company_new",
+      "org": "Water company: new home",
+      "category": "utilities",
+      "applies_if": [
+        {
+          "fact": "new_country",
+          "in": [
+            "England",
+            "Wales"
+          ]
+        }
+      ],
+      "provider_category": null,
+      "legal_requirement": false,
+      "penalty_note": "None, but you will be billed as the new occupier. Water and sewerage may come from two different companies.",
+      "timing": {
+        "anchor": "completion",
+        "offset_days": 0,
+        "working_days": false,
+        "window": "on_or_after"
+      },
+      "timing_basis": "recommendation",
+      "agent": "home_utilities_agent",
+      "source_url": "https://www.ccw.org.uk/faq/which-water-company-supplies-my-area/",
+      "verify_hint": "Find the company for the new postcode with Water UK's checker (linked from CCW), or from the seller's last bill.",
+      "verified": true
+    },
+    {
+      "id": "ni_rates_old",
+      "org": "Domestic rates: Land & Property Services (Northern Ireland)",
+      "category": "government",
+      "applies_if": [
+        {
+          "fact": "old_country",
+          "equals": "Northern Ireland"
+        }
+      ],
+      "provider_category": null,
+      "legal_requirement": true,
+      "penalty_note": "Northern Ireland has domestic rates, not council tax. Tell LPS immediately when you move, or you may get a backdated rate bill for after you left.",
+      "timing": {
+        "anchor": "completion",
+        "offset_days": 0,
+        "working_days": false,
+        "window": "on"
+      },
+      "timing_basis": "source",
+      "agent": "government_agent",
+      "source_url": "https://www.nidirect.gov.uk/articles/occupying-and-leaving-property",
+      "verify_hint": "Report it with the online form at https://www.nidirect.gov.uk/services/create-or-update-your-rate-account using the occupancy, account or ratepayer ID from the rate bill.",
+      "verified": true
+    },
+    {
+      "id": "ni_rates_new",
+      "org": "Domestic rates: Land & Property Services (Northern Ireland)",
+      "category": "government",
+      "applies_if": [
+        {
+          "fact": "new_country",
+          "equals": "Northern Ireland"
+        }
+      ],
+      "provider_category": null,
+      "legal_requirement": true,
+      "penalty_note": "When you buy a home in Northern Ireland you must tell LPS immediately and open a domestic rate account.",
+      "timing": {
+        "anchor": "completion",
+        "offset_days": 0,
+        "working_days": false,
+        "window": "on"
+      },
+      "timing_basis": "source",
+      "agent": "government_agent",
+      "source_url": "https://www.nidirect.gov.uk/articles/occupying-and-leaving-property",
+      "verify_hint": "Online form: https://www.nidirect.gov.uk/services/create-or-update-your-rate-account",
+      "verified": true
+    },
+    {
+      "id": "ni_licence_to_gb",
+      "org": "Northern Ireland driving licence: contact DVLA",
+      "category": "government",
+      "applies_if": [
+        {
+          "fact": "has_driving_licence",
+          "equals": true
+        },
+        {
+          "fact": "old_country",
+          "equals": "Northern Ireland"
+        },
+        {
+          "fact": "new_country",
+          "in": [
+            "England",
+            "Wales",
+            "Scotland"
+          ]
+        }
+      ],
+      "provider_category": null,
+      "legal_requirement": true,
+      "penalty_note": "DVA cannot register a new address outside Northern Ireland on an NI licence. Contact the licensing authority where you now live (DVLA) about exchanging it.",
+      "timing": {
+        "anchor": "completion",
+        "offset_days": 0,
+        "working_days": false,
+        "window": "on_or_after"
+      },
+      "timing_basis": "recommendation",
+      "agent": "government_agent",
+      "source_url": "https://www.nidirect.gov.uk/articles/keeping-your-driving-licence-date",
+      "verify_hint": "nidirect does not state the exchange steps or a fine for this case: confirm with DVLA before relying on it.",
+      "verified": false
+    },
+    {
+      "id": "own_bank_accounts",
+      "org": "Your banks and building societies",
+      "category": "financial",
+      "applies_if": [
+        {
+          "fact": "is_bank_customer",
+          "equals": false
+        }
+      ],
+      "provider_category": null,
+      "legal_requirement": false,
+      "penalty_note": "None, but cards, statements and security checks use the address on file; an out-of-date address can block payments or leave post at the old home.",
+      "timing": {
+        "anchor": "completion",
+        "offset_days": 0,
+        "working_days": false,
+        "window": "on_or_after"
+      },
+      "timing_basis": "recommendation",
+      "agent": "financial_agent",
+      "source_url": "https://www.citizensadvice.org.uk/consumer/energy/energy-supply/moving-home-your-energy-supply/moving-home-dealing-with-your-energy-supply/",
+      "verify_hint": "Most banks let you change your address in their app or online banking. Placeholder source: no official rule.",
+      "verified": false
+    }
+  ]
+}

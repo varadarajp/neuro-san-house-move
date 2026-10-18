@@ -1,0 +1,27 @@
+{
+  "_note": "Water and sewerage companies by postcode district for the demo addresses, checked 2026-10-18. Supply areas do not follow council boundaries and can split within a district: always confirm with the official checker. 'confirmed' says whether a current source was found for that entry.",
+  "checker_url": "https://www.ccw.org.uk/faq/which-water-company-supplies-my-area/",
+  "companies": {
+    "yorkshire": {"name": "Yorkshire Water", "website": "https://www.yorkshirewater.com"},
+    "essex_suffolk": {"name": "Essex & Suffolk Water", "website": "https://www.eswater.co.uk"},
+    "anglian": {"name": "Anglian Water", "website": "https://www.anglianwater.co.uk"},
+    "northumbrian": {"name": "Northumbrian Water", "website": "https://www.nwl.co.uk"},
+    "severn_trent": {"name": "Severn Trent Water", "website": "https://www.stwater.co.uk"},
+    "bristol": {"name": "Bristol Water", "website": "https://www.bristolwater.co.uk"},
+    "wessex": {"name": "Wessex Water", "website": "https://www.wessexwater.co.uk"},
+    "welsh": {"name": "Dŵr Cymru Welsh Water", "website": "https://www.dwrcymru.com"},
+    "scottish": {"name": "Scottish Water", "website": "https://www.scottishwater.co.uk"},
+    "ni": {"name": "NI Water", "website": "https://www.niwater.com"}
+  },
+  "districts": {
+    "LS1": {"water": "yorkshire", "sewerage": "yorkshire", "confirmed": false},
+    "LS6": {"water": "yorkshire", "sewerage": "yorkshire", "confirmed": false},
+    "HG1": {"water": "yorkshire", "sewerage": "yorkshire", "confirmed": false},
+    "HX1": {"water": "yorkshire", "sewerage": "yorkshire", "confirmed": false},
+    "CM1": {"water": "essex_suffolk", "sewerage": "anglian", "confirmed": false, "note": "Water supplier confirmed (Essex & Suffolk Water serves Chelmsford); sewerage provider not confirmed."},
+    "DL3": {"water": "northumbrian", "sewerage": "northumbrian", "confirmed": true},
+    "NG7": {"water": "severn_trent", "sewerage": "severn_trent", "confirmed": false},
+    "BS6": {"water": "bristol", "sewerage": "wessex", "confirmed": true},
+    "CF24": {"water": "welsh", "sewerage": "welsh", "confirmed": false}
+  }
+}

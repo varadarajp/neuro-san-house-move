@@ -1,0 +1,13 @@
+{
+  "_note": "Fictional GP practices for the demo, keyed by postcode outcode.",
+  "practices": {
+    "HG1": [
+      {"practice_name": "Valley Gardens Medical Practice", "distance_miles": 0.4, "accepting_patients": true},
+      {"practice_name": "Stray Road Surgery", "distance_miles": 0.9, "accepting_patients": true},
+      {"practice_name": "Knaresborough Road Health Centre", "distance_miles": 1.6, "accepting_patients": false}
+    ],
+    "LS1": [
+      {"practice_name": "Wharf Street Health Centre", "distance_miles": 0.3, "accepting_patients": true}
+    ]
+  }
+}

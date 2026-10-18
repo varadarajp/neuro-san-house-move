@@ -1,0 +1,32 @@
+{
+  "_note": "Draft templates. Placeholders in {{double braces}} are filled from sly_data by the draft tools, so the LLM never sees the personal data. Customer-supplied placeholders are left as visible gaps for the customer to complete.",
+  "profile_placeholders": ["full_names", "first_names", "old_address", "new_address", "old_postcode", "new_postcode", "move_date", "exchange_date", "customer_email"],
+  "customer_supplied_placeholders": ["account_number", "policy_number", "licence_number", "v5c_reference", "meter_readings", "meter_serial_number", "microchip_number", "nhs_numbers", "child_name", "ni_number"],
+  "templates": {
+    "email": {
+      "subject": "Change of address from {{move_date}}: {{full_names}}",
+      "body": "Dear {{org_name}} team,\n\nWe are moving home on {{move_date}}.\nOld address: {{old_address}}\nNew address: {{new_address}}\n\n{{request}}\n\nOur reference: {{account_number}}\n\nKind regards,\n{{full_names}}\n{{customer_email}}",
+      "guidance": "Replace {{request}} with one or two plain sentences saying exactly what this organisation should do. Keep the whole email under 120 words."
+    },
+    "letter": {
+      "subject": "Change of address",
+      "body": "{{full_names}}\n{{old_address}}\n\nDear {{org_name}},\n\nWe are moving home on {{move_date}}. From that date our address will be:\n{{new_address}}\n\n{{request}}\n\nYours faithfully,\n{{full_names}}",
+      "guidance": "Replace {{request}} with the action needed, including any notice period. Keep it under 120 words."
+    },
+    "online_form": {
+      "subject": "Pre-filled answers for the {{org_name}} online form",
+      "body": "Use the official form: {{url}}\n\nAnswers ready to copy:\n{{form_fields}}\n\nYou will need to add: {{customer_supplied}}",
+      "guidance": "List the form fields as 'Field: {{placeholder}}' lines, one per line, using only fields this organisation needs."
+    },
+    "phone": {
+      "subject": "Call script for {{org_name}}",
+      "body": "Call {{org_name}} ({{url}}).\nSay: \"Hello, we are moving home on {{move_date}} and need to {{request}}.\"\nHave ready: {{customer_supplied}}\nNew address: {{new_address}}",
+      "guidance": "Replace {{request}} with a short phrase, for example 'move our broadband to our new address'."
+    },
+    "direct": {
+      "subject": "We will update your address with us",
+      "body": "With your approval, we will update your address with us to {{new_address}} from {{move_date}}. You do not need to do anything else.",
+      "guidance": "Use as is."
+    }
+  }
+}

@@ -1,0 +1,183 @@
+{
+  "_note": "Synthetic Direct Debit mandates keyed by customer. A UK DD mandate carries the payer's reference with the service user, which is usually their account, policy or licence number there. The bank holds these, so drafts can quote them without asking the customer. References are fictional.",
+  "customers": {
+    "C-10042": [
+      {
+        "service_user": "Brightwatt Energy",
+        "category": "energy",
+        "placeholder": "account_number",
+        "reference": "BW-00347781"
+      },
+      {
+        "service_user": "NVW Water Services",
+        "category": "water",
+        "placeholder": "account_number",
+        "reference": "NVW-8812201"
+      },
+      {
+        "service_user": "Fibrely Broadband",
+        "category": "broadband",
+        "placeholder": "account_number",
+        "reference": "FB-55120934"
+      },
+      {
+        "service_user": "TV Licensing",
+        "category": "tv_licence",
+        "placeholder": "licence_number",
+        "reference": "TVL-4410923871"
+      },
+      {
+        "service_user": "Shieldmotor Insurance",
+        "category": "car_insurance",
+        "placeholder": "policy_number",
+        "reference": "SM-POL-44102"
+      },
+      {
+        "service_user": "Hearthguard Home Insurance",
+        "category": "home_insurance",
+        "placeholder": "policy_number",
+        "reference": "HG-HOME-9921"
+      },
+      {
+        "service_user": "Pawsure Pet Insurance",
+        "category": "pet_insurance",
+        "placeholder": "policy_number",
+        "reference": "PW-30019"
+      }
+    ],
+    "C-20001": [
+      {
+        "service_user": "Northgate Energy",
+        "category": "energy",
+        "placeholder": "account_number",
+        "reference": "NG-5512093"
+      },
+      {
+        "service_user": "Pennine Water",
+        "category": "water",
+        "placeholder": "account_number",
+        "reference": "PW-7720114"
+      },
+      {
+        "service_user": "Lumen Fibre",
+        "category": "broadband",
+        "placeholder": "account_number",
+        "reference": "LF-3309811"
+      },
+      {
+        "service_user": "TV Licensing",
+        "category": "tv_licence",
+        "placeholder": "licence_number",
+        "reference": "TVL-5518820347"
+      },
+      {
+        "service_user": "Hearthguard Home Insurance",
+        "category": "home_insurance",
+        "placeholder": "policy_number",
+        "reference": "HG-HOME-2210"
+      }
+    ],
+    "C-20002": [
+      {
+        "service_user": "Brightwatt Energy",
+        "category": "energy",
+        "placeholder": "account_number",
+        "reference": "BW-00911842"
+      },
+      {
+        "service_user": "Fibrely Broadband",
+        "category": "broadband",
+        "placeholder": "account_number",
+        "reference": "FB-77120455"
+      },
+      {
+        "service_user": "TV Licensing",
+        "category": "tv_licence",
+        "placeholder": "licence_number",
+        "reference": "TVL-6620195533"
+      },
+      {
+        "service_user": "Shieldmotor Insurance",
+        "category": "car_insurance",
+        "placeholder": "policy_number",
+        "reference": "SM-POL-58811"
+      },
+      {
+        "service_user": "Pawsure Pet Insurance",
+        "category": "pet_insurance",
+        "placeholder": "policy_number",
+        "reference": "PW-41107"
+      },
+      {
+        "service_user": "Clyde Home Cover",
+        "category": "home_insurance",
+        "placeholder": "policy_number",
+        "reference": "CHC-90233"
+      }
+    ],
+    "C-20003": [
+      {
+        "service_user": "Taff Valley Water",
+        "category": "water",
+        "placeholder": "account_number",
+        "reference": "TVW-4471902"
+      },
+      {
+        "service_user": "Northgate Energy",
+        "category": "energy",
+        "placeholder": "account_number",
+        "reference": "NG-8830417"
+      },
+      {
+        "service_user": "Lumen Fibre",
+        "category": "broadband",
+        "placeholder": "account_number",
+        "reference": "LF-6602218"
+      },
+      {
+        "service_user": "Shieldmotor Insurance",
+        "category": "car_insurance",
+        "placeholder": "policy_number",
+        "reference": "SM-POL-60314"
+      },
+      {
+        "service_user": "Hearthguard Home Insurance",
+        "category": "home_insurance",
+        "placeholder": "policy_number",
+        "reference": "HG-HOME-4418"
+      }
+    ],
+    "C-20004": [
+      {
+        "service_user": "Laganside Power",
+        "category": "energy",
+        "placeholder": "account_number",
+        "reference": "LGP-2290381"
+      },
+      {
+        "service_user": "Fibrely Broadband",
+        "category": "broadband",
+        "placeholder": "account_number",
+        "reference": "FB-90455120"
+      },
+      {
+        "service_user": "TV Licensing",
+        "category": "tv_licence",
+        "placeholder": "licence_number",
+        "reference": "TVL-7709123344"
+      },
+      {
+        "service_user": "Shieldmotor Insurance",
+        "category": "car_insurance",
+        "placeholder": "policy_number",
+        "reference": "SM-POL-71520"
+      },
+      {
+        "service_user": "Hearthguard Home Insurance",
+        "category": "home_insurance",
+        "placeholder": "policy_number",
+        "reference": "HG-HOME-5532"
+      }
+    ]
+  }
+}

@@ -1,0 +1,85 @@
+{
+  "_note": "Official service directory, checked against the linked pages on 2026-10-18. Council tax links are council-specific: find any council at https://www.gov.uk/find-local-council.",
+  "services": {
+    "dvla_licence": {
+      "service": "Change the address on your driving licence",
+      "channel": "online_form",
+      "url": "https://www.gov.uk/change-address-driving-licence",
+      "what_customer_needs": [
+        "your driving licence",
+        "sign-in details (or create them)",
+        "photo ID if asked to prove identity"
+      ],
+      "who": "each licence holder separately",
+      "verified": true
+    },
+    "dvla_v5c": {
+      "service": "Change the address on your vehicle log book (V5C)",
+      "channel": "online_form",
+      "url": "https://www.gov.uk/change-address-v5c",
+      "what_customer_needs": [
+        "vehicle registration number",
+        "log book (V5C) reference number"
+      ],
+      "who": "the registered keeper only",
+      "verified": true
+    },
+    "council_tax_old": {
+      "service": "Tell your old council you are moving out",
+      "channel": "online_form",
+      "url": "https://www.leeds.gov.uk/council-tax/report-a-change/register-for-council-tax-or-change-your-address",
+      "what_customer_needs": [
+        "date you leave",
+        "forwarding address",
+        "sale completion date"
+      ],
+      "who": "any liable adult",
+      "verified": true,
+      "note": "Demo customer's old council (Leeds). For other customers use their council's move-out page."
+    },
+    "council_tax_new": {
+      "service": "Register for council tax with your new council",
+      "channel": "online_form",
+      "url": "https://www.northyorks.gov.uk/council-tax/tell-us-about-council-tax-change",
+      "what_customer_needs": [
+        "move-in date",
+        "names of all adults living there"
+      ],
+      "who": "the new owners",
+      "verified": true,
+      "note": "Demo customer's new council (North Yorkshire). For other customers use their council's move-in page."
+    },
+    "electoral_register": {
+      "service": "Register to vote at your new address",
+      "channel": "online_form",
+      "url": "https://www.gov.uk/register-to-vote",
+      "what_customer_needs": [
+        "National Insurance number (you can still register without one)"
+      ],
+      "who": "each adult separately",
+      "verified": true
+    },
+    "pet_microchip": {
+      "service": "Update your pet's microchip record",
+      "channel": "online_form",
+      "url": "https://www.gov.uk/get-your-dog-microchipped",
+      "what_customer_needs": [
+        "microchip number (from vet records)",
+        "which database the chip is registered on (check-a-chip.co.uk)"
+      ],
+      "who": "the registered keeper",
+      "verified": true
+    },
+    "gp_registration": {
+      "service": "Register with a GP surgery",
+      "channel": "online_form",
+      "url": "https://www.nhs.uk/nhs-services/gps/how-to-register-with-a-gp-surgery/",
+      "what_customer_needs": [
+        "new address",
+        "NHS number if known (not required)"
+      ],
+      "who": "each household member",
+      "verified": true
+    }
+  }
+}

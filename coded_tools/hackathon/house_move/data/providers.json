@@ -1,0 +1,301 @@
+{
+  "_note": "Mock provider directory. Brightwatt, NVW, Fibrely, Shieldmotor, Hearthguard, Pawsure and Little Acorns are fictional. TV Licensing and Royal Mail links checked on 2026-10-18.",
+  "providers": [
+    {
+      "name": "Brightwatt Energy",
+      "aliases": [
+        "BRIGHTWATT",
+        "BRIGHTWATT EN"
+      ],
+      "category": "energy",
+      "contact_channel": "email",
+      "url": "https://brightwatt.example/moving-home",
+      "fields_required": [
+        "account number",
+        "move-out date",
+        "final meter readings (gas and electricity)",
+        "forwarding address"
+      ],
+      "notes": "Can also set up supply at the new address if it supplies that area."
+    },
+    {
+      "name": "NVW Water Services",
+      "aliases": [
+        "NVW",
+        "NVW WATER",
+        "NVW WATER SVCS"
+      ],
+      "category": "water",
+      "contact_channel": "email",
+      "url": "https://nvwwater.example/moving",
+      "fields_required": [
+        "customer reference",
+        "move-out date",
+        "water meter reading if metered",
+        "forwarding address"
+      ],
+      "notes": "Serves the old address only. The new address may be served by a different water company."
+    },
+    {
+      "name": "Fibrely Broadband",
+      "aliases": [
+        "FIBRELY",
+        "FIBRELY BB"
+      ],
+      "category": "broadband",
+      "contact_channel": "phone",
+      "url": "https://fibrely.example/home-move",
+      "fields_required": [
+        "account number",
+        "new address",
+        "preferred installation date"
+      ],
+      "notes": "Needs to check service at the new address before booking an engineer."
+    },
+    {
+      "name": "TV Licensing",
+      "aliases": [
+        "TV LICENCE",
+        "TV LICENCE MBP"
+      ],
+      "category": "tv_licence",
+      "contact_channel": "online_form",
+      "url": "https://www.tvlicensing.co.uk/faqs/FAQ27",
+      "fields_required": [
+        "licence number",
+        "move date",
+        "new address"
+      ],
+      "notes": "The licence does not move automatically. It can be updated up to three months before the move."
+    },
+    {
+      "name": "Royal Mail",
+      "aliases": [
+        "ROYAL MAIL",
+        "REDIRECTION"
+      ],
+      "category": "mail_redirection",
+      "contact_channel": "online_form",
+      "url": "https://help.royalmail.com/personal/s/article/Moving-home-redirection-support-hub",
+      "fields_required": [
+        "names of everyone to redirect for",
+        "old and new address",
+        "start date",
+        "redirection length",
+        "payment"
+      ],
+      "notes": "Paid service. Needs at least 5 working days; Royal Mail recommends applying about 3 weeks before the move."
+    },
+    {
+      "name": "Shieldmotor Insurance",
+      "aliases": [
+        "SHIELDMOTOR",
+        "SHIELDMOTOR INS"
+      ],
+      "category": "car_insurance",
+      "contact_channel": "phone",
+      "url": "https://shieldmotor.example/change-details",
+      "fields_required": [
+        "policy number",
+        "new address",
+        "where the car is kept overnight",
+        "date of change"
+      ],
+      "notes": "The premium may change with the new postcode."
+    },
+    {
+      "name": "Hearthguard Home Insurance",
+      "aliases": [
+        "HEARTHGUARD",
+        "HEARTHGUARD HM INS"
+      ],
+      "category": "home_insurance",
+      "contact_channel": "email",
+      "url": "https://hearthguard.example/moving",
+      "fields_required": [
+        "policy number",
+        "new property details",
+        "cover start date (exchange)"
+      ],
+      "notes": "Ask whether the policy can move to the new home or must be replaced."
+    },
+    {
+      "name": "Pawsure Pet Insurance",
+      "aliases": [
+        "PAWSURE",
+        "PAWSURE LTD",
+        "PAWSURE LTD PETPOL"
+      ],
+      "category": "pet_insurance",
+      "contact_channel": "email",
+      "url": "https://pawsure.example/my-policy",
+      "fields_required": [
+        "policy number",
+        "new address"
+      ],
+      "notes": "The insurer is not the microchip database. Both need updating."
+    },
+    {
+      "name": "Little Acorns Nursery",
+      "aliases": [
+        "LITTLE ACORNS",
+        "LITTLE ACORNS NURSERY"
+      ],
+      "category": "childcare",
+      "contact_channel": "letter",
+      "url": null,
+      "fields_required": [
+        "child's name",
+        "last day of attendance",
+        "notice period in the contract"
+      ],
+      "notes": "Notice period is set by the nursery contract."
+    },
+    {
+      "name": "Northgate Energy",
+      "aliases": [
+        "NORTHGATE",
+        "NORTHGATE ENERGY"
+      ],
+      "category": "energy",
+      "contact_channel": "email",
+      "url": "https://northgate.example/moving",
+      "fields_required": [
+        "account number",
+        "move-out date",
+        "final meter readings",
+        "forwarding address"
+      ],
+      "notes": "Supplies England, Wales and Scotland."
+    },
+    {
+      "name": "Pennine Water",
+      "aliases": [
+        "PENNINE WATER"
+      ],
+      "category": "water",
+      "contact_channel": "email",
+      "url": "https://penninewater.example/moving",
+      "fields_required": [
+        "customer reference",
+        "move-out date",
+        "meter reading if metered",
+        "forwarding address"
+      ],
+      "notes": "Serves the old address only."
+    },
+    {
+      "name": "Taff Valley Water",
+      "aliases": [
+        "TAFF VALLEY WATER"
+      ],
+      "category": "water",
+      "contact_channel": "email",
+      "url": "https://taffvalleywater.example/moving",
+      "fields_required": [
+        "customer reference",
+        "move-out date",
+        "meter reading if metered",
+        "forwarding address"
+      ],
+      "notes": "Serves the old address only."
+    },
+    {
+      "name": "Lumen Fibre",
+      "aliases": [
+        "LUMEN",
+        "LUMEN FIBRE"
+      ],
+      "category": "broadband",
+      "contact_channel": "phone",
+      "url": "https://lumenfibre.example/home-move",
+      "fields_required": [
+        "account number",
+        "new address",
+        "preferred installation date"
+      ],
+      "notes": "Check service at the new address first."
+    },
+    {
+      "name": "Laganside Power",
+      "aliases": [
+        "LAGANSIDE",
+        "LAGANSIDE POWER"
+      ],
+      "category": "energy",
+      "contact_channel": "email",
+      "url": "https://laganside.example/moving",
+      "fields_required": [
+        "account number",
+        "move-out date",
+        "final meter reading",
+        "forwarding address"
+      ],
+      "notes": "Supplies Northern Ireland only: a new supplier is needed in Great Britain."
+    },
+    {
+      "name": "Clyde Home Cover",
+      "aliases": [
+        "CLYDE HOME COVER"
+      ],
+      "category": "home_insurance",
+      "contact_channel": "email",
+      "url": "https://clydehome.example/moving",
+      "fields_required": [
+        "policy number",
+        "new property details",
+        "cover start date (exchange)"
+      ],
+      "notes": "Ask whether cover can move to an English property."
+    },
+    {
+      "name": "Talkmore Mobile",
+      "aliases": [
+        "TALKMORE",
+        "TALKMORE MOBILE"
+      ],
+      "category": "mobile",
+      "contact_channel": "email",
+      "url": "https://talkmore.example/account",
+      "fields_required": [
+        "account number",
+        "new billing address"
+      ],
+      "notes": "Address change only; service is not tied to the home."
+    },
+    {
+      "name": "Avonside Energy",
+      "aliases": [
+        "AVONSIDE",
+        "AVONSIDE ENERGY"
+      ],
+      "category": "energy",
+      "contact_channel": "email",
+      "url": "https://avonside.example/moving",
+      "fields_required": [
+        "account number",
+        "move-out date",
+        "final meter readings",
+        "forwarding address"
+      ],
+      "notes": "Supplies England and Wales."
+    },
+    {
+      "name": "Severnside Water",
+      "aliases": [
+        "SEVERNSIDE",
+        "SEVERNSIDE WATER"
+      ],
+      "category": "water",
+      "contact_channel": "email",
+      "url": "https://severnside.example/moving",
+      "fields_required": [
+        "customer reference",
+        "move-out date",
+        "meter reading if metered",
+        "forwarding address"
+      ],
+      "notes": "Serves the old address only."
+    }
+  ]
+}

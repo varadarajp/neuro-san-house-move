@@ -1,0 +1,4 @@
+{
+    # Hackathon agent networks. Included from registries/manifest.hocon.
+    "hackathon/house_move.hocon": true,
+}

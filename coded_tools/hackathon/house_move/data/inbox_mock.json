@@ -1,0 +1,23 @@
+{
+  "_note": "Scripted provider replies. A reply only arrives once its task has been sent. Providers are fictional.",
+  "replies": [
+    {
+      "reply_id": "R-1",
+      "obligation_id": "energy_supplier",
+      "from": "Brightwatt Energy",
+      "body": "Thanks for letting us know about your move. Your closing account number is 88412. Please confirm your electricity meter serial number so we can take your final reading on your move day."
+    },
+    {
+      "reply_id": "R-2",
+      "obligation_id": "home_insurance",
+      "from": "Hearthguard Home Insurance",
+      "body": "We have noted your new address. Your policy will move to the new property from your exchange date. No further action is needed."
+    },
+    {
+      "reply_id": "R-3",
+      "obligation_id": "broadband",
+      "from": "Fibrely Broadband",
+      "body": "Good news: we can provide service at your new address. An engineer is booked for your move day between 8am and 1pm. Reply to this message if you need to change the date."
+    }
+  ]
+}

@@ -1,0 +1,123 @@
+{
+  "_note": "Fallback used only when postcodes.io is unreachable. Values fetched from postcodes.io on 2026-10-17.",
+  "LS1 3ED": {
+    "postcode": "LS1 3ED",
+    "council_name": "Leeds",
+    "council_code": "E08000035",
+    "country": "England",
+    "eastings": 429825,
+    "northings": 433906,
+    "latitude": 53.800623,
+    "longitude": -1.54866
+  },
+  "HG1 1SY": {
+    "postcode": "HG1 1SY",
+    "council_name": "North Yorkshire",
+    "council_code": "E06000065",
+    "country": "England",
+    "eastings": 430381,
+    "northings": 455207,
+    "latitude": 53.992033,
+    "longitude": -1.538114
+  },
+  "HX1 5LZ": {
+    "postcode": "HX1 5LZ",
+    "council_name": "Calderdale",
+    "council_code": "E08000033",
+    "country": "England",
+    "eastings": 408355,
+    "northings": 425181,
+    "latitude": 53.722984,
+    "longitude": -1.874862
+  },
+  "CM1 1FR": {
+    "postcode": "CM1 1FR",
+    "council_name": "Chelmsford",
+    "council_code": "E07000070",
+    "country": "England",
+    "eastings": 571268,
+    "northings": 207542,
+    "latitude": 51.740417,
+    "longitude": 0.47919
+  },
+  "G12 8QQ": {
+    "postcode": "G12 8QQ",
+    "council_name": "Glasgow City",
+    "council_code": "S12000049",
+    "country": "Scotland",
+    "eastings": 256916,
+    "northings": 666655,
+    "latitude": 55.871746,
+    "longitude": -4.288345
+  },
+  "DL3 9LP": {
+    "postcode": "DL3 9LP",
+    "council_name": "Darlington",
+    "council_code": "E06000005",
+    "country": "England",
+    "eastings": 427954,
+    "northings": 515098,
+    "latitude": 54.530406,
+    "longitude": -1.569567
+  },
+  "CF24 3PY": {
+    "postcode": "CF24 3PY",
+    "council_name": "Cardiff",
+    "council_code": "W06000015",
+    "country": "Wales",
+    "eastings": 319347,
+    "northings": 177778,
+    "latitude": 51.493172,
+    "longitude": -3.163144
+  },
+  "EH7 4LB": {
+    "postcode": "EH7 4LB",
+    "council_name": "City of Edinburgh",
+    "council_code": "S12000036",
+    "country": "Scotland",
+    "eastings": 325853,
+    "northings": 675299,
+    "latitude": 55.964946,
+    "longitude": -3.189367
+  },
+  "BT9 5AH": {
+    "postcode": "BT9 5AH",
+    "council_name": "Belfast",
+    "council_code": "N09000003",
+    "country": "Northern Ireland",
+    "eastings": 333536,
+    "northings": 372155,
+    "latitude": 54.580022,
+    "longitude": -5.935498
+  },
+  "LS6 3BQ": {
+    "postcode": "LS6 3BQ",
+    "council_name": "Leeds",
+    "council_code": "E08000035",
+    "country": "England",
+    "eastings": 427736,
+    "northings": 436025,
+    "latitude": 53.819783,
+    "longitude": -1.580185
+  },
+  "BS6 6RB": {
+    "postcode": "BS6 6RB",
+    "council_name": "Bristol, City of",
+    "council_code": "E06000023",
+    "country": "England",
+    "eastings": 358455,
+    "northings": 174731,
+    "latitude": 51.470009,
+    "longitude": -2.599507
+  },
+  "NG7 2NF": {
+    "postcode": "NG7 2NF",
+    "council_name": "Nottingham",
+    "council_code": "E06000018",
+    "country": "England",
+    "eastings": 455485,
+    "northings": 338992,
+    "latitude": 52.945476,
+    "longitude": -1.175728
+  }
+}

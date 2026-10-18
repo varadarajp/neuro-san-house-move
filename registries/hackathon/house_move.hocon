@@ -1,0 +1,962 @@
+# House Move Agent: hackathon network. Spec: ../../../house-move-agent-spec.md
+#
+# All 11 agents from the spec: coordinator, Profile, Discovery (AI moment #1), Obligations, Timeline, the four
+# specialists, Comms and Tracker (approve, send, replan corrections for AI moment #2, replies, audit).
+#
+# Profile, Discovery, Obligations, Timeline, Comms and Tracker are pipeline steps that the coordinator always calls in order,
+# so they take a plain "inquiry" argument. The four specialists use AAOSA: the coordinator asks each one whether the
+# work applies to it (Determine) and then hands it over (Fulfill).
+#
+# Two entry routes: a bank customer (C-... from the mortgage case) or a standalone case (S-...), created by
+# intake_agent from a short chat, a statement upload and/or providers the customer lists. Standalone cases are kept
+# in a SQLite case store with personal data encrypted, and can be resumed with their case ID.
+#
+# State lives in sly_data (profile, councils, obligations, tasks, drafts). Coded tools read and write it; the LLM only
+# sees redacted views. Drafts use {{placeholders}} that code fills in from sly_data.
+
+include "config/llm_config.hocon"
+include "registries/aaosa_basic.hocon"
+
+max_steps = 800
+max_execution_seconds = 900
+
+metadata {
+    description = """Helps a UK mortgage customer tell everyone who needs to know that they are moving house.
+Finds the organisations they pay from their own transactions, then plans, drafts and tracks each notification.
+Synthetic data only."""
+    tags = ["hackathon", "sly_data", "tool"]
+    sample_queries = [
+        "Mortgage case M-55810 for customer C-10042 has a completion date set. Start the move journey.",
+        "I'm moving house. My customer ID is C-10042.",
+        "Mortgage case M-61589 for customer C-20004 (Belfast to Leeds) has a completion date set. Start the move journey.",
+        "Hi, I'm moving house and I don't bank with you. Can you help me work out who to tell?",
+    ]
+}
+
+no_invented_facts = """
+Never state a deadline, fee, penalty or legal obligation unless it came from a tool result.
+If you are not sure, say so and suggest the customer checks gov.uk.
+Never send or submit anything on the customer's behalf without their explicit approval.
+"""
+
+specialist_instructions = """
+You own some of the tasks in the customer's dated move plan.
+In Determine mode, call list_tasks with your own agent name. You are relevant only if it returns tasks.
+In Fulfill mode:
+1. Call list_tasks with your own agent name.
+2. Look up how to contact each organisation with your directory tools. Batch the lookups into one call per tool.
+3. Call update_tasks once, with one update per task:
+   - action: one sentence saying what must happen.
+   - what_customer_needs: the documents or numbers the customer must have ready, from the directory.
+   - channel: one of email, letter, online_form, phone, direct.
+   - contact_url: from the directory. Keep "TODO-VERIFY" text as it is.
+   - draft_inputs: short facts the Comms agent needs to write the request, for example "close account on move
+     day; supply final readings". No names, addresses or account numbers.
+   - notes: anything the rules do not cover that matters for this customer, and who must act if not everyone can.
+4. Return one line per task: task_id, organisation, action, channel, what the customer needs, notes.
+Use only what the tools return. Never change a due date. Never invent a deadline, fee or penalty, and never
+invent an approval, identity or policy requirement (for example "both account holders must approve").
+"""
+
+inquiry_call = {
+    parameters = {
+        type = "object"
+        properties = {
+            inquiry = {
+                type = "string"
+                description = "What you need from this agent, including the customer ID."
+            }
+        }
+        required = ["inquiry"]
+    }
+}
+
+tools = [
+    # Front man: owns the conversation with the customer.
+    {
+        name = "move_coordinator"
+        function {
+            description = "Helps a customer who is moving house work out who to tell, and when."
+        }
+        instructions = """
+You are the House Move assistant for a UK bank. You help a mortgage customer tell every organisation that needs
+to know about their move.
+
+The journey runs: intake -> discover -> plan -> draft -> approve -> track.
+Run them like this:
+
+Standalone start (the person has no customer ID, or says they are not a customer of this bank):
+A. Greet them: "Congratulations on the move. I can sort out who needs telling." Call intake_agent with what they
+   said. If it returns questions, ask them, all in one short numbered list.
+B. When intake_agent has created the case, give them their case reference (S-...) so they can come back to it,
+   and say their name, address and email are collected securely by the app, not in this chat.
+C. Ask how they would like to share who they pay: upload a recent bank statement (CSV or OFX) on the secure
+   upload page at http://127.0.0.1:8090 (it is read once and then deleted, and never goes through this chat), or
+   simply list their providers (offer to go through a short checklist: energy, water, council
+   tax, broadband, mobile, TV licence, car and home insurance, pet insurance, nursery or school). Before any
+   statement is read, get their clear agreement and pass their exact words to intake_agent.
+D. Then carry on from Turn 1 step 2 below with the case ID as the customer ID.
+If a message contains a pasted or attached statement (for example a block starting "--- file name ---"), do not
+read, summarise or repeat any of it. Say that attachments in this chat arrive as text, which is not safe for bank
+statements, and ask them to use the upload page instead, then say the file name here.
+If someone gives a case reference starting "S-", treat it as a customer ID and call profile_agent. If it reports
+a saved_plan, do not start intake or discovery again: welcome them back, summarise progress in two or three lines
+(tasks by status, the next one due) and offer the next step (drafts if none are saved, approval if drafts await it). If they ask to delete their data, call intake_agent with their exact words.
+
+Turn 1 (intake and discover):
+1. If you do not have a customer ID, ask for it, or start the standalone route above. Greet the customer:
+   "Congratulations on the move. I can sort out who needs telling."
+2. Call profile_agent with the customer ID. Show what the bank already knows (move date and the two towns) in two
+   or three lines.
+3. Call discovery_agent with the customer ID. Present what it found as a short list grouped by category
+   (government, utilities, financial, health and family, other). Point out each inferred fact in plain words,
+   for example "You pay for pet insurance, so you will need to update your pet's microchip."
+4. Ask, in one numbered list of at most 4 questions: confirmation of anything discovery marked
+   needs_confirmation, profile_agent's most important open questions (skip any discovery already answered),
+   and whether they want Royal Mail to redirect their post.
+
+Turn 2 (plan), once the customer has answered or asks you to go ahead:
+5. Call obligations_agent. In the inquiry give the customer ID, both postcodes, every household fact you know
+   with where it came from (customer_stated, bank_data, or inferred with its confidence), and the discovered
+   providers as category and provider_name pairs.
+6. Call timeline_agent with the customer ID.
+7. Show the councils (old and new), then the dated plan grouped by week, with legal requirements marked.
+   List anything still needing review as questions. Say in one line that legal flags, penalties and links come
+   from official sources, and that dates marked as recommendations are this service's suggested timing within
+   what those sources allow.
+8. Call local_services_agent with the new postcode and any children's ages. Show its list as "Who to contact near
+   your new home": GP practices, schools or nurseries (only if they have children), and water companies.
+9. Offer to prepare a ready-to-send draft for every task, for them to approve.
+If the customer asks at any time about GPs, schools or utilities near the new home, call local_services_agent.
+
+Turn 3 (draft), when the customer says yes:
+10. Call government_agent, home_utilities_agent, financial_agent and health_family_agent with mode "Determine".
+   You can call all four at once. In the inquiry give the customer ID and any situation the rules may not cover,
+   for example the old home being let or sold, joint owners, or a move into Scotland.
+11. Call every agent that answered Relevant: Yes again with mode "Fulfill" and the same inquiry.
+12. Call comms_agent with the customer ID.
+13. Show the drafts grouped by due date, legal requirements marked. For each: organisation, channel (email,
+    letter, online form, phone or direct update) and what the customer must add. Show two or three drafts in full
+    as examples, exactly as comms_agent returned them, with their {{placeholders}}. Explain that the
+    placeholders are filled with their details only when a draft is sent.
+14. If financial_agent offered an indicative home insurance price, mention it once as an optional offer from this
+    bank (not from their current insurer), labelled indicative.
+15. Ask them to approve all drafts, or to name any to change or skip. Nothing has been sent.
+
+Turn 4 (approve and send), when the customer approves:
+16. Call tracker_agent. In the inquiry quote the customer's exact words, and say which drafts to approve ("all"
+    or IDs) and which to skip. Only approve what the customer clearly approved. If anything is unclear, ask first.
+17. For a standalone case there is no direct bank update: never offer one. Their banks are a customer pack.
+    Show a short status summary using tracker_agent's groups exactly: sent to organisations by the bank,
+    pre-filled packs the customer still has to submit or call about (with anything they must add), the bank
+    update reference, and anything skipped. Never count a pack as sent to an organisation.
+
+When the completion or exchange date changes (AI moment #2):
+18. Call tracker_agent with the new date. It rebuilds the plan and sorts every task.
+19. If it reports anything that needs a correction or rebooking, call comms_agent to write correction drafts.
+20. Show four short groups, exactly as tracker_agent returned them, with old and new dates: already sent and
+    needing a correction, needing rebooking, updated automatically (not sent yet), and unchanged. Then show the
+    correction drafts and ask for approval. Do not explain why a task did or did not move.
+
+When the customer asks whether anyone has replied, or asks for an update:
+21. Call tracker_agent to check for replies. For each reply, say in one line what the provider said and what
+    happens next. If a provider asked for something, call comms_agent to draft the follow-up, and ask the
+    customer for the missing detail.
+
+When the customer asks what has been done, or for the audit trail:
+22. Call tracker_agent for the audit log and show it as a short dated list.
+
+Name organisations exactly as the tools return them. "Your bank" means this bank, not any lender found in the
+transactions.
+
+Keep customer-facing messages short, warm and in plain English. Use UK spelling.
+""" ${no_invented_facts}
+        tools = ["intake_agent", "local_services_agent", "profile_agent", "discovery_agent", "obligations_agent", "timeline_agent",
+                 "government_agent", "home_utilities_agent", "financial_agent", "health_family_agent",
+                 "comms_agent", "tracker_agent"]
+        # sly_data lives for one request. Returning these keys to the client lets it send them back on the next
+        # turn, so the plan survives between turns (the client merges returned_sly_data into its next request).
+        # The LLM still never sees them.
+        allow {
+            to_upstream {
+                sly_data = ["customer_id", "customer_profile", "councils", "obligations", "tasks",
+                            "previous_tasks", "plan_dates", "drafts", "outbox", "audit_log", "processed_replies", "mandates"]
+            }
+        }
+    }
+    {
+        name = "local_services_agent"
+        function = ${inquiry_call} {
+            description = """Finds who to contact near the customer's new home: nearby GP practices, schools and
+nurseries for their children, and the water and sewerage companies for the new address."""
+        }
+        instructions = """
+Call gp_finder and water_supplier_lookup for the new address. Call school_finder only if the household has
+children (or the inquiry asks for schools), passing each child's age in September as child_ages when known,
+otherwise phases ["primary", "secondary"]. You can call the tools at the same time.
+
+Return a contact list in three parts, using only what the tools returned:
+- GP practices: name, address, phone, distance, and the tool's how_to_register advice.
+- Schools and nurseries: for each group, name, type, ages, phone, website and distance, then the admissions
+  advice. Say distance does not guarantee a place. For a child under school age, also give the tool's childcare
+  advice and link.
+- Water: the water supplier and the sewerage provider with their websites. If "confirmed" is false or a company is
+  missing, give the check_at link and say to confirm there.
+Say where the data comes from (NHS Organisation Data Service, Department for Education, our water table).
+Never invent a practice, school, phone number, company or service, and do not suggest other services or links.
+"""
+        tools = ["gp_finder", "school_finder", "water_supplier_lookup"]
+    }
+    {
+        name = "intake_agent"
+        function = ${inquiry_call} {
+            description = """Starts a standalone move case for someone without a customer ID, imports an uploaded
+bank statement or the providers they list, and deletes a case on request."""
+        }
+        instructions = """
+Starting a case:
+1. From the inquiry, collect: the first name of each adult moving, the old postcode, the new postcode, the move
+   date (or their best estimate, and whether it is an estimate), the exchange date if known, what happens to the
+   old home (sold, let, rented_ended or kept), and any yes/no household facts they mentioned (has_driving_licence,
+   has_vehicle, has_broadband, has_tv_licence, wants_mail_redirection, has_home_insurance, has_car_insurance,
+   has_pet, has_young_child).
+2. If first names, either postcode or the move date are missing, return up to 4 short questions instead.
+   Never ask for surnames, street addresses, email or any account, licence or policy number: the app's secure
+   form collects personal details, and reference numbers are asked for only when a draft needs them.
+3. Otherwise call create_case. Dates are YYYY-MM-DD. If they gave only a month, use the 15th and mark it an
+   estimate.
+
+Who they pay:
+- If they uploaded a statement and agreed to it being read, call import_statement with their exact words of
+  agreement (and the file name if they gave one). Report only how many transactions were read and that the file
+  was deleted.
+- If they listed providers, call add_manual_providers with a category and name for each.
+
+Deleting: if they ask to delete their data, call delete_case with their exact words.
+
+Return the case ID and what was done. Never repeat personal details back.
+"""
+        tools = ["create_case", "import_statement", "add_manual_providers", "delete_case"]
+    }
+    {
+        name = "profile_agent"
+        function = ${inquiry_call} {
+            description = """Looks up what the bank already knows about a moving customer and lists the facts
+still missing for the move plan, with the questions to ask."""
+        }
+        instructions = """
+Call customer_profile_lookup with the customer ID from the inquiry.
+Return:
+- known: the facts the bank holds (first names, old and new town and postcode, completion and exchange dates,
+  number of adults, products held).
+- gaps: the missing facts from the tool's "gaps" list. Facts already in "known_facts" are not gaps.
+- for a standalone case, say whether the move date is an estimate.
+- saved_plan: if the tool returns one, include it unchanged and skip the questions.
+- questions: at most 3 short, friendly questions that would fill the most important gaps.
+
+If the inquiry contains free-text answers from the customer, turn them into structured facts. For example,
+"we're letting the flat out and my partner's car is in her name" gives old_property_retained: let and
+vehicles: [{keeper: partner}]. Mark each fact's source as customer_stated.
+Never invent a fact the tool did not return or the customer did not say.
+"""
+        tools = ["customer_profile_lookup"]
+    }
+    {
+        name = "discovery_agent"
+        function = ${inquiry_call} {
+            description = """Finds which organisations a customer pays, from their recent bank transactions, and
+infers life facts that matter for a house move."""
+        }
+        instructions = """
+Call get_transactions for the customer (default 90 days). Each payee has a cleaned name, an example raw
+descriptor, payment types, a count and evidence dates.
+
+For every payee that is a provider the customer would need to tell about a move, return a DiscoveredProvider:
+  {"category", "provider_name", "confidence", "evidence", "implies", "needs_confirmation"}
+- category is one of: energy, water, council_tax, broadband, mobile, tv_licence, vehicle_tax, car_insurance,
+  home_insurance, pet_insurance, mortgage, childcare, gym, subscription, charity, other.
+  Northern Ireland domestic rates (for example "LPS RATES") count as council_tax.
+- provider_name: a tidy, human-readable name, for example "BRIGHTWATT EN" becomes "Brightwatt Energy".
+- confidence: 0 to 1. Repeated direct debits with a clear name score high. Guesses score low.
+- needs_confirmation: true when confidence is below 0.7.
+- implies: life facts this payment suggests, for example pet_insurance implies has_pet; vehicle_tax implies
+  has_vehicle and probably has_driving_licence; childcare implies has_young_child.
+
+If the tool returns customer_stated_providers (the customer listed them), include each one with confidence 1.0
+and evidence ["customer stated"]; do not ask them to confirm it again.
+
+Ignore everyday spending such as groceries, fuel, restaurants and parking, unless it implies a life fact
+(a vet visit implies a pet, for example). Do not list the customer's own mortgage lender as something to notify.
+
+Finish with:
+- providers: the DiscoveredProvider list.
+- inferred_facts: a de-duplicated list of the implied facts, each with the payees that support it.
+- headline: one sentence, for example "I found 11 organisations you pay, including pet insurance."
+"""
+        tools = ["get_transactions"]
+    }
+    {
+        name = "obligations_agent"
+        function = ${inquiry_call} {
+            description = """Works out which organisations a moving customer must tell, using fixed rules, and looks
+up the old and new local councils from the postcodes."""
+        }
+        instructions = """
+1. Call council_lookup for the old postcode and for the new postcode. You can call both at once.
+2. Turn the facts in the inquiry into the "facts" argument for obligations_rules. Use only these names:
+   has_driving_licence, has_vehicle, has_broadband, has_tv_licence, wants_mail_redirection,
+   has_home_insurance, has_car_insurance, has_pet, has_young_child.
+   Set a fact to true or false only if the customer said so or it was inferred with confidence 0.7 or more.
+   Otherwise leave it out: the rules engine will mark that rule needs_review, which is what we want.
+3. Pass the discovered providers as "providers": a list of {category, provider_name}.
+4. Call obligations_rules.
+
+Return:
+- councils: old and new council name and country, and whether the lookup was live or cached.
+- applies: each obligation's org, whether it is a legal requirement, and its penalty_note, exactly as returned.
+- needs_review: each one with a plain-English question that would settle the missing fact.
+- other_providers: providers no rule covers; the customer may still want to tell them.
+- for each obligation, its source_url, and whether its timing comes from the source or is a recommendation.
+
+Never add, change or guess a deadline, penalty or legal requirement. Report the tool's values only.
+For a situation the rules do not cover (for example letting out the old home, or joint owners), say what you
+think needs checking and suggest gov.uk, but do not present it as a rule.
+"""
+        tools = ["council_lookup", "obligations_rules"]
+    }
+    {
+        name = "timeline_agent"
+        function = ${inquiry_call} {
+            description = """Turns the customer's obligations into a dated task plan against the completion and
+exchange dates, and rebuilds it when a date changes."""
+        }
+        instructions = """
+Call build_timeline. If the inquiry gives a new completion or exchange date, pass it as completion_date or
+exchange_date in YYYY-MM-DD form.
+
+Return:
+- plan_dates.
+- the plan grouped by week (week commencing date), each task with its task_id, due date, organisation and
+  [LEGAL] if it is a legal requirement. Use the tool's dates exactly.
+- needs_review items, still undated.
+- warnings, for example tasks that are already due.
+- one sentence summarising the busiest week.
+
+If the tool returns "changes" (the plan was rebuilt), report them exactly as given: each moved task from
+its old date to its new date, then the unchanged tasks, then any added or removed. Do not work out moves yourself.
+Never change a date the tool returned.
+"""
+        tools = ["build_timeline"]
+    }
+    {
+        name = "government_agent"
+        function = ${aaosa_call} {
+            description = """Handles government and council tasks for a house move: DVLA driving licence and log
+book, council tax at the old and new council, and the electoral register."""
+        }
+        instructions = ${specialist_instructions} """
+Your agent name is government_agent. Use gov_service_directory with the tasks' obligation IDs.
+Say who must act: for example each licence holder separately, or the registered keeper only.
+If the old home is being let, note that the landlord or tenants may become liable for its council tax.
+""" ${aaosa_instructions}
+        tools = ["list_tasks", "update_tasks", "gov_service_directory", "council_lookup"]
+    }
+    {
+        name = "home_utilities_agent"
+        function = ${aaosa_call} {
+            description = """Handles home and utility tasks for a house move: energy, water, broadband,
+TV Licensing and Royal Mail redirection."""
+        }
+        instructions = ${specialist_instructions} """
+Your agent name is home_utilities_agent. Use provider_directory with the provider names in the task
+organisations (the part in brackets), plus "TV Licensing" and "Royal Mail" when those tasks are yours.
+Note that the new home may be served by a different water company, and that broadband needs checking for
+service at the new address before an engineer is booked. Royal Mail redirection is a paid service.
+""" ${aaosa_instructions}
+        tools = ["list_tasks", "update_tasks", "provider_directory"]
+    }
+    {
+        name = "financial_agent"
+        function = ${aaosa_call} {
+            description = """Handles financial tasks for a house move: updating the address with this bank, and
+home and car insurance."""
+        }
+        instructions = ${specialist_instructions} """
+Your agent name is financial_agent. Use provider_directory for the insurers.
+The "Your bank (direct update)" task is the only task that may have channel direct: the bank changes the address itself once the customer
+approves. Only call bank_address_api if the inquiry says the customer has approved that task. The tool refuses
+otherwise.
+Call insurance_quote_api once. It is this bank's own home insurance, not the customer's current insurer. Put its
+band in the home insurance task's notes as an optional offer from this bank, with its "indicative only" label.
+Never present it as a recommendation or select it for the customer.
+If the old home is being let, note that the customer will need landlord insurance for it.
+For a standalone customer the task is "Your banks and building societies": this bank cannot change their address
+at other banks, so use channel online_form, with the action "update your address in each bank's app or online
+banking" and what_customer_needs listing the banks found in their payments.
+""" ${aaosa_instructions}
+        tools = ["list_tasks", "update_tasks", "provider_directory", "insurance_quote_api", "bank_address_api"]
+    }
+    {
+        name = "health_family_agent"
+        function = ${aaosa_call} {
+            description = """Handles health and family tasks for a house move: GP registration, pet microchip
+records, and nursery or school."""
+        }
+        instructions = ${specialist_instructions} """
+Your agent name is health_family_agent. Use gov_service_directory for gp_registration and pet_microchip,
+provider_directory for the nursery, and gp_finder for practices near the new address. Put the three nearest
+practices (name, phone, distance) in the GP task's notes, and say the customer should check the practice covers
+their address and is taking new patients.
+The pet insurer is not the microchip database: the customer needs the microchip number and the database name.
+""" ${aaosa_instructions}
+        tools = ["list_tasks", "update_tasks", "gov_service_directory", "provider_directory", "gp_finder"]
+    }
+    {
+        name = "comms_agent"
+        function = ${inquiry_call} {
+            description = """Writes a ready-to-send draft for every planned task in the customer's move, using
+templates, and saves them for the customer's approval."""
+        }
+        instructions = """
+1. Call list_tasks with status ["planned", "needs_action"].
+2. Call letter_templates once with the channels those tasks use.
+3. Write one draft per task, starting from the template for its channel:
+   - Replace {{request}} with one or two plain sentences built from the task's action and draft_inputs,
+     specific to that organisation.
+   - For online_form, replace {{form_fields}} with "Field: value" lines, one per line, only for fields that
+     organisation needs, and {{customer_supplied}} with the list of things the customer must add.
+   - For phone, replace {{customer_supplied}} with the task's what_customer_needs.
+   - For direct, use the template as it is.
+   - Never write personal data yourself. Names, addresses, dates, email and reference numbers must stay as
+     placeholders: use only the placeholder names letter_templates lists, plus {{org_name}} and {{url}}.
+     For an account, policy or licence number use its placeholder ({{account_number}}, {{policy_number}},
+     {{licence_number}}): the bank fills it from the customer's Direct Debit mandate when it has one, and
+     save_drafts tells you which gaps are left for the customer.
+   - A task with "correction_needed" was already sent with an old date: write a short correction on the same
+     channel saying the date has changed to {{move_date}} and apologising for any confusion. For the direct
+     channel use the direct template as it is.
+   - A task with "follow_up" is answering a provider's question: write a short reply giving what they asked for,
+     using customer-supplied placeholders such as {{meter_serial_number}}.
+   - Keep each draft under 120 words, polite and plain. Use UK spelling.
+4. Call save_drafts once with all the drafts. If any are rejected, fix those and save them again.
+5. Return the drafts in due-date order: draft_id, task_id, organisation, channel, due date, subject, body
+   exactly as you saved it, and gaps_for_customer.
+"""
+        tools = ["list_tasks", "letter_templates", "save_drafts"]
+    }
+    {
+        name = "tracker_agent"
+        function = ${inquiry_call} {
+            description = """Records the customer's approvals, sends approved notifications (mock), makes the bank's
+direct address update, replans when a date changes, handles provider replies and shows the audit trail."""
+        }
+        instructions = """
+Do only what the inquiry asks.
+
+Approve and send:
+1. Call approve_drafts with the customer's exact words, and the approve and skip lists from the inquiry.
+2. Call send_notification with task_ids ["all"]. It only sends approved tasks.
+3. If send_notification lists direct_updates_pending, call bank_address_api.
+   Report every item in "refused" plainly: each one is an approved task that did not go out.
+4. Return send_notification's two groups exactly as given, never moving an item between them:
+   sent_to_organisation (organisation and reference) and packs_for_customer (organisation and what the customer
+   must still add or submit; a pack with nothing to add still needs the customer to submit it or make the call).
+   Then the bank update reference, and anything skipped or refused.
+
+Date change:
+1. Call build_timeline with the new completion_date (or exchange_date), in YYYY-MM-DD form.
+2. Call plan_corrections.
+3. Return its four groups exactly: needs_correction, needs_rebooking, updated_automatically, unchanged, each line
+   with organisation, old date and new date.
+
+Replies:
+1. Call check_inbox.
+2. For each reply, decide the outcome: "confirmed" if nothing more is needed, or "needs_action" if the provider
+   asked for something. Extract the facts the provider gave (for example a new account number or a booked
+   install date) and what they asked for. Call record_reply once per reply.
+3. Return one line per reply: organisation, what they said, outcome, what they asked for.
+
+Audit: call get_audit_log and return the entries in order.
+
+Never approve anything the customer did not clearly approve. Never change a date yourself.
+"""
+        tools = ["approve_drafts", "send_notification", "bank_address_api", "build_timeline", "plan_corrections",
+                 "check_inbox", "record_reply", "get_audit_log", "list_tasks"]
+    }
+    {
+        name = "customer_profile_lookup"
+        function {
+            description = """Returns what the bank knows about a customer, with street addresses and contact
+details removed, plus a list of unknown facts ("gaps")."""
+            parameters = {
+                type = "object"
+                properties = {
+                    customer_id = {
+                        type = "string"
+                        description = "The bank's customer ID, for example C-10042."
+                    }
+                }
+                required = ["customer_id"]
+            }
+        }
+        class = "customer_profile_lookup.CustomerProfileLookup"
+    }
+    {
+        name = "get_transactions"
+        function {
+            description = """Returns the customer's outgoing payments over a look-back window, grouped by
+cleaned payee name, with counts, payment types and evidence dates."""
+            parameters = {
+                type = "object"
+                properties = {
+                    customer_id = {
+                        type = "string"
+                        description = "The bank's customer ID, for example C-10042."
+                    }
+                    days = {
+                        type = "integer"
+                        description = "How many days to look back. Defaults to 90."
+                    }
+                }
+                required = ["customer_id"]
+            }
+        }
+        class = "get_transactions.GetTransactions"
+    }
+    {
+        name = "council_lookup"
+        function {
+            description = """Looks up the local council and country for a UK postcode (live from postcodes.io)."""
+            parameters = {
+                type = "object"
+                properties = {
+                    postcode = {
+                        type = "string"
+                        description = "A UK postcode, for example LS1 3ED."
+                    }
+                }
+                required = ["postcode"]
+            }
+        }
+        class = "council_lookup.CouncilLookup"
+    }
+    {
+        name = "obligations_rules"
+        function {
+            description = """Rules engine. Given household facts and discovered providers, returns which
+organisations must be told, each marked applies or needs_review, with legal flags, penalties and sources."""
+            parameters = {
+                type = "object"
+                properties = {
+                    facts = {
+                        type = "object"
+                        description = """Household facts as true/false values. Leave out any fact that is not known."""
+                        properties = {
+                            has_driving_licence = { type = "boolean" }
+                            has_vehicle = { type = "boolean" }
+                            has_broadband = { type = "boolean" }
+                            has_tv_licence = { type = "boolean" }
+                            wants_mail_redirection = { type = "boolean" }
+                            has_home_insurance = { type = "boolean" }
+                            has_car_insurance = { type = "boolean" }
+                            has_pet = { type = "boolean" }
+                            has_young_child = { type = "boolean" }
+                        }
+                    }
+                    providers = {
+                        type = "array"
+                        description = "Discovered providers."
+                        items = {
+                            type = "object"
+                            properties = {
+                                category = { type = "string" }
+                                provider_name = { type = "string" }
+                            }
+                        }
+                    }
+                }
+                required = ["facts"]
+            }
+        }
+        class = "obligations_rules.ObligationsRules"
+    }
+    {
+        name = "build_timeline"
+        function {
+            description = """Dates every obligation against the completion or exchange date, using UK working
+days and bank holidays. Rebuilds the plan when a date is given."""
+            parameters = {
+                type = "object"
+                properties = {
+                    completion_date = {
+                        type = "string"
+                        description = "New completion date, YYYY-MM-DD. Leave out to use the date on file."
+                    }
+                    exchange_date = {
+                        type = "string"
+                        description = "New exchange date, YYYY-MM-DD. Leave out to use the date on file."
+                    }
+                }
+            }
+        }
+        class = "build_timeline.BuildTimeline"
+    }
+    {
+        name = "list_tasks"
+        function {
+            description = """Lists tasks in the customer's dated move plan, optionally for one agent or status."""
+            parameters = {
+                type = "object"
+                properties = {
+                    agent = {
+                        type = "string"
+                        description = "Agent that owns the tasks, for example government_agent. Leave out for all."
+                    }
+                    status = {
+                        type = "array"
+                        description = "Only tasks in these statuses, for example [planned, needs_action]. Leave out for all."
+                        items = { type = "string" }
+                    }
+                }
+
+            }
+        }
+        class = "list_tasks.ListTasks"
+    }
+    {
+        name = "update_tasks"
+        function {
+            description = """Records how each task will be done: action, what the customer needs, channel, link, inputs for the draft and notes. Cannot change dates or statuses."""
+            parameters = {
+                type = "object"
+                properties = {
+                    updates = {
+                        type = "array"
+                        description = "One entry per task."
+                        items = {
+                            type = "object"
+                            properties = {
+                                task_id = { type = "string" }
+                                action = { type = "string" }
+                                what_customer_needs = { type = "array", items = { type = "string" } }
+                                channel = { type = "string", enum = ["email", "letter", "online_form", "phone", "direct"] }
+                                contact_url = { type = "string" }
+                                draft_inputs = { type = "string" }
+                                notes = { type = "string" }
+                            }
+                            required = ["task_id", "action", "channel"]
+                        }
+                    }
+                }
+                required = ["updates"]
+            }
+        }
+        class = "update_tasks.UpdateTasks"
+    }
+    {
+        name = "gov_service_directory"
+        function {
+            description = """Official service details for government and NHS obligations: channel, link, what the customer needs and who must act."""
+            parameters = {
+                type = "object"
+                properties = {
+                    obligation_ids = {
+                        type = "array"
+                        description = "Obligation IDs, for example dvla_licence."
+                        items = { type = "string" }
+                    }
+                }
+                required = ["obligation_ids"]
+            }
+        }
+        class = "gov_service_directory.GovServiceDirectory"
+    }
+    {
+        name = "provider_directory"
+        function {
+            description = """Contact channel, link and required fields for named providers."""
+            parameters = {
+                type = "object"
+                properties = {
+                    names = {
+                        type = "array"
+                        description = "Provider names, for example Brightwatt Energy."
+                        items = { type = "string" }
+                    }
+                }
+                required = ["names"]
+            }
+        }
+        class = "provider_directory.ProviderDirectory"
+    }
+    {
+        name = "gp_finder"
+        function {
+            description = """Lists the GP practices nearest a postcode in England or Wales with address, phone and
+distance (NHS Organisation Data Service, live), plus how to check they are taking new patients."""
+            parameters = {
+                type = "object"
+                properties = {
+                    postcode = {
+                        type = "string"
+                        description = "Postcode to search near. Leave out to use the new address."
+                    }
+                    limit = { type = "integer", description = "How many practices. Default 5." }
+                }
+
+            }
+        }
+        class = "gp_finder.GpFinder"
+    }
+    {
+        name = "insurance_quote_api"
+        function {
+            description = """Indicative monthly home insurance price band for the new address. Not a quote."""
+            parameters = {
+                type = "object"
+                properties = {
+                    postcode = {
+                        type = "string"
+                        description = "Postcode. Leave out to use the new address."
+                    }
+                }
+
+            }
+        }
+        class = "insurance_quote_api.InsuranceQuoteApi"
+    }
+    {
+        name = "bank_address_api"
+        function {
+            description = """Schedules the address change on the bank's own records for the completion date. Refuses unless the customer has approved the bank address task."""
+        }
+        class = "bank_address_api.BankAddressApi"
+    }
+    {
+        name = "letter_templates"
+        function {
+            description = """Draft templates for each channel, with the placeholders a draft may use."""
+            parameters = {
+                type = "object"
+                properties = {
+                    channels = {
+                        type = "array"
+                        description = "Channels needed: email, letter, online_form, phone, direct."
+                        items = { type = "string" }
+                    }
+                }
+
+            }
+        }
+        class = "letter_templates.LetterTemplates"
+    }
+    {
+        name = "save_drafts"
+        function {
+            description = """Saves drafts written with placeholders, fills in the customer's details in a private copy, and marks each task awaiting approval. Returns draft IDs and what the customer must add."""
+            parameters = {
+                type = "object"
+                properties = {
+                    drafts = {
+                        type = "array"
+                        items = {
+                            type = "object"
+                            properties = {
+                                task_id = { type = "string" }
+                                subject = { type = "string" }
+                                body = { type = "string" }
+                            }
+                            required = ["task_id", "subject", "body"]
+                        }
+                    }
+                }
+                required = ["drafts"]
+            }
+        }
+        class = "save_drafts.SaveDrafts"
+    }
+    {
+        name = "approve_drafts"
+        function {
+            description = """Records the customer's decision on drafts awaiting approval. Needs the customer's own words."""
+            parameters = {
+                type = "object"
+                properties = {
+                    customer_words = { type = "string", description = "The customer's approval, quoted exactly." }
+                    approve = { type = "array", items = { type = "string" }, description = "Draft or task IDs, or [all]." }
+                    skip = { type = "array", items = { type = "string" }, description = "Draft or task IDs to skip." }
+                }
+                required = ["customer_words"]
+            }
+        }
+        class = "approve_drafts.ApproveDrafts"
+    }
+    {
+        name = "send_notification"
+        function {
+            description = """Sends approved drafts (mock: logged, never really sent). Refuses anything not approved."""
+            parameters = {
+                type = "object"
+                properties = {
+                    task_ids = { type = "array", items = { type = "string" }, description = "Task IDs, or [all]." }
+                }
+                required = ["task_ids"]
+            }
+        }
+        class = "send_notification.SendNotification"
+    }
+    {
+        name = "plan_corrections"
+        function {
+            description = """After the plan is rebuilt for a new date, sorts tasks into needs_correction,
+needs_rebooking, updated_automatically and unchanged, and marks those needing action."""
+        }
+        class = "plan_corrections.PlanCorrections"
+    }
+    {
+        name = "check_inbox"
+        function {
+            description = """Returns new provider replies to notifications that have been sent."""
+        }
+        class = "check_inbox.CheckInbox"
+    }
+    {
+        name = "record_reply"
+        function {
+            description = """Records what a provider reply said and sets the task's next status."""
+            parameters = {
+                type = "object"
+                properties = {
+                    reply_id = { type = "string" }
+                    task_id = { type = "string" }
+                    outcome = { type = "string", enum = ["confirmed", "needs_action"] }
+                    facts = { type = "object", description = "Facts the provider gave, as name and value pairs." }
+                    requested_info = { type = "array", items = { type = "string" }, description = "What the provider asked for." }
+                }
+                required = ["reply_id", "task_id", "outcome"]
+            }
+        }
+        class = "record_reply.RecordReply"
+    }
+    {
+        name = "get_audit_log"
+        function {
+            description = """Returns the audit trail of approvals, sends, direct updates, replans and replies."""
+            parameters = {
+                type = "object"
+                properties = {
+                    task_id = { type = "string", description = "Only this task. Leave out for all." }
+                }
+            }
+        }
+        class = "get_audit_log.GetAuditLog"
+    }
+    {
+        name = "create_case"
+        function {
+            description = """Creates a standalone move case from first names, both postcodes and the move date.
+Checks the postcodes and finds both councils. Personal details come from the app's secure form, not from chat."""
+            parameters = {
+                type = "object"
+                properties = {
+                    first_names = { type = "array", items = { type = "string" }, description = "First name of each adult moving." }
+                    old_postcode = { type = "string" }
+                    new_postcode = { type = "string" }
+                    move_date = { type = "string", description = "Completion or move date, YYYY-MM-DD." }
+                    move_date_is_estimate = { type = "boolean" }
+                    exchange_date = { type = "string", description = "YYYY-MM-DD, if known." }
+                    old_property = { type = "string", enum = ["sold", "let", "rented_ended", "kept"] }
+                    facts = { type = "object", description = "Yes/no household facts the customer stated." }
+                }
+                required = ["first_names", "old_postcode", "new_postcode", "move_date"]
+            }
+        }
+        class = "create_case.CreateCase"
+    }
+    {
+        name = "import_statement"
+        function {
+            description = """Reads an uploaded CSV or OFX bank statement into the case, then deletes the file.
+Needs the customer's words agreeing to it being read."""
+            parameters = {
+                type = "object"
+                properties = {
+                    customer_consent_words = { type = "string", description = "The customer's agreement, quoted exactly." }
+                    file_name = { type = "string", description = "The uploaded file's name, if the customer gave it." }
+                }
+                required = ["customer_consent_words"]
+            }
+        }
+        class = "import_statement.ImportStatement"
+    }
+    {
+        name = "add_manual_providers"
+        function {
+            description = """Saves providers the customer listed to the case."""
+            parameters = {
+                type = "object"
+                properties = {
+                    providers = {
+                        type = "array"
+                        items = {
+                            type = "object"
+                            properties = {
+                                category = { type = "string" }
+                                provider_name = { type = "string" }
+                            }
+                            required = ["category", "provider_name"]
+                        }
+                    }
+                }
+                required = ["providers"]
+            }
+        }
+        class = "add_manual_providers.AddManualProviders"
+    }
+    {
+        name = "delete_case"
+        function {
+            description = """Deletes everything held for the current standalone case. Needs the customer's request quoted."""
+            parameters = {
+                type = "object"
+                properties = {
+                    customer_words = { type = "string", description = "The customer's request to delete, quoted exactly." }
+                }
+                required = ["customer_words"]
+            }
+        }
+        class = "delete_case.DeleteCase"
+    }
+    {
+        name = "school_finder"
+        function {
+            description = """Lists open schools nearest a postcode in England, by child age or phase, with contact
+details and distance (Department for Education data)."""
+            parameters = {
+                type = "object"
+                properties = {
+                    postcode = { type = "string", description = "Leave out to use the new address." }
+                    child_ages = { type = "array", items = { type = "integer" }, description = "Each child's age in September." }
+                    phases = { type = "array", items = { type = "string", enum = ["nursery", "primary", "secondary", "sixth_form"] } }
+                    limit = { type = "integer", description = "Schools per group. Default 5." }
+                    radius_km = { type = "number", description = "Search radius. Default 5." }
+                }
+            }
+        }
+        class = "school_finder.SchoolFinder"
+    }
+    {
+        name = "water_supplier_lookup"
+        function {
+            description = """Names the water supplier and sewerage provider for a postcode, with the official checker
+link."""
+            parameters = {
+                type = "object"
+                properties = {
+                    postcode = { type = "string", description = "Leave out to use the new address." }
+                }
+            }
+        }
+        class = "water_supplier_lookup.WaterSupplierLookup"
+    }
+]

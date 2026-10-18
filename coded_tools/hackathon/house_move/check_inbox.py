@@ -1,0 +1,66 @@
+"""Mock inbox: scripted provider replies to notifications that have been sent."""
+
+import asyncio
+import json
+import logging
+from typing import Any
+
+from neuro_san.interfaces.coded_tool import CodedTool
+
+from coded_tools.hackathon.house_move.house_move_data_store import HouseMoveDataStore
+
+logger = logging.getLogger(__name__)
+
+
+class CheckInbox(CodedTool):
+    """
+    Returns new provider replies from data/inbox_mock.json. A reply only arrives once its task has been sent at
+    least once (it has a sent_ref), whatever its status now: a task re-drafted after a date change still gets
+    replies to the first send. Each reply is returned until record_reply has processed it.
+    """
+
+    FILE_NAME: str = "inbox_mock.json"
+
+    def __init__(self, data_store: HouseMoveDataStore | None = None):
+        """
+        :param data_store: source of the scripted replies. Defaults to the synthetic data files.
+        """
+        self._data_store: HouseMoveDataStore = data_store or HouseMoveDataStore()
+
+    def invoke(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
+        """
+        :param args: not used.
+        :param sly_data: reads "tasks" and "processed_replies".
+        :return: {"replies": [{"reply_id", "task_id", "org", "from", "body"}]}, or an "Error: ..." string.
+        """
+        try:
+            replies: list[dict[str, Any]] = self._data_store.get_section(CheckInbox.FILE_NAME, "replies") or []
+        except (OSError, json.JSONDecodeError) as error:
+            logger.error("Could not read the mock inbox: %s", error)
+            return f"Error: the inbox could not be read ({error})."
+
+        sent_tasks: dict[str, dict[str, Any]] = {
+            task.get("obligation_id"): task for task in sly_data.get("tasks") or [] if task.get("sent_ref")
+        }
+        processed: set[str] = set(sly_data.get("processed_replies") or [])
+        new_replies: list[dict[str, Any]] = []
+        for reply in replies:
+            task: dict[str, Any] | None = sent_tasks.get(reply.get("obligation_id"))
+            if task is None or reply.get("reply_id") in processed:
+                continue
+            new_replies.append(
+                {
+                    "reply_id": reply.get("reply_id"),
+                    "task_id": task.get("task_id"),
+                    "org": task.get("org"),
+                    "from": reply.get("from"),
+                    "body": reply.get("body"),
+                }
+            )
+        return {"replies": new_replies}
+
+    async def async_invoke(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
+        """
+        Runs invoke in a worker thread because it reads files.
+        """
+        return await asyncio.to_thread(self.invoke, args, sly_data)

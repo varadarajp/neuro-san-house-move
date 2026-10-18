@@ -1,0 +1,195 @@
+{
+  "_note": "Synthetic data only. Postcodes are real (checked on postcodes.io); people and street addresses are fictional.",
+  "customers": [
+    {
+      "customer_id": "C-10042",
+      "names": [
+        "Sam Morgan",
+        "Alex Morgan"
+      ],
+      "email": "sam.morgan@example.com",
+      "household": {
+        "adults": 2,
+        "children": null,
+        "pets": null
+      },
+      "old_address": {
+        "line1": "14 Wharf Approach",
+        "town": "Leeds",
+        "postcode": "LS1 3ED"
+      },
+      "new_address": {
+        "line1": "7 Mayfield Grove",
+        "town": "Harrogate",
+        "postcode": "HG1 1SY"
+      },
+      "completion_date": "2026-11-27",
+      "exchange_date": "2026-11-13",
+      "old_property_retained": null,
+      "vehicles": null,
+      "has_driving_licence": null,
+      "employment": "employed",
+      "products_held": [
+        "current_account",
+        "mortgage"
+      ],
+      "mortgage_case": {
+        "case_id": "M-55810",
+        "status": "completion_date_set"
+      }
+    },
+    {
+      "customer_id": "C-20001",
+      "names": [
+        "Priya Shah"
+      ],
+      "email": "priya.shah@example.com",
+      "household": {
+        "adults": 1,
+        "children": null,
+        "pets": null
+      },
+      "old_address": {
+        "line1": "22 Savile Park Terrace",
+        "town": "Halifax",
+        "postcode": "HX1 5LZ"
+      },
+      "new_address": {
+        "line1": "3 Rainsford Mews",
+        "town": "Chelmsford",
+        "postcode": "CM1 1FR"
+      },
+      "completion_date": "2026-12-04",
+      "exchange_date": "2026-11-20",
+      "old_property_retained": null,
+      "vehicles": null,
+      "has_driving_licence": null,
+      "employment": "self_employed",
+      "products_held": [
+        "current_account",
+        "mortgage",
+        "buy_to_let_enquiry"
+      ],
+      "mortgage_case": {
+        "case_id": "M-61204",
+        "status": "completion_date_set"
+      },
+      "_scenario": "England to England, different councils and water companies. Single, no car. Old flat may be let (landlord insurance edge case)."
+    },
+    {
+      "customer_id": "C-20002",
+      "names": [
+        "Callum Reid",
+        "Morag Reid"
+      ],
+      "email": "callum.reid@example.com",
+      "household": {
+        "adults": 2,
+        "children": null,
+        "pets": null
+      },
+      "old_address": {
+        "line1": "41 Hyndland Avenue",
+        "town": "Glasgow",
+        "postcode": "G12 8QQ"
+      },
+      "new_address": {
+        "line1": "9 Cleveland Terrace",
+        "town": "Darlington",
+        "postcode": "DL3 9LP"
+      },
+      "completion_date": "2026-11-30",
+      "exchange_date": "2026-11-16",
+      "old_property_retained": "sold",
+      "vehicles": null,
+      "has_driving_licence": null,
+      "employment": "employed",
+      "products_held": [
+        "current_account",
+        "mortgage"
+      ],
+      "mortgage_case": {
+        "case_id": "M-61377",
+        "status": "completion_date_set"
+      },
+      "_scenario": "Scotland to England. No old water account (water was in council tax); new home needs a water company. Two cars. Completion falls on St Andrew's Day (a Scottish bank holiday, not an English one)."
+    },
+    {
+      "customer_id": "C-20003",
+      "names": [
+        "Rhys Evans"
+      ],
+      "email": "rhys.evans@example.com",
+      "household": {
+        "adults": 1,
+        "children": [],
+        "pets": []
+      },
+      "old_address": {
+        "line1": "17 Mackintosh Place",
+        "town": "Cardiff",
+        "postcode": "CF24 3PY"
+      },
+      "new_address": {
+        "line1": "5 Pilrig Street",
+        "town": "Edinburgh",
+        "postcode": "EH7 4LB"
+      },
+      "completion_date": "2027-01-08",
+      "exchange_date": "2026-12-11",
+      "old_property_retained": "sold",
+      "vehicles": null,
+      "has_driving_licence": null,
+      "employment": "employed",
+      "products_held": [
+        "current_account",
+        "mortgage",
+        "credit_card"
+      ],
+      "mortgage_case": {
+        "case_id": "M-61452",
+        "status": "completion_date_set"
+      },
+      "_scenario": "Wales to Scotland. Close the Welsh water account; in Scotland water is billed with council tax. No TV licence (streaming only). Scottish bank holidays around New Year affect working days."
+    },
+    {
+      "customer_id": "C-20004",
+      "names": [
+        "Aoife Byrne",
+        "Daniel Byrne"
+      ],
+      "email": "aoife.byrne@example.com",
+      "household": {
+        "adults": 2,
+        "children": null,
+        "pets": null
+      },
+      "old_address": {
+        "line1": "28 Malone Park Lane",
+        "town": "Belfast",
+        "postcode": "BT9 5AH"
+      },
+      "new_address": {
+        "line1": "12 Ash Grove",
+        "town": "Leeds",
+        "postcode": "LS6 3BQ"
+      },
+      "completion_date": "2026-12-18",
+      "exchange_date": "2026-12-04",
+      "old_property_retained": null,
+      "vehicles": null,
+      "has_driving_licence": null,
+      "employment": "employed",
+      "products_held": [
+        "current_account",
+        "mortgage",
+        "savings"
+      ],
+      "mortgage_case": {
+        "case_id": "M-61589",
+        "status": "completion_date_set"
+      },
+      "_scenario": "Northern Ireland to England. Domestic rates (Land & Property Services), not council tax; NI driving licence (DVA cannot record a GB address); no NI household water bill; new home needs council tax and a water company."
+    }
+  ]
+}

@@ -1,0 +1,316 @@
+<!-- pyml disable line-length-->
+# House Move Agent
+
+A multi-agent assistant, built on [Neuro SAN Studio](https://github.com/cognizant-ai-lab/neuro-san-studio), that helps someone moving home in the UK tell
+every organisation that needs to know, in the right order and on time, without sending anything they have not
+approved.
+
+> Hackathon build. Synthetic customer data only. Every send is mocked and logged; nothing leaves the machine.
+>
+> This repository holds only the House Move files. They use the same folder layout as neuro-san-studio, so you
+> copy them into a neuro-san-studio checkout to run them (see [Getting started](#getting-started)).
+
+## Contents
+
+- [The problem](#the-problem)
+- [What it does](#what-it-does)
+- [Design principle: AI only where it adds value](#design-principle-ai-only-where-it-adds-value)
+- [Agent network](#agent-network)
+- [Data, privacy and safety](#data-privacy-and-safety)
+- [Getting started](#getting-started)
+- [Running the demo](#running-the-demo)
+- [Test customers](#test-customers)
+- [Project layout](#project-layout)
+- [Tests](#tests)
+- [Data sources](#data-sources)
+- [Known limitations](#known-limitations)
+- [Licence and credits](#licence-and-credits)
+- [Roadmap](#roadmap)
+
+## The problem
+
+Moving home in the UK means telling 15 to 30 organisations. Some are legal requirements: DVLA (fines of up to
+£1,000), council tax (a £70 penalty for not notifying), the electoral register, TV Licensing. Others cost money if
+missed: energy and water final readings, insurance that no longer matches the address. People forget some, find
+out late, and then contact their bank and providers to fix the gaps.
+
+## What it does
+
+1. **Discovers** who the customer pays from their own transactions, including the ones they forgot
+   (for example: "you pay for pet insurance, so you need to update your pet's microchip").
+2. **Plans** a dated task list against the completion date, from rules with official sources, using UK working
+   days and the bank holidays of the country they are moving to.
+3. **Drafts** every notification with placeholders, so personal data is filled in by code, not by the LLM.
+4. **Gets approval** for each draft. Nothing is sent without the customer's own words, recorded in an audit log.
+5. **Tracks** progress: mock sends, the bank's own address update, replanning when completion moves, and provider
+   replies (for example a request for a meter serial number).
+6. **Finds local contacts** at the new address: nearest GP practices (NHS, live), schools for the children's ages
+   (Department for Education data) and the water and sewerage companies.
+
+Two ways in:
+
+| Route | Who | How the data arrives |
+|---|---|---|
+| **Bank customer** (`C-…`) | A mortgage customer whose completion date has been set | Profile from the CRM, 90 days of transactions and Direct Debit references from the bank (mocked) |
+| **Standalone** (`S-…`) | Anyone moving, bank customer or not | A short chat, a statement uploaded on a separate secure page (CSV, OFX or QFX) or a list of providers, and personal details from the app's form, stored encrypted in SQLite |
+
+Cross-border moves are handled: Scotland (water billed with council tax), Wales, and Northern Ireland (domestic
+rates through Land & Property Services instead of council tax, and an NI driving licence route).
+
+## Design principle: AI only where it adds value
+
+| Deterministic (code and rules) | AI (LLM agents) |
+|---|---|
+| Which obligations apply, from known facts (23 rules with source URLs) | Turning messy descriptors (`BRIGHTWATT EN DD 0034X`) into providers and life facts |
+| Deadlines in working days, bank holidays per nation | Conversational intake: free text into structured facts |
+| Legal flags and penalties, copied from the rules file | Edge cases the rules do not cover (letting the old home, joint owners) |
+| The approval gate: nothing is sent unless its status is `approved` | Personalising each draft to the organisation |
+| What a date change means for each task (correction, rebooking, automatic) | Reading a provider's reply and deciding the next step |
+| Audit log, case store, encryption, statement parsing | Explaining the plan in plain English |
+
+An LLM never invents a deadline, fee or legal obligation: those come only from
+[`obligations_rules.json`](coded_tools/hackathon/house_move/data/obligations_rules.json). If the rules do not cover
+a situation, the agents say so and point to gov.uk.
+
+## Agent network
+
+Network file: [`registries/hackathon/house_move.hocon`](registries/hackathon/house_move.hocon), runtime name
+`hackathon/house_move`. 13 LLM agents and 26 coded tools.
+
+```mermaid
+flowchart TD
+    C[move_coordinator<br/>front man] --> I[intake_agent]
+    C --> P[profile_agent]
+    C --> D[discovery_agent]
+    C --> O[obligations_agent]
+    C --> T[timeline_agent]
+    C --> L[local_services_agent]
+    C --> G[government_agent]
+    C --> H[home_utilities_agent]
+    C --> F[financial_agent]
+    C --> HF[health_family_agent]
+    C --> CM[comms_agent]
+    C --> TR[tracker_agent]
+    subgraph AAOSA specialists
+      G
+      H
+      F
+      HF
+    end
+```
+
+| Agent | Job | Main tools |
+|---|---|---|
+| `move_coordinator` | Owns the conversation: intake → discover → plan → draft → approve → track | All agents below |
+| `intake_agent` | Starts a standalone case, imports a statement or listed providers, deletes a case | `create_case`, `import_statement`, `add_manual_providers`, `delete_case` |
+| `profile_agent` | What is known, what is missing, the questions to ask; resumes a saved case | `customer_profile_lookup` |
+| `discovery_agent` | **AI moment 1:** providers and life facts from transactions | `get_transactions` |
+| `obligations_agent` | Which organisations must be told; councils for both postcodes (live) | `council_lookup`, `obligations_rules` |
+| `timeline_agent` | Dated plan grouped by week | `build_timeline` |
+| `local_services_agent` | GPs, schools and water companies at the new address | `gp_finder`, `school_finder`, `water_supplier_lookup` |
+| `government_agent` and 3 other specialists | AAOSA: each says whether a task is theirs (Determine), then records how to do it (Fulfill) | `list_tasks`, `update_tasks`, directories |
+| `comms_agent` | One draft per task, with `{{placeholders}}` | `letter_templates`, `save_drafts` |
+| `tracker_agent` | **AI moment 2:** approve, send, replan corrections, replies, audit | `approve_drafts`, `send_notification`, `bank_address_api`, `plan_corrections`, `check_inbox`, `record_reply`, `get_audit_log` |
+
+## Data, privacy and safety
+
+- **Personal data stays out of the LLM.** Full names, street addresses, email and account references live in
+  `sly_data` and the encrypted vault. The LLM sees first names, towns and postcodes, and writes drafts with
+  placeholders such as `{{new_address}}` that code fills in at send time.
+- **Direct Debit references** (bank route) fill `{{account_number}}`, `{{policy_number}}` and `{{licence_number}}`,
+  so emails can go straight to providers.
+- **Statements never go through the chat.** nsflow's paperclip pastes file text into the message, so the agents
+  refuse pasted statements and send users to the upload page. Imported files are deleted after reading.
+- **Consent is recorded:** statement import, each approval and data deletion need the customer's own words.
+- **Standalone case store** (`case_data/house_move_cases.sqlite`, git-ignored): profile and plan snapshot, a vault
+  encrypted per field with Fernet, transactions, listed providers and consents. Cases can be resumed by case ID,
+  deleted on request, and purged after the move (retention).
+- **Approval gate in code:** `send_notification` and `bank_address_api` refuse anything not approved; any approved
+  task that cannot go out is reported, never dropped silently.
+- **Audit trail:** every approval, send, direct update, replan, reply and deletion is appended to
+  `logs/house_move_audit.jsonl` with IDs and events only.
+
+## Getting started
+
+Requirements: macOS or Linux, git, [uv](https://docs.astral.sh/uv/), an Anthropic API key.
+
+1. Get Neuro SAN Studio and this repository side by side:
+
+   ```bash
+   git clone https://github.com/cognizant-ai-lab/neuro-san-studio.git
+   git clone https://github.com/varadarajp/neuro-san-house-move.git
+   ```
+
+2. Copy the House Move files into the studio (the folders match):
+
+   ```bash
+   cd neuro-san-house-move
+   cp -R registries coded_tools apps build_scripts tests ../neuro-san-studio/
+   cd ../neuro-san-studio
+   ```
+
+3. Register the network: add this line to `registries/manifest.hocon`, next to the other `include` lines:
+
+   ```hocon
+   include "registries/hackathon/manifest.hocon",
+   ```
+
+4. Create the environment:
+
+   ```bash
+   uv venv venv --python 3.12
+   VIRTUAL_ENV=$PWD/venv uv pip install -r requirements.txt -r requirements-build.txt
+   VIRTUAL_ENV=$PWD/venv uv pip install -r coded_tools/hackathon/house_move/requirements.txt
+   ```
+
+5. Put your key in `.env` (git-ignored by neuro-san-studio):
+
+   ```text
+   ANTHROPIC_API_KEY="sk-ant-..."
+   ```
+
+   The default LLM config falls back to Claude when no OpenAI key is set. Check it with
+   `venv/bin/python -m neuro_san_studio check-llm-keys`.
+
+6. Add these lines to the studio's `.gitignore`, so the local case database and uploads are never committed:
+
+   ```text
+   case_data/
+   uploads/
+   ```
+
+All commands below run from the neuro-san-studio folder. Start the server and the nsflow UI (server on port 8080,
+UI on <http://localhost:4173>):
+
+```bash
+venv/bin/python -m neuro_san_studio run
+```
+
+For the standalone route, also start the statement upload page (<http://127.0.0.1:8090>):
+
+```bash
+venv/bin/python -m apps.house_move_upload.upload_server
+```
+
+Optional: refresh the schools list from the Department for Education (about 60 MB download):
+
+```bash
+venv/bin/python -m build_scripts.build_house_move_schools
+```
+
+Python code changes need a server restart; HOCON changes are picked up automatically.
+
+## Running the demo
+
+In nsflow, open **hackathon → house_move**.
+
+**Bank customer (about 5 minutes):**
+
+1. "Mortgage case M-55810 for customer C-10042 has a completion date set. Start the move journey."
+   Discovery finds 12 providers, including pet insurance, and infers a pet and a young child.
+2. Answer the questions and say "build the plan". Councils come from postcodes.io live; the plan is dated by
+   week with legal items marked, followed by local GPs and water companies.
+3. "Yes please, prepare the drafts." Four AAOSA specialists and Comms produce a draft per task.
+4. "Approve all of them." Emails with known references go to providers; the rest become pre-filled packs; the
+   bank's own address update is made directly.
+5. "Completion has moved to 11 December." The Tracker sorts every task: needs correction, needs rebooking,
+   updated automatically, unchanged.
+6. "Has anyone replied yet?" Brightwatt asks for a meter serial number; the agent drafts the follow-up.
+7. "Show me the audit trail."
+
+**Standalone:**
+
+1. Paste into the SlyData panel and tick "Use Edited Sly Data" (this stands in for the app's secure form):
+
+   ```json
+   {"intake_form": {"full_names": ["Jordan Lee"], "email": "jordan.lee@example.com",
+     "old_address_line1": "8 Cotham Vale", "new_address_line1": "21 Lenton Boulevard"}}
+   ```
+
+2. "Hi, I'm moving house and I don't bank with you. I'm Jordan, moving from BS6 6RB to NG7 2NF on
+   11 December 2026."
+3. Upload `coded_tools/hackathon/house_move/data/sample_statements/jordan_lee_bristol.csv` at
+   <http://127.0.0.1:8090>, then say "I've uploaded jordan_lee_bristol.csv. Yes, you can read it."
+4. Continue as above. Later, "My case reference is S-…" resumes the case in a new session.
+
+The same journeys run from the command line:
+
+```bash
+venv/bin/python -m neuro_san_studio chat hackathon/house_move --connection http --port 8080
+```
+
+## Test customers
+
+All synthetic. Postcodes are real and were checked on postcodes.io; people, street addresses and most providers
+are fictional.
+
+| ID | Move | What it exercises |
+|---|---|---|
+| C-10042 Sam and Alex Morgan | Leeds LS1 3ED → Harrogate HG1 1SY | The main demo: pet insurance discovery, nursery, car, date slip, replies |
+| C-20001 Priya Shah | Halifax HX1 5LZ → Chelmsford CM1 1FR | England to England, different councils and water companies, no car |
+| C-20002 Callum and Morag Reid | Glasgow G12 8QQ → Darlington DL3 9LP | Scotland to England: no old water account; completion on a Scottish-only bank holiday |
+| C-20003 Rhys Evans | Cardiff CF24 3PY → Edinburgh EH7 4LB | Wales to Scotland: close the Welsh water account; water billed with council tax; no TV licence |
+| C-20004 Aoife and Daniel Byrne | Belfast BT9 5AH → Leeds LS6 3BQ | Northern Ireland to England: LPS rates, NI licence route, a baby (schools and childcare) |
+| Standalone: Jordan Lee | Bristol BS6 6RB → Nottingham NG7 2NF | Statement upload (CSV and OFX samples), case store, resume |
+
+## Project layout
+
+```text
+registries/hackathon/house_move.hocon         the agent network
+coded_tools/hackathon/house_move/             coded tools (one class per file)
+coded_tools/hackathon/house_move/data/        rules, synthetic data, directories, schools extract, samples
+apps/house_move_upload/upload_server.py       statement upload page
+build_scripts/build_house_move_schools.py     builds the schools extract from GIAS
+tests/coded_tools/hackathon/house_move/       unit tests
+tests/apps/house_move_upload/                 upload page tests
+House_Move_Agent.pptx                         pitch deck
+```
+
+## Tests
+
+```bash
+venv/bin/python -m pytest tests/coded_tools/hackathon tests/apps/house_move_upload -q
+```
+
+61 tests cover the rules engine (including Scotland, Wales and Northern Ireland), working-day dates, the approval
+gate, mock sending, replanning, replies, the case store and encryption, statement parsing, the upload page, and the
+GP, school and water finders. Network calls are mocked in tests.
+
+## Data sources
+
+| Data | Source | Notes |
+|---|---|---|
+| Councils and coordinates | [postcodes.io](https://postcodes.io) | Live, with a cached fallback for the demo postcodes |
+| Obligations, penalties, timings | gov.uk, legislation.gov.uk, nidirect, Citizens Advice, Ofcom, Royal Mail, TV Licensing, NHS | 20 of 23 rules verified on 2026-10-18; each rule says whether its date comes from the source or is a recommendation |
+| Bank holidays | [gov.uk/bank-holidays.json](https://www.gov.uk/bank-holidays.json) | England and Wales, Scotland, Northern Ireland |
+| GP practices | NHS Organisation Data Service | Live, no key |
+| Schools | Department for Education, Get Information About Schools | 26,483 open schools in England; Open Government Licence v3.0 |
+| Water companies | Checked table by postcode district, plus the [CCW checker](https://www.ccw.org.uk/faq/which-water-company-supplies-my-area/) | No public API exists; entries are marked confirmed or not |
+
+## Known limitations
+
+- Synthetic data only: the CRM, transactions, mandates, providers and inbox are mocks. Sends are logged, not sent.
+- PDF statements are not supported; CSV, OFX and QFX are.
+- Three rules are not verified: the nursery notice period (set by the contract), the NI licence exchange steps, and
+  the standalone "your banks" task.
+- Water companies are confirmed for Bristol and Darlington only; other districts point to the official checker.
+- Schools cover England only; Wales, Scotland and Northern Ireland get pointers to their own admissions routes.
+- The upload page address is fixed (`127.0.0.1:8090`) and only works on the machine running the demo.
+- The full draft turn takes several minutes: four specialists are each called twice (Determine, then Fulfill).
+- The vault key is a local file; production would use a managed key service.
+
+## Licence and credits
+
+Built on [Neuro SAN Studio](https://github.com/cognizant-ai-lab/neuro-san-studio) and [neuro-san](https://github.com/cognizant-ai-lab/neuro-san)
+(Apache 2.0). School data: Department for Education, Open Government Licence v3.0.
+
+## Roadmap
+
+1. **Open Banking:** with consent, read transactions and Direct Debits from any UK bank, replacing statement upload
+   and restoring automatic account references for everyone.
+2. **Pilot:** real data for consenting mortgage customers; the bank's address update and home insurance live.
+3. **Partners:** APIs with major energy, water and broadband providers.
+4. **Government:** links into gov.uk services as they become available.
+5. **SME variant:** business premises moves (Companies House, HMRC, business rates).
+6. **Other life events:** the same pattern for bereavement, marriage or a new baby.
+<!-- pyml enable line-length-->
