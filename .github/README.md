@@ -69,12 +69,12 @@ rates through Land & Property Services instead of council tax, and an NI driving
 | Audit log, case store, encryption, statement parsing | Explaining the plan in plain English |
 
 An LLM never invents a deadline, fee or legal obligation: those come only from
-[`obligations_rules.json`](coded_tools/hackathon/house_move/data/obligations_rules.json). If the rules do not cover
+[`obligations_rules.json`](../coded_tools/hackathon/house_move/data/obligations_rules.json). If the rules do not cover
 a situation, the agents say so and point to gov.uk.
 
 ## Agent network
 
-Network file: [`registries/hackathon/house_move.hocon`](registries/hackathon/house_move.hocon), runtime name
+Network file: [`registries/hackathon/house_move.hocon`](../registries/hackathon/house_move.hocon), runtime name
 `hackathon/house_move`. 13 LLM agents and 26 coded tools.
 
 ```mermaid

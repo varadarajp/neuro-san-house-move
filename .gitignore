@@ -1,9 +1,0 @@
-__pycache__/
-*.pyc
-.DS_Store
-.env
-venv/
-.venv/
-logs/
-case_data/
-uploads/
