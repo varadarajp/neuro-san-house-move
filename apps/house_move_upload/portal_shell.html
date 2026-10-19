@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1f6f62">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>$title · House Move</title>
+<link rel="stylesheet" href="/portal.css">
+</head>
+<body>
+<div class="app$app_class">
+  <header class="topbar" id="topbar">
+    <div class="brand-mark">$icon_home</div>
+    <h1>$heading<span class="sub">$subheading</span></h1>
+    $account
+  </header>
+  <main id="main">
+    $body
+  </main>
+  $nav
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script>
+// Shared behaviour: a hairline under the app bar once the page scrolls.
+const bar = document.getElementById("topbar");
+addEventListener("scroll", () => bar.classList.toggle("scrolled", scrollY > 4), {passive: true});
+function toast(text, bad) {
+  const t = document.getElementById("toast");
+  t.textContent = text;
+  t.className = "toast show" + (bad ? " bad" : "");
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => { t.className = "toast" + (bad ? " bad" : ""); }, bad ? 6000 : 3500);
+}
+</script>
+$script
+</body></html>

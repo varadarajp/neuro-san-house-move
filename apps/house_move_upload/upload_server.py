@@ -18,6 +18,7 @@ import json
 import logging
 import re
 from pathlib import Path
+from string import Template
 from typing import Any
 
 import uvicorn
@@ -28,7 +29,9 @@ from fastapi import Request
 from fastapi import UploadFile
 from fastapi.responses import HTMLResponse
 from fastapi.responses import JSONResponse
+from fastapi.responses import Response
 
+from apps.house_move_upload.portal_icons import PortalIcons
 from coded_tools.hackathon.house_move.approve_on_portal import ApproveOnPortal
 from coded_tools.hackathon.house_move.audit_log import AuditLog
 from coded_tools.hackathon.house_move.case_status import CaseStatus
@@ -55,33 +58,22 @@ class StatementUploadServer:
     GUEST: str = "guest"
     EXTENSIONS: tuple[str, ...] = (".csv", ".ofx", ".qfx")
     UNSAFE_CHARACTERS: re.Pattern = re.compile(r"[^A-Za-z0-9._-]+")
-    PAGE: str = """<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>House Move portal</title>
-<style>
-  :root {{ color-scheme: light dark; --accent: #2f7d6d; }}
-  body {{ font-family: system-ui, sans-serif; max-width: 40rem; margin: 3rem auto; padding: 0 1rem;
-         line-height: 1.5; }}
-  .card {{ border: 1px solid #8884; border-radius: 12px; padding: 1.25rem 1.5rem; margin-bottom: 1.25rem; }}
-  button {{ background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: .55rem 1.1rem;
-           font-size: 1rem; cursor: pointer; }}
-  button.quiet {{ background: transparent; color: inherit; border: 1px solid #8886; }}
-  select, input[type=file] {{ font-size: 1rem; }}
-  .ok {{ border-left: 4px solid #2da44e; padding: .5rem 1rem; }}
-  .error {{ border-left: 4px solid #cf222e; padding: .5rem 1rem; }}
-  code, pre {{ background: #8882; padding: .1rem .3rem; border-radius: 4px; }}
-  pre {{ padding: .75rem; white-space: pre-wrap; word-break: break-all; }}
-  small {{ opacity: .75; }}
-</style></head>
-<body>
-<h1>House Move portal</h1>
-{message}
-{body}
-<small>Demo only: synthetic data. In production, sign-in is the bank's own and uploads are part of the app.</small>
-</body></html>"""
-
-    # The "My move" page renders the status JSON in the browser; see status_page.html.
-    STATUS_PAGE: str = (Path(__file__).parent / "status_page.html").read_text(encoding="utf-8")
+    HERE: Path = Path(__file__).parent
+    # Every screen is the same app shell (app bar, content, tab bar) styled by portal.css; see portal_shell.html.
+    SHELL: Template = Template((HERE / "portal_shell.html").read_text(encoding="utf-8"))
+    STYLES: str = (HERE / "portal.css").read_text(encoding="utf-8")
+    # The "My move" screen renders the status JSON in the browser; see status_page.html.
+    STATUS_PAGE: str = (HERE / "status_page.html").read_text(encoding="utf-8")
+    TABS: tuple[tuple[str, str, str], ...] = (
+        ("/", "Home", PortalIcons.HOME),
+        ("/status", "My move", PortalIcons.ROUTE),
+        ("/upload", "Upload", PortalIcons.UPLOAD),
+    )
+    CURRENT: str = ' aria-current="page"'
+    DEMO_NOTE: str = (
+        '<p class="fineprint">Demo with synthetic data. In production, sign-in is the bank\'s own and this is part '
+        "of the banking app.</p>"
+    )
 
     def __init__(
         self,
@@ -114,6 +106,10 @@ class StatementUploadServer:
         async def home(request: Request) -> str:
             return self._home(request.cookies.get(StatementUploadServer.COOKIE), "")
 
+        @app.get("/portal.css")
+        async def styles() -> Response:
+            return Response(StatementUploadServer.STYLES, media_type="text/css")
+
         @app.post("/signin", response_class=HTMLResponse)
         async def sign_in(who: str = Form(...)) -> HTMLResponse:
             token: str | None = self._issue(who)
@@ -131,7 +127,7 @@ class StatementUploadServer:
 
         @app.post("/signout", response_class=HTMLResponse)
         async def sign_out() -> HTMLResponse:
-            response: HTMLResponse = HTMLResponse(self._home(None, '<p class="ok">Signed out.</p>'))
+            response: HTMLResponse = HTMLResponse(self._home(None, self._ok("Signed out.")))
             response.delete_cookie(StatementUploadServer.COOKIE)
             return response
 
@@ -139,7 +135,11 @@ class StatementUploadServer:
         async def status_page(request: Request) -> HTMLResponse:
             if self._tokens.verify(request.cookies.get(StatementUploadServer.COOKIE)) is None:
                 return HTMLResponse(self._home(None, self._error("Sign in to see your move.")), status_code=401)
-            return HTMLResponse(StatementUploadServer.STATUS_PAGE)
+            return HTMLResponse(
+                self._page(
+                    request.cookies.get(StatementUploadServer.COOKIE), "/status", StatementUploadServer.STATUS_PAGE
+                )
+            )
 
         @app.get("/status.json")
         async def status_json(request: Request) -> JSONResponse:
@@ -175,6 +175,13 @@ class StatementUploadServer:
                 return JSONResponse({"error": result.removeprefix("Error: ")}, status_code=status)
             return JSONResponse(result)
 
+        @app.get("/upload", response_class=HTMLResponse)
+        async def upload_page(request: Request) -> HTMLResponse:
+            token: str | None = request.cookies.get(StatementUploadServer.COOKIE)
+            if self._tokens.verify(token) is None:
+                return HTMLResponse(self._home(None, self._error("Sign in before uploading.")), status_code=401)
+            return HTMLResponse(self._upload_screen(token, ""))
+
         @app.post("/upload", response_class=HTMLResponse)
         async def upload(request: Request, file: UploadFile = File(...)) -> HTMLResponse:
             token: str | None = request.cookies.get(StatementUploadServer.COOKIE)
@@ -183,7 +190,7 @@ class StatementUploadServer:
                 return HTMLResponse(self._home(None, self._error("Sign in before uploading.")), status_code=401)
             content: bytes = await file.read(ImportStatement.MAX_BYTES + 1)
             message, status = self._save(claims.get("sub"), file.filename or "", content)
-            return HTMLResponse(self._home(token, message), status_code=status)
+            return HTMLResponse(self._upload_screen(token, message), status_code=status)
 
         return app
 
@@ -220,43 +227,206 @@ class StatementUploadServer:
 
     def _home(self, token: str | None, message: str) -> str:
         """
-        The sign-in form when signed out; the session token and upload form when signed in.
+        The welcome screen with sign-in when signed out; the home screen when signed in: a summary of the move
+        (filled in from /status.json), quick actions, and the session to give the chat.
         """
         claims: dict[str, Any] | None = self._tokens.verify(token)
         if claims is None:
-            options: str = "".join(
-                f'<option value="{html.escape(cid)}">{html.escape(cid)} · {html.escape(name)} (bank customer)</option>'
-                for cid, name in self._demo_customers().items()
-            )
-            body: str = f"""<div class="card"><h2>Sign in</h2>
-<form action="/signin" method="post">
-  <p><select name="who" required>
-    <option value="{StatementUploadServer.GUEST}">I'm not a customer: start as a guest</option>{options}
-  </select></p>
-  <p><button type="submit">Sign in</button></p>
-</form>
-<small>Demo sign-in. A bank customer can open only their own record; a guest can open only cases they create.</small>
-</div>"""
-            return StatementUploadServer.PAGE.format(message=message, body=body)
-
-        who: str = "a guest" if claims.get("sub", "").startswith("guest:") else ", ".join(claims.get("customers", []))
+            return self._welcome(message)
         sly: str = html.escape(json.dumps({"session_token": token}))
-        body = f"""<div class="card"><h2>Signed in as {html.escape(who)}</h2>
-<p>Give the chat this session, once, at the start:</p>
-<ul><li><strong>nsflow:</strong> paste it into the SlyData tab and tick <em>Use Edited Sly Data</em>.</li>
-<li><strong>Command line:</strong> pass it with <code>--sly_data</code>.</li></ul>
-<pre>{sly}</pre>
-<p><a href="/status"><button type="button">See your move's status</button></a></p>
-<form action="/signout" method="post"><button class="quiet" type="submit">Sign out</button></form>
+        name: str = html.escape(self._first_name(claims) or "there")
+        body: str = f"""<section class="welcome" style="padding-top:8px"><h1>Hi {name}</h1>
+<p>Here is where your move stands.</p></section>
+<a class="card" id="summary" href="/status" style="display:block;text-decoration:none;color:inherit">
+  <div class="skeleton" style="height:64px;margin:0"></div></a>
+<div class="quick">
+  <a href="/status"><span class="avatar">{PortalIcons.CHECK}</span>Review and approve
+    <span class="muted">Read each letter first</span></a>
+  <a href="/upload"><span class="avatar">{PortalIcons.UPLOAD}</span>Upload a statement
+    <span class="muted">Find who you pay</span></a>
 </div>
-<div class="card"><h2>Upload a bank statement</h2>
-<form action="/upload" method="post" enctype="multipart/form-data">
-  <p><input type="file" name="file" accept=".csv,.ofx,.qfx" required></p>
-  <p><button type="submit">Upload</button></p>
-</form>
-<small>CSV, OFX or QFX, up to 5&nbsp;MB. Read once to find who you pay, then deleted. It never goes into the chat.
-</small></div>"""
-        return StatementUploadServer.PAGE.format(message=message, body=body)
+<div class="section-head"><h2>Connect your chat</h2></div>
+<div class="card">
+  <div style="display:flex;gap:12px;align-items:flex-start">
+    <span class="avatar">{PortalIcons.CHAT}</span>
+    <div><h2 class="title">Give the assistant your session</h2>
+    <p class="small muted">Once, at the start. In nsflow, paste it into the SlyData tab and tick
+    <em>Use Edited Sly Data</em>; on the command line, pass it with <code>--sly_data</code>.</p></div>
+  </div>
+  <pre class="token" id="token">{sly}</pre>
+  <button class="btn secondary block" type="button" id="copy">{PortalIcons.COPY} Copy session</button>
+  <p class="small muted" style="margin-top:10px">Never share it: it opens your case.</p>
+</div>
+{StatementUploadServer.DEMO_NOTE}"""
+        script: str = """<script>
+document.getElementById("copy").onclick = async () => {
+  const text = document.getElementById("token").textContent;
+  try { await navigator.clipboard.writeText(text); toast("Session copied. Paste it into the chat's SlyData."); }
+  catch (e) { getSelection().selectAllChildren(document.getElementById("token")); toast("Selected: press Copy."); }
+};
+// The move summary, from the same feed as the My move screen. Built with textContent only.
+(async () => {
+  const box = document.getElementById("summary");
+  const el = (tag, text, cls) => { const e = document.createElement(tag); if (text) e.textContent = text;
+    if (cls) e.className = cls; return e; };
+  try {
+    const s = await (await fetch("/status.json", {cache: "no-store"})).json();
+    box.textContent = "";
+    if (!s.case) {
+      box.appendChild(el("h2", "No move started yet", "title"));
+      box.appendChild(el("p", s.hint, "small muted"));
+      return;
+    }
+    const label = el("div", undefined, "progress");
+    const head = el("div", undefined, "label");
+    head.appendChild(el("b", s.stage));
+    head.appendChild(el("span", "Step " + (s.stage_index + 1) + " of " + s.stages.length, "small muted"));
+    label.appendChild(head);
+    const seg = el("div", undefined, "segments");
+    s.stages.forEach((_, i) =>
+      seg.appendChild(el("i", "", i < s.stage_index ? "done" : i === s.stage_index ? "now" : "")));
+    label.appendChild(seg);
+    box.appendChild(el("div", s.case.from + "  →  " + s.case.to, "small muted"));
+    box.appendChild(label);
+    const waiting = s.awaiting_approval.length;
+    const action = (s.groups.find(g => g.status === "needs_action") || {tasks: []}).tasks.length;
+    box.appendChild(el("p", waiting ? waiting + " letters waiting for your approval"
+      : action ? action + " replies need something from you" : s.hint, "small"));
+  } catch (e) { box.textContent = "Open My move to see your plan."; }
+})();
+</script>"""
+        return self._page(token, "/", message + body, script)
+
+    def _welcome(self, message: str) -> str:
+        """
+        Signed out: what the app does, and the demo sign-in.
+        """
+        options: str = "".join(
+            f'<option value="{html.escape(cid)}">{html.escape(name)} · {html.escape(cid)}</option>'
+            for cid, name in self._demo_customers().items()
+        )
+        features: str = "".join(
+            f'<li><span class="avatar">{icon}</span>{text}</li>'
+            for icon, text in (
+                (PortalIcons.SEARCH, "Finds everyone you need to tell, from who you pay"),
+                (PortalIcons.CHECK, "Dated plan and ready-made letters you approve"),
+                (PortalIcons.SHIELD, "Nothing is sent without your say-so"),
+            )
+        )
+        body: str = f"""<section class="welcome">
+  <div class="logo">{PortalIcons.HOME}</div>
+  <h1>Moving home,<br>sorted.</h1>
+  <p>Tell everyone you're moving: on time, in the right order, and only with your approval.</p>
+  <ul class="features">{features}</ul>
+</section>
+<div class="card">
+  <h2 class="title">Sign in</h2>
+  <form action="/signin" method="post">
+    <label class="field" for="who">Who are you?</label>
+    <select name="who" id="who" required>
+      <option value="{StatementUploadServer.GUEST}">I'm not a customer (guest)</option>
+      <optgroup label="Demo bank customers">{options}</optgroup>
+    </select>
+    <button class="btn block" type="submit" style="margin-top:14px">Sign in</button>
+  </form>
+  <p class="small muted" style="margin-top:12px">A bank customer can open only their own record; a guest can open
+  only cases they create.</p>
+</div>
+{StatementUploadServer.DEMO_NOTE}"""
+        return self._page(None, "", message + body)
+
+    def _upload_screen(self, token: str | None, message: str) -> str:
+        """
+        Upload a bank statement into the signed-in person's own folder.
+        """
+        body: str = f"""<div class="section-head"><h2>Upload a bank statement</h2></div>
+<div class="card">
+  <form action="/upload" method="post" enctype="multipart/form-data" id="upload-form">
+    <label class="drop" id="drop">
+      {PortalIcons.FILE}
+      <span class="file-name" id="file-name">Choose a CSV, OFX or QFX file</span>
+      <span class="small muted">Up to 5&nbsp;MB, downloaded from your online banking</span>
+      <input type="file" name="file" id="file" accept=".csv,.ofx,.qfx" required>
+    </label>
+    <button class="btn block" type="submit" id="send" style="margin-top:14px" disabled>Upload</button>
+  </form>
+</div>
+<ul class="list">
+  <li class="row"><span class="avatar">{PortalIcons.SHIELD}</span><div class="main"><div class="name">Never in the
+  chat</div><div class="small muted">It goes to your own private folder, not to the assistant.</div></div></li>
+  <li class="row"><span class="avatar">{PortalIcons.SEARCH}</span><div class="main"><div class="name">Read once,
+  then deleted</div><div class="small muted">Only to find the organisations you pay.</div></div></li>
+  <li class="row"><span class="avatar">{PortalIcons.CHAT}</span><div class="main"><div class="name">Then tell the
+  assistant</div><div class="small muted">Say the file name; it asks your permission before reading it.</div>
+  </div></li>
+</ul>
+{StatementUploadServer.DEMO_NOTE}"""
+        script: str = """<script>
+const input = document.getElementById("file"), send = document.getElementById("send");
+input.onchange = () => {
+  const f = input.files[0];
+  document.getElementById("file-name").textContent = f ? f.name : "Choose a CSV, OFX or QFX file";
+  document.getElementById("drop").classList.toggle("has-file", !!f);
+  send.disabled = !f;
+};
+document.getElementById("upload-form").onsubmit = () => { send.disabled = true; send.textContent = "Uploading…"; };
+</script>"""
+        return self._page(token, "/upload", message + body, script)
+
+    def _page(self, token: str | None, tab: str, body: str, script: str = "") -> str:
+        """
+        Fills the app shell: app bar with the signed-in name and sign-out, the screen, and the tab bar.
+        :param tab: the screen's tab path ("" when signed out), which also gives the page title.
+        :param body: the screen's HTML, including any message to show above it.
+        """
+        title: str = next((label for href, label, _ in StatementUploadServer.TABS if href == tab), "Welcome")
+        claims: dict[str, Any] | None = self._tokens.verify(token)
+        account: str = ""
+        nav: str = ""
+        subheading: str = "Your move, step by step"
+        if claims is not None:
+            account = (
+                '<form action="/signout" method="post" style="margin:0">'
+                f'<button class="icon-btn" type="submit" aria-label="Sign out" title="Sign out">'
+                f"{PortalIcons.SIGN_OUT}</button></form>"
+            )
+            subheading = html.escape(self._display_name(claims))
+            links: str = "".join(
+                f'<a href="{href}"{StatementUploadServer.CURRENT if href == tab else ""}>'
+                f'<span class="pill">{icon}</span>{label}</a>'
+                for href, label, icon in StatementUploadServer.TABS
+            )
+            nav = f'<nav class="tabbar" aria-label="Main">{links}</nav>'
+        return StatementUploadServer.SHELL.safe_substitute(
+            title=html.escape(title),
+            heading="House Move",
+            subheading=subheading,
+            icon_home=PortalIcons.HOME,
+            account=account,
+            body=body,
+            nav=nav,
+            app_class="" if nav else " no-nav",
+            script=script,
+        )
+
+    def _display_name(self, claims: dict[str, Any]) -> str:
+        """
+        :return: who is signed in, as shown in the app bar.
+        """
+        if claims.get("sub", "").startswith("guest:"):
+            return "Signed in as a guest"
+        names: str = ", ".join(self._demo_customers().get(cid, cid) for cid in claims.get("customers", []))
+        return f"Signed in as {names}"
+
+    def _first_name(self, claims: dict[str, Any]) -> str | None:
+        """
+        :return: the signed-in customer's first name for the greeting, or None for a guest.
+        """
+        customers: list[str] = claims.get("customers") or []
+        if not customers:
+            return None
+        names: str = self._demo_customers().get(customers[0], "")
+        return names.split()[0] if names else None
 
     def _save(self, owner: str, original_name: str, content: bytes) -> tuple[str, int]:
         """
@@ -320,6 +490,13 @@ class StatementUploadServer:
             target = folder / f"{Path(name).stem}-{counter}{Path(name).suffix}"
             counter += 1
         return target
+
+    @staticmethod
+    def _ok(text: str) -> str:
+        """
+        :return: an escaped success message block.
+        """
+        return f'<p class="ok">{html.escape(text)}</p>'
 
     @staticmethod
     def _error(text: str) -> str:
