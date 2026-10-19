@@ -118,6 +118,7 @@ class TestStatementUploadServer(HouseMoveTestCase):
         feed = self.client.get("/status.json")
         self.assertEqual("no-store", feed.headers.get("cache-control"))
         self.assertEqual("Drafts ready", feed.json().get("stage"))
+        self.assertEqual("C-10042", feed.json().get("case").get("reference"))
 
     def test_approve_from_the_status_page(self):
         """
