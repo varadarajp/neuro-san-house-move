@@ -1,0 +1,376 @@
+# Neuro SAN Search Tools
+
+Neuro SAN offers search capability via the following search engines:
+
+1. [Anthropic Search](#anthropic-search) — Web search via Anthropic's search tool
+2. [Brave Search](#brave-search) — Search using Brave Search API
+3. [Dux Distributed Global Search (DDGS)](#dux-distributed-global-search-ddgs) — Search using DuckDuckGo (no API key required)
+4. [Firecrawl Search](#firecrawl-search) — Search with the cleaned content of each result, via Firecrawl MCP server
+5. [Google Custom Search Engine](#google-custom-search-engine) — Search using Google Custom Search Engine
+6. [Google Serper](#google-serper) — Search using Google Serper API with advanced filtering
+7. [OpenAI Search](#openai-search) — Web search via OpenAI's search tool
+8. [Serply Search](#serply-search) — Google web, News and Scholar results via the Serply MCP server
+9. [Tavily Search](#tavily-search) — AI-optimized search using Tavily API
+10. [You.com Search](#youcom-search) — Web search, content extraction, and AI research via You.com MCP server
+
+See also: [Comparison of Search Tools](#comparison-of-search-tools)
+
+## Anthropic Search
+
+Anthropic Search is the built-in web search system used by Claude, designed to let the model access fresh, real-time
+information from the internet in a safe, transparent way. It is not a standalone public product (like Google or Bing).
+Instead, it is a search layer integrated into Claude, combining multiple web search APIs (E.g., Brave, depending on
+partnership and availability).
+
+![Anthropic](./images/Anthropic.png)
+
+_Environment Variables:_
+
+Get an API key by visiting [https://console.anthropic.com/settings/keys](https://console.anthropic.com/settings/keys).
+Once you have the API key, set it using the `ANTHROPIC_API_KEY` environment variable. The required
+langchain-anthropic package is already included with neuro-san-studio.
+
+_Example Usage in Neuro San Studio_:
+
+- [anthropic\_web_search.hocon](../neuro_san_studio/coded_tools/anthropic_web_search.py),
+- available as a tool in [toolbox_info.hocon](../neuro_san_studio/toolbox/toolbox_info.hocon)
+
+## Brave Search
+
+Brave Search is an independent, privacy-focused search engine developed by Brave Software, Inc., that uses its own
+web index rather than relying on Google or Bing. It does not profile users, meaning it does not collect or store
+personal data to track activity.
+
+![Brave](./images/Brave.png)
+
+_Environment Variables:_
+
+To use Brave Search in your agent network, you must obtain an API key from
+[https://brave.com/search/api/](https://brave.com/search/api/). Once you have the API key, set it using the
+`BRAVE_API_KEY` environment variable.
+
+The Brave search URL is specified via `BRAVE_URL` environment variable. If `BRAVE_URL` is not set, the
+default value listed below is used:
+
+[https://api.search.brave.com/res/v1/web/search?q=](https://api.search.brave.com/res/v1/web/search?q=)
+
+Optionally, you can override the default value by setting `BRAVE_URL` environment variable (E.g., if you're running
+a self-hosted Brave Search API clone, or if you want to Switch to a different search engine, like DuckDuckGo). You
+can also configure the request timeout (in seconds) using `BRAVE_TIMEOUT`; the default is 30 seconds.
+
+_Example Usage in Neuro San Studio:_
+
+- [brave\_search.hocon](../registries/tools/brave_search.hocon),
+- [real\_estate.hocon](../registries/industry/real_estate.hocon),
+- available as a tool in [toolbox\_info.hocon](../neuro_san_studio/toolbox/toolbox_info.hocon)
+
+## Dux Distributed Global Search (DDGS)
+
+Dux Distributed Global Search (DDGS) is a Python open-source library that acts as a metasearch tool, aggregating
+and ranking search results from multiple web search engines, like Google and Brave, to provide a diverse set of
+results. It was originally called duckduckgo\_search but was expanded to support a variety of search backends.
+
+![DDGS](./images/DDGS.png)
+
+DDGS requires no API key, even though it may search Brave or Google. That is because DDGS scrapes public search
+result pages and avoids official API endpoints (which require keys). For example, no Google API key needed, because
+it does not call
+
+[https://www.googleapis.com/customsearch/v1](https://www.googleapis.com/customsearch/v1)
+
+Instead, it scrapes:
+
+[https://www.google.com/search?q=<query](https://www.google.com/search?q=<query)\>
+
+_Example Usage in Neuro San Studio_:
+
+- [ddgs_search.hocon](../registries/tools/ddgs_search.hocon),
+- [agent\_network\_designer.hocon](../registries/agent_network_designer.hocon),
+- [agentic\_rag.hocon](../registries/tools/agentic_rag.hocon),
+- [airbnb.hocon](../registries/industry/airbnb.hocon),
+- [booking.hocon](../registries/industry/booking.hocon),
+- [carmax.hocon](../registries/industry/carmax.hocon),
+- [expedia.hocon](../registries/industry/expedia.hocon),
+- [LinkedInJobSeekerSupportNetwork.hocon](../registries/industry/LinkedInJobSeekerSupportNetwork.hocon),
+- available as a tool in [toolbox\_info.hocon](../neuro_san_studio/toolbox/toolbox_info.hocon)
+
+## Firecrawl Search
+
+Firecrawl is a developer-focused web data platform. Its Search API is not a search engine of its own: it queries
+the web and then, in the same call, runs the results through Firecrawl's scraping and cleaning pipeline, so a single
+request returns both the ranked results and the Markdown of each result page. For an agent, this replaces the usual
+two-step pattern of calling a search tool and then calling a separate extraction tool on each URL it wants to read.
+
+Alongside the general web, the `category` parameter narrows the search: `developer` searches an index of code
+repositories, issues, merged pull requests and curated technical documentation; `research` restricts an ordinary
+web search to academic domains such as arXiv, Nature, IEEE and PubMed, returning page snippets rather than paper
+records; and `pdf` returns PDF documents.
+
+![Firecrawl](./images/Firecrawl.png)
+
+_MCP Configuration:_
+
+Firecrawl is integrated as an MCP server at `https://mcp.firecrawl.dev/v2/mcp`, configured in
+[mcp\_info.hocon](../neuro_san_studio/mcp/mcp_info.hocon). It is enabled by default and needs no credentials.
+
+The keyless server exposes three tools, and the `tools` list in `mcp_info.hocon` is set to exactly those three:
+
+- **`firecrawl_search`** — Web, news and image search that returns ranked results and, in the same call, the
+  cleaned Markdown of each result page. Supports the `developer`, `research` and `pdf` categories described above.
+- **`firecrawl_scrape`** — Extracts a single URL as clean Markdown.
+- **`firecrawl_parse`** — Extracts the contents of a document, such as a PDF, as Markdown.
+
+_Free Tier (No Credentials Required):_
+
+The same URL works with no `Authorization` header. The keyless tier is rate limited per IP per day, on both
+requests and credits. No signup is required.
+
+_Getting an API Key:_
+
+1. Sign up at [https://www.firecrawl.dev/](https://www.firecrawl.dev/) — no credit card required
+2. You receive **1,000 credits per month** on the free plan
+3. Get your API key at [https://www.firecrawl.dev/app/api-keys](https://www.firecrawl.dev/app/api-keys)
+4. Set it using the `FIRECRAWL_API_KEY` environment variable, then uncomment the `http_headers` block in
+   [mcp\_info.hocon](../neuro_san_studio/mcp/mcp_info.hocon). Keyless and keyed usage share the same URL. The key
+   raises the rate limits; it does not change which tools the agent sees. With a key the server exposes more
+   tools, so add their names to the `tools` list in that entry, or remove the `tools` key entirely to load every
+   tool the server exposes for your connection.
+5. For full pricing details, see [https://www.firecrawl.dev/pricing](https://www.firecrawl.dev/pricing)
+
+_Example Usage in Neuro San Studio:_
+
+- [firecrawl\_search.hocon](../registries/tools/firecrawl_search.hocon),
+- see also [MCP server configuration](../neuro_san_studio/mcp/mcp_info.hocon)
+
+## Google Custom Search Engine
+
+Google Custom Search Engine (CSE) -- now called Programmable Search Engine -- is a service from Google that lets you
+create your **own search engine** that searches only **specific sites**, or a controlled slice of the web, with
+optional customization and API access. It’s commonly used in websites, apps, and research tools.
+
+![GCSE](./images/GCSE.png)
+
+_Environment Variables_:
+
+To use this search tool, you must
+
+1. Create a Custom Search Engine (CSE)
+   - Go to [https://programmablesearchengine.google.com/](https://programmablesearchengine.google.com/)
+   - Click "Add" → Choose sites or use "\*" to search the whole web
+   - Note your Search Engine ID (cx).
+2. Get Google API key
+   - Go to: [https://console.cloud.google.com/](https://console.cloud.google.com/)
+   - Enable the Custom Search API.
+   - Create an API key under APIs & Services > Credentials.  
+3. Use the CSE ID in step 1 to set `GOOGLE_SEARCH_CSE_ID` environment variable.  
+4. Use the API key in step 2 to set `GOOGLE_SEARCH_API_KEY` environment variable.
+5. You can optionally set a custom search URL and a custom timeout via the `GOOGLE_SEARCH_URL` and
+`GOOGLE_SEARCH_TIMEOUT` environment variables. Otherwise, the default values of
+[https://www.googleapis.com/customsearch/v1](https://www.googleapis.com/customsearch/v1) and `30` are used.
+
+_Example Usage in Neuro San Studio_:
+
+- [google\_search.hocon](../registries/tools/google_search.hocon),
+- available as a tool in [toolbox\_info.hocon](../neuro_san_studio/toolbox/toolbox_info.hocon)
+
+## Google Serper
+
+Google Serper (serper.dev) is a third-party Google Search API service that gives developers programmatic access to
+real Google Search results in JSON format. It exists because Google does NOT provide an official full-web Search API,
+and scraping Google yourself is difficult, unstable, and often blocked. Serper solves that by doing the scraping on
+your behalf and returning clean, structured results.
+
+![Serper](./images/Serper.png)
+
+_Environment Variables:_
+
+To use this search tool, obtain an API key from: [https://serper.dev/](https://serper.dev/). Once you have the API
+key, set it using the SERPER\_API\_KEY environment variable.
+
+_Example Usage in Neuro San Studio_:
+
+- Available as a tool in [toolbox\_info.hocon](../neuro_san_studio/toolbox/toolbox_info.hocon)
+
+## OpenAI Search
+
+OpenAI Search is the built-in web search system used by ChatGPT. It is not a standalone search engine like Google/Bing,
+nor a public “OpenAI Search API”. It is an internal retrieval system that lets ChatGPT access fresh, real-time
+information from the internet when you ask it to “search the web”. It’s not publicly confirmed exactly which
+underlying search engine OpenAI uses for all of its web-search features.
+
+_Environment Variables:_
+
+To use this search tool, obtain an API key from:
+[https://platform.openai.com/api-keys](https://platform.openai.com/api-keys). Once you have the API key, set it using
+the `OPENAI_API_KEY` environment variable. The required
+langchain-openai package is already included with neuro-san-studio.
+
+_Example Usage in Neuro San Studio:_
+
+- [openai\_web\_search.hocon](../registries/tools/openai_web_search.hocon),
+- available as a tool in [toolbox\_info.hocon](../neuro_san_studio/toolbox/toolbox_info.hocon)
+
+## Serply Search
+
+Serply (serply.io) is a third-party Google Search API service. Like Serper, it does not run a search engine of its
+own: it returns real Google Search results as structured JSON so that you do not have to scrape Google yourself.
+It integrates with Neuro SAN via the Model Context Protocol (MCP), exposing its search verticals as separate tools
+through a single MCP server at `https://api.serply.io/mcp`:
+
+- **`google_search`** — Google organic web results, with geographic and language localization.
+- **`google_news_search`** — Google News results, for current events and recent reporting.
+- **`google_scholar_search`** — Google Scholar results, for academic papers and their citation counts.
+
+Because Serply returns real Google results, Google's own query syntax works as written: quoted phrases, `OR`
+groups, `-exclusions`, `site:`, `filetype:`, and `before:`/`after:` bounds can be passed through in the query
+rather than translated onto vendor-specific filter parameters.
+
+The same server also exposes `bing_search`, `google_maps_search`, `google_video_search`, `google_jobs_search`,
+`amazon_product_search`, `scrape_url`, and a set of Reddit tools (`reddit_post`, `reddit_post_comments`,
+`reddit_subreddit_about`, `reddit_subreddit_posts`, `reddit_user_posts`). Add any of them to the `tools` list to
+enable them.
+
+![Serply](./images/Serply.png)
+
+_Getting a Free API Key:_
+
+1. Go to [https://serply.io](https://serply.io)
+2. Sign up — no credit card required
+3. You automatically receive **2,500 free credits** in the first 30 days
+4. Set your API key using the `SERPLY_API_KEY` environment variable
+5. The API reference is at [https://serply.io/docs](https://serply.io/docs)
+
+_MCP Configuration:_
+
+Serply is integrated as an MCP server. To enable it, uncomment the Serply section in
+[mcp\_info.hocon](../neuro_san_studio/mcp/mcp_info.hocon)
+and set the `SERPLY_API_KEY` environment variable.
+
+Serply authenticates with a bare `X-Api-Key` header rather than `Authorization: Bearer`, which is why its block in
+[mcp\_info.hocon](../neuro_san_studio/mcp/mcp_info.hocon) sets `X-Api-Key` directly.
+
+The server's own documentation, including the full tool list and their arguments, is at
+[https://serply.io/mcp](https://serply.io/mcp).
+
+_Example Usage in Neuro San Studio:_
+
+- [serply\_search.hocon](../registries/tools/serply_search.hocon),
+- see also [MCP server configuration](../neuro_san_studio/mcp/mcp_info.hocon)
+
+## Tavily Search
+
+Tavily Search is a developer-focused search API designed specifically for LLMs, AI agents, and automation. It is
+not a traditional search engine like Google or Bing; instead, it is a purpose-built retrieval system optimized for
+fast, cheap, reliable, LLM-friendly search. It’s one of the most popular search solutions in the AI ecosystem
+(used in LangChain, LlamaIndex, etc.).
+
+![Tavily](./images/Tavily.png)
+
+_Environment Variables:_
+
+To use this search tool, obtain an API key from: [https://www.tavily.com/](https://www.tavily.com/). Once you have
+the API key, set it using the TAVILY\_API\_KEY environment variable. You must also have langchain-tavily installed
+in your virtual environment.
+
+_Example Usage in Neuro San Studio_:
+
+- Available as a tool in [toolbox\_info.hocon](../neuro_san_studio/toolbox/toolbox_info.hocon)
+
+## You.com Search
+
+You.com is a developer-focused search platform designed for AI agents and automation. It integrates with Neuro SAN
+via the Model Context Protocol (MCP), exposing three tools through a single MCP server at `https://api.you.com/mcp`:
+
+- **`you-search`** (Web Search API) — Real-time web and news search with advanced filtering options including site
+  filtering, file type restrictions, language filtering, exact term matching, and date ranges. Pricing: $5 per 1,000
+  calls.
+- **`you-contents`** (Contents API) — Extracts full page content from URLs in Markdown or HTML format, useful for
+  documentation analysis and content processing. Pricing: $1 per 1,000 pages.
+- **`you-research`** (Research API) — A separate API that provides synthesized, citation-backed answers with
+  configurable effort levels: `lite`, `standard`, `deep`, `exhaustive`, and `frontier`. Higher effort levels use more
+  sources and deeper reasoning but take longer. Pricing: starting at ~$6.50 per 1,000 calls, varying by effort level.
+
+_Free Tier (No Credentials Required):_
+
+You.com also exposes a free profile of `you-search` that requires no API key. Append `?profile=free` to the MCP
+server URL — `https://api.you.com/mcp?profile=free` — to use it without authentication. This profile is limited
+to `you-search`; `you-contents` and `you-research` are not available on the free tier.
+
+_Getting a Free API Key:_
+
+1. Go to [https://you.com/platform](https://you.com/platform)
+2. Sign up — no credit card required
+3. You automatically receive **$100 in free credits** upon signup
+4. Get your API key at [https://you.com/platform/api-keys](https://you.com/platform/api-keys)
+5. Set it using the `YDC_API_KEY` environment variable
+
+_Getting a Paid API Key:_
+
+1. Sign up at [https://you.com/platform](https://you.com/platform) if you haven't already
+2. After free credits are exhausted, add a payment method in your account
+3. Pay-as-you-go billing with no minimum spend
+4. Enterprise options are available with volume discounts, annual savings, SOC 2 certification, and zero data retention
+5. For full pricing details, see [https://you.com/pricing](https://you.com/pricing)
+
+_MCP Configuration:_
+
+You.com is integrated as an MCP server. To enable it, uncomment the You.com section in
+[mcp\_info.hocon](../neuro_san_studio/mcp/mcp_info.hocon)
+and set the `YDC_API_KEY` environment variable.
+
+To use the no-credentials free tier instead, use `https://api.you.com/mcp?profile=free` as the MCP server URL and
+omit the `Authorization` header — see the commented "free tier" example in
+[mcp\_info.hocon](../neuro_san_studio/mcp/mcp_info.hocon). Only `you-search` is available on this profile.
+
+_Example Usage in Neuro San Studio:_
+
+- [you\_search.hocon](../registries/tools/you_search.hocon),
+- see also [MCP server configuration](../neuro_san_studio/mcp/mcp_info.hocon)
+
+## Comparison of Search Tools
+
+<!-- pyml disable no-inline-html -->
+<!-- pyml disable line-length -->
+| Search Tool | What It Is | Search Engine? | Data Source / Index | Public API ? |
+| --- | --- | --- | --- | --- |
+| Anthropic | built-in web search system used by Claude | No | Uses external APIs (e.g., Bing, Brave) | No |
+| Brave | Privacy-focused independent search engine | Yes | Own independent index | Yes |
+| DDGS | A meta-search library, aggregates results from diverse web search services | No | Scrapes public search result pages from DuckDuckGo, Bing, Brave, Google | No |
+| Firecrawl | Web data platform whose search returns ranked results together with the cleaned Markdown of each result page, plus scrape and parse, via MCP | No | Web search results passed through its own scraping and cleaning pipeline, with category filters for developer, academic and PDF sources | Yes |
+| Google | Lets you build a search engine tailored to specific websites or topics | Yes | Google’s index (simpler ranking, limited personalization) | Yes |
+| Serper | Third-party Google Search API service that scrapes Google Search results in JSON format | No | Real Google Search results via scraping | Yes |
+| OpenAI | Built-in web search system used by ChatGP | No | Uses Bing API + other sources | No |
+| Serply | Third-party Google Search API service that returns Google web, News and Scholar results via MCP | No | Real Google Search results via scraping | Yes |
+| Tavily | Search API designed specifically for LLMs, AI agents, and automation | No | Mix of search providers + own crawlers + extraction pipeline | Yes |
+| You.com | Developer-focused search platform with web search, content extraction, and AI research via MCP | No | Own search index + multiple web sources + AI synthesis | Yes |
+<!-- pyml enable line-length -->
+<!-- pyml enable no-inline-html -->
+
+The cost and rate limit comparison is provided in the table below.
+
+<!-- pyml disable no-inline-html -->
+<!-- pyml disable line-length -->
+| Search Tool | Free Tier | Paid Tier(s) |
+| --- | --- | --- |
+| Anthropic Search | Yes<br> (Internal to Claude)<br>Check Anthropic rate limits | Yes<br> (Internal to Claude)<br>Check Anthropic rate limits |
+| Brave Search | Yes<br> 1 request/second<br>2,000 request /month | Base AI: $5 per 1,000 requests<br>20 requests/second<br>20 million queries/month<br>Pro AI: $9 per 1,000 requests<br>50 requests/second<br>Unlimited queries/month |
+| DDGS | Yes<br>Rate limit: backend specific | No |
+| Firecrawl Search | Yes<br>Keyless via MCP: no signup, rate limited per IP per day<br>With a free API key: 1,000 credits/month<br>No credit card required<br>10 requests/minute | Yes<br>Hobby: $19/month, or $16/month billed annually<br>5,000 credits, 100 requests/minute<br>Standard: $83/month billed annually<br>100,000 credits, 500 requests/minute<br>Search costs 2 credits per 10 results (rounded up), plus 1 credit for each result page scraped |
+| Google Search | Yes<br>100 searches/day | Yes<br>$5 for 1,000 queries<br>10,000 queries/day |
+| Google Serper | Yes<br>2,500 queries (one-time) | Yes<br>$50, 50k queries, 50 queries/sec |
+| OpenAI Search | Yes (Internal to ChatGPT)<br>Check OpenAI rate limits | Yes (Internal to ChatGPT)<br>Check OpenAI rate limits |
+| Serply Search | Yes<br>2,500 credits in the first 30 days<br>No credit card required | Yes<br>Prepaid packs that never expire, from $5 for 2,500 credits ($2.00 per 1,000 requests) down to $0.75 per 1,000 requests<br>1 credit = 1 successful uncached request |
+| Tavily Search | Yes<br>1,000 API credits/month | Yes<br>Pay-as-you-go: $0.008 per credit<br>Monthly plans: $0.0075 - $0.005 per credit |
+| You.com Search | Yes<br>$100 in free credits<br>No credit card required | Yes<br>Web Search: $5 per 1,000 calls<br>Contents: $1 per 1,000 pages<br>Research: from ~$6.50 per 1,000 calls |
+<!-- pyml enable line-length -->
+<!-- pyml enable no-inline-html -->
+
+Links for cost and rate limit comparison data:
+
+1. [Brave Search](https://brave.com/search/api/)
+2. [Firecrawl Search](https://www.firecrawl.dev/pricing)
+3. [Google Search](https://support.google.com/programmable-search/answer/9069107?hl=en)
+4. [Google Serper](https://serper.dev/)
+5. [Serply Search](https://serply.io/pricing)
+6. [Tavily Search](https://www.tavily.com/#pricing)
+7. [You.com Search](https://you.com/pricing)
