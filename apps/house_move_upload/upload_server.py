@@ -248,7 +248,7 @@ class StatementUploadServer:
         if who == StatementUploadServer.GUEST:
             return self._tokens.issue(SessionTokens.new_guest_id(), [])
         if who in self._demo_customers():
-            return self._tokens.issue(f"bank:{who}", [who])
+            return self._tokens.issue(SessionTokens.bank_owner_id(who), [who])
         return None
 
     def _demo_customers(self) -> dict[str, str]:

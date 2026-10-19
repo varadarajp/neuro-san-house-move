@@ -232,6 +232,13 @@ Python code changes need a server restart; HOCON changes are picked up automatic
 
 In nsflow, open **hackathon → house_move**.
 
+To start every test customer from scratch (no plans, cases, codes, uploads or audit entries), reset the demo data.
+It is moved to `case_data/backups/` first, so a reset can be undone:
+
+```bash
+venv/bin/python -m build_scripts.reset_house_move_demo --yes
+```
+
 **First, sign in.** Open the portal at <http://127.0.0.1:8090> and choose a demo bank customer (for example
 C-10042) or "I'm not a customer". The portal shows a session, for example `{"session_token": "v1...."}`. Paste it into
 nsflow's SlyData tab and tick "Use Edited Sly Data" for the first message. The demo sign-in stands in for the bank's

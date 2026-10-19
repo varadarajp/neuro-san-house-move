@@ -1,6 +1,7 @@
 from datetime import date
 
 from coded_tools.hackathon.house_move.build_timeline import BuildTimeline
+from coded_tools.hackathon.house_move.case_session import CaseSession
 from coded_tools.hackathon.house_move.create_case import CreateCase
 from coded_tools.hackathon.house_move.move_dates import MoveDates
 from coded_tools.hackathon.house_move.obligations_rules import ObligationsRules
@@ -125,9 +126,11 @@ class TestPlanIntegrity(HouseMoveTestCase):
         """
         args: dict = {"first_names": ["Jordan"], "old_postcode": "BS6 6RB", "new_postcode": "NG7 2NF"}
         tool = CreateCase(council_lookup=HouseMoveTestState.offline_lookup(), today=self.TODAY)
-        result = tool.run({**args, "move_date": "2025-01-10"}, {})
+        result = tool.run({**args, "move_date": "2025-01-10"}, {CaseSession.OWNER_KEY: "guest:dates"})
         self.assertTrue(result.startswith("Error: the completion date 2025-01-10"))
-        result = tool.run({**args, "move_date": "2026-12-11", "exchange_date": "2026-12-18"}, {})
+        result = tool.run(
+            {**args, "move_date": "2026-12-11", "exchange_date": "2026-12-18"}, {CaseSession.OWNER_KEY: "guest:dates"}
+        )
         self.assertIn("after the completion date", result)
 
     def test_moving_within_one_council_is_one_council_tax_task(self):

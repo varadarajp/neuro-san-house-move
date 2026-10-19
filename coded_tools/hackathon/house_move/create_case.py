@@ -10,6 +10,7 @@ from coded_tools.hackathon.house_move.case_store import CaseStore
 from coded_tools.hackathon.house_move.case_tool import CaseTool
 from coded_tools.hackathon.house_move.council_lookup import CouncilLookup
 from coded_tools.hackathon.house_move.move_dates import MoveDates
+from coded_tools.hackathon.house_move.session_tokens import SessionTokens
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +62,10 @@ class CreateCase(CaseTool):
         :param sly_data: discards any "intake_form"; receives "customer_id", "customer_profile" and "councils".
         :return: the case summary, without personal data, or an "Error: ..." string.
         """
+        owner: str | None = sly_data.get(CaseSession.OWNER_KEY)
+        refusal: str | None = self._owner_error(owner)
+        if refusal is not None:
+            return refusal
         first_names: list[str] = [name.strip() for name in args.get("first_names") or [] if name.strip()]
         if not first_names:
             return "Error: ask for the first name of each adult who is moving."
@@ -71,9 +76,9 @@ class CreateCase(CaseTool):
             )
         except ValueError:
             return "Error: give the move date (or best estimate) as YYYY-MM-DD."
-        date_error: str | None = MoveDates.check(move_date, exchange_date, self._today or date.today())
-        if date_error is not None:
-            return date_error
+        refusal = MoveDates.check(move_date, exchange_date, self._today or date.today())
+        if refusal is not None:
+            return refusal
 
         councils: dict[str, dict[str, Any]] = {}
         for key in ("old_postcode", "new_postcode"):
@@ -87,9 +92,6 @@ class CreateCase(CaseTool):
         if sly_data.pop("intake_form", None) is not None:
             logger.warning("Discarded intake_form sent by the client: personal details come only from the portal")
         store: CaseStore = self._case_store or await asyncio.to_thread(CaseStore)
-        owner: str | None = sly_data.get(CaseSession.OWNER_KEY)
-        if not owner:
-            return "Error: not signed in. Sign in on the House Move portal first."
         form: dict[str, Any] = await asyncio.to_thread(store.take_pending_intake, owner)
         case_id: str = await asyncio.to_thread(store.create_case, profile, form, owner)
 
@@ -112,6 +114,24 @@ class CreateCase(CaseTool):
                 "'Your details' on the portal (never in the chat), or letters will come back to them to complete."
             ),
         }
+
+    @staticmethod
+    def _owner_error(owner: str | None) -> str | None:
+        """
+        :return: why this sign-in cannot start a standalone case, or None if it can.
+        """
+        if not owner:
+            return "Error: not signed in. Sign in on the House Move portal first."
+        if SessionTokens.is_bank_owner(owner):
+            # A bank customer's move comes from their bank record, and a new standalone case would be filed under
+            # their sign-in. Someone else's move (or a demo of the standalone journey) needs its own guest sign-in.
+            return (
+                "Error: this chat is signed in as a bank customer, whose move comes from their bank record: look up "
+                "their profile instead. To start a separate move for someone who is not this customer, sign out on "
+                'the portal, sign in as "I\'m not a customer (guest)", copy the new session into SlyData and start '
+                "a new chat."
+            )
+        return None
 
     def after_run(self, result: Any, sly_data: dict[str, Any], session: CaseSession) -> None:
         """
