@@ -98,11 +98,12 @@ class TestStandalone(HouseMoveTestCase):
         """
         Missing names, a bad date or an invalid postcode stop the case being created.
         """
+        guest: dict = {CaseSession.OWNER_KEY: self.OWNER}
         tool = CreateCase(council_lookup=self.offline_lookup())
-        self.assertTrue(tool.run({**self.CASE_ARGS, "first_names": []}, {}).startswith("Error:"))
-        self.assertTrue(tool.run({**self.CASE_ARGS, "move_date": "next spring"}, {}).startswith("Error:"))
+        self.assertTrue(tool.run({**self.CASE_ARGS, "first_names": []}, dict(guest)).startswith("Error:"))
+        self.assertTrue(tool.run({**self.CASE_ARGS, "move_date": "next spring"}, dict(guest)).startswith("Error:"))
         not_found = CouncilLookup(transport=httpx.MockTransport(lambda request: httpx.Response(404)))
-        result = CreateCase(council_lookup=not_found).run({**self.CASE_ARGS, "new_postcode": "ZZ9 9ZZ"}, {})
+        result = CreateCase(council_lookup=not_found).run({**self.CASE_ARGS, "new_postcode": "ZZ9 9ZZ"}, dict(guest))
         self.assertIn("not a valid UK postcode", result)
 
     def test_parser_reads_csv_and_ofx_alike(self):

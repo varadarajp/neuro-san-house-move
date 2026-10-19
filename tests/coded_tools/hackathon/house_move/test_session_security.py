@@ -6,6 +6,7 @@ from pathlib import Path
 
 from coded_tools.hackathon.house_move.audit_log import AuditLog
 from coded_tools.hackathon.house_move.bank_address_api import BankAddressApi
+from coded_tools.hackathon.house_move.case_store import CaseStore
 from coded_tools.hackathon.house_move.council_lookup import CouncilLookup
 from coded_tools.hackathon.house_move.create_case import CreateCase
 from coded_tools.hackathon.house_move.customer_profile_lookup import CustomerProfileLookup
@@ -105,6 +106,23 @@ class TestSessionSecurity(HouseMoveTestCase):
         for token in (None, "", "not-a-token", tampered, expired, foreign, forged_claims):
             result = CustomerProfileLookup().invoke({"customer_id": "C-10042"}, {"session_token": token})
             self.assertTrue(str(result).startswith("Error: not signed in"), token)
+
+    def test_a_bank_session_cannot_start_someone_elses_move(self):
+        """
+        A chat signed in as bank customer C-10042 cannot create a standalone case: it would be filed under that
+        customer's sign-in. Nothing is created, and the customer's own record is untouched.
+        """
+        token: str = SessionTokens().issue(SessionTokens.bank_owner_id("C-10042"), ["C-10042"])
+        args: dict = {
+            "first_names": ["Varada"],
+            "old_postcode": "CM2 6AP",
+            "new_postcode": "HX3 0HY",
+            "move_date": "2027-01-04",
+        }
+        result = CreateCase(council_lookup=self.offline()).invoke(args, {"session_token": token})
+        self.assertIn("signed in as a bank customer", result)
+        self.assertIn("I'm not a customer (guest)", result)
+        self.assertIsNone(CaseStore().get_active(SessionTokens.bank_owner_id("C-10042")))
 
     def test_standalone_case_ids_are_unguessable_and_owned(self):
         """

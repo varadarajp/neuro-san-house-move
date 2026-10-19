@@ -31,6 +31,7 @@ class SessionTokens:
     LEGACY_KEY_FILE: Path = Path(__file__).resolve().parents[3] / "case_data" / "session.key"
     KEY_NAME: str = "session.key"
     LIFETIME_SECONDS: int = 7 * 24 * 3600
+    BANK_PREFIX: str = "bank:"
     VERSION: str = "v1"
 
     def __init__(self, secret: bytes | None = None, key_file: Path | None = None):
@@ -70,6 +71,20 @@ class SessionTokens:
         if not isinstance(claims.get("sub"), str) or int(claims.get("exp", 0)) < time.time():
             return None
         return claims
+
+    @staticmethod
+    def bank_owner_id(customer_id: str) -> str:
+        """
+        :return: the owner ID for a signed-in bank customer, for example "bank:C-10042".
+        """
+        return SessionTokens.BANK_PREFIX + customer_id
+
+    @staticmethod
+    def is_bank_owner(owner_id: str | None) -> bool:
+        """
+        :return: true if the owner signed in as a bank customer (not as a guest).
+        """
+        return bool(owner_id) and owner_id.startswith(SessionTokens.BANK_PREFIX)
 
     @staticmethod
     def new_guest_id() -> str:
