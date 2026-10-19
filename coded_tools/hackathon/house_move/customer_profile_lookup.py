@@ -1,19 +1,18 @@
 """Mock CRM lookup for the House Move Agent's Profile agent."""
 
-import asyncio
 import json
 import logging
 from typing import Any
 
-from neuro_san.interfaces.coded_tool import CodedTool
-
+from coded_tools.hackathon.house_move.case_session import CaseSession
 from coded_tools.hackathon.house_move.case_store import CaseStore
+from coded_tools.hackathon.house_move.case_tool import CaseTool
 from coded_tools.hackathon.house_move.house_move_data_store import HouseMoveDataStore
 
 logger = logging.getLogger(__name__)
 
 
-class CustomerProfileLookup(CodedTool):
+class CustomerProfileLookup(CaseTool):
     """
     Returns what the bank already knows about a moving customer.
     The full record, including street addresses, stays in sly_data. The LLM gets a redacted view
@@ -37,7 +36,19 @@ class CustomerProfileLookup(CodedTool):
         self._data_store: HouseMoveDataStore = data_store or HouseMoveDataStore()
         self._case_store: CaseStore | None = case_store
 
-    def invoke(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
+    NEEDS_CASE: bool = False  # This is the tool that opens a case.
+
+    def before_run(self, args: dict[str, Any], sly_data: dict[str, Any], session: CaseSession) -> str | None:
+        """
+        Opens the requested case only if the signed-in caller may: their own bank record, or a standalone case they
+        created. Resuming loads the saved plan from the server.
+        """
+        case_id: str | None = args.get("customer_id") or sly_data.get("customer_id")
+        if not case_id:
+            return None
+        return session.select_case(sly_data, case_id)
+
+    def run(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
         """
         :param args: optional "customer_id". Falls back to sly_data["customer_id"].
         :param sly_data: receives "customer_id" and the full "customer_profile".
@@ -49,7 +60,7 @@ class CustomerProfileLookup(CodedTool):
 
         try:
             if CaseStore.is_case(customer_id):
-                customer: dict[str, Any] | None = self._resume_case(customer_id, sly_data)
+                customer: dict[str, Any] | None = (self._case_store or CaseStore()).get_customer(customer_id)
             else:
                 customer = self._data_store.get_customer(customer_id)
         except (OSError, json.JSONDecodeError) as error:
@@ -64,22 +75,6 @@ class CustomerProfileLookup(CodedTool):
         view: dict[str, Any] = self._redacted_view(customer)
         view["saved_plan"] = self._plan_summary(sly_data)
         return view
-
-    async def async_invoke(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
-        """
-        Runs invoke in a worker thread because it reads files.
-        """
-        return await asyncio.to_thread(self.invoke, args, sly_data)
-
-    def _resume_case(self, case_id: str, sly_data: dict[str, Any]) -> dict[str, Any] | None:
-        """
-        Loads a standalone case and, when this session has no plan yet, restores the last saved plan state.
-        """
-        store: CaseStore = self._case_store or CaseStore()
-        customer: dict[str, Any] | None = store.get_customer(case_id)
-        if customer is not None and not sly_data.get("tasks"):
-            sly_data.update(store.load_state(case_id))
-        return customer
 
     @staticmethod
     def _plan_summary(sly_data: dict[str, Any]) -> dict[str, Any] | None:

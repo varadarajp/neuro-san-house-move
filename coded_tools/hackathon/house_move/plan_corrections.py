@@ -2,13 +2,11 @@
 
 from typing import Any
 
-from neuro_san.interfaces.coded_tool import CodedTool
-
 from coded_tools.hackathon.house_move.audit_log import AuditLog
-from coded_tools.hackathon.house_move.case_store import CaseStore
+from coded_tools.hackathon.house_move.case_tool import CaseTool
 
 
-class PlanCorrections(CodedTool):
+class PlanCorrections(CaseTool):
     """
     After build_timeline has rebuilt the plan for a new date, sorts every task into:
     - needs_correction: already sent with the old date, so the organisation must be told the new one.
@@ -28,7 +26,7 @@ class PlanCorrections(CodedTool):
         """
         self._audit_log: AuditLog = audit_log or AuditLog()
 
-    def invoke(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
+    def run(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
         """
         :param args: not used.
         :param sly_data: reads "tasks" and "previous_tasks"; updates task statuses and "audit_log".
@@ -77,11 +75,4 @@ class PlanCorrections(CodedTool):
             f"completion {plan_dates.get('completion_date')}: {len(groups['needs_correction'])} corrections, "
             f"{len(groups['needs_rebooking'])} rebookings, {len(groups['updated_automatically'])} auto-updated",
         )
-        CaseStore.snapshot(sly_data)
         return groups
-
-    async def async_invoke(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
-        """
-        Delegates to invoke: the audit append is a small local write.
-        """
-        return self.invoke(args, sly_data)

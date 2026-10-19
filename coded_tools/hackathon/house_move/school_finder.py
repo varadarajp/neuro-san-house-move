@@ -6,15 +6,14 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from neuro_san.interfaces.coded_tool import CodedTool
-
+from coded_tools.hackathon.house_move.case_tool import CaseTool
 from coded_tools.hackathon.house_move.council_lookup import CouncilLookup
 from coded_tools.hackathon.house_move.geo_distance import GeoDistance
 
 logger = logging.getLogger(__name__)
 
 
-class SchoolFinder(CodedTool):
+class SchoolFinder(CaseTool):
     """
     Lists the open schools nearest a postcode in England, for each child's age or for chosen phases, with contact
     details and straight-line distance. Data: data/schools_england.csv, built from GIAS by
@@ -46,13 +45,7 @@ class SchoolFinder(CodedTool):
         """
         self._council_lookup: CouncilLookup = council_lookup or CouncilLookup()
 
-    def invoke(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
-        """
-        Synchronous entry point for scripts and tests. The server calls async_invoke.
-        """
-        return asyncio.run(self.async_invoke(args, sly_data))
-
-    async def async_invoke(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
+    async def arun(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
         """
         :param args: optional "postcode" (defaults to the new address), "child_ages" (list of ages in September),
                      "phases" (nursery, primary, secondary, sixth_form), "limit" (per group, default 5) and

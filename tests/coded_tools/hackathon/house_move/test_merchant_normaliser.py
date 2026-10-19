@@ -1,9 +1,8 @@
-from unittest import TestCase
-
 from coded_tools.hackathon.house_move.merchant_normaliser import MerchantNormaliser
+from tests.coded_tools.hackathon.house_move.house_move_test_case import HouseMoveTestCase
 
 
-class TestMerchantNormaliser(TestCase):
+class TestMerchantNormaliser(HouseMoveTestCase):
     """
     Unit tests for MerchantNormaliser.
     """

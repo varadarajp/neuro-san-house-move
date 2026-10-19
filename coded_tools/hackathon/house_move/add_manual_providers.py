@@ -1,14 +1,12 @@
 """Manual entry: providers the customer names instead of uploading a statement."""
 
-import asyncio
 from typing import Any
 
-from neuro_san.interfaces.coded_tool import CodedTool
-
 from coded_tools.hackathon.house_move.case_store import CaseStore
+from coded_tools.hackathon.house_move.case_tool import CaseTool
 
 
-class AddManualProviders(CodedTool):
+class AddManualProviders(CaseTool):
     """
     Saves providers the customer tells us about (for example "Octopus for energy, Sky for broadband") to a standalone
     case. get_transactions returns them alongside any statement payees, marked as customer stated.
@@ -41,7 +39,7 @@ class AddManualProviders(CodedTool):
         """
         self._case_store: CaseStore | None = case_store
 
-    def invoke(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
+    def run(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
         """
         :param args: "providers", a list of {"category", "provider_name"}.
         :param sly_data: reads "customer_id" (a standalone case).
@@ -61,9 +59,3 @@ class AddManualProviders(CodedTool):
                 rejected.append(f"{provider}: needs a provider_name and a category from {sorted(self.CATEGORIES)}")
         total: int = (self._case_store or CaseStore()).add_manual_providers(case_id, accepted)
         return {"added": [p.get("provider_name") for p in accepted], "rejected": rejected, "total": total}
-
-    async def async_invoke(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
-        """
-        Runs invoke in a worker thread because it writes to the database.
-        """
-        return await asyncio.to_thread(self.invoke, args, sly_data)

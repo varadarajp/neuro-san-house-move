@@ -1,30 +1,38 @@
 """Imports an uploaded bank statement into a standalone case, then deletes the file."""
 
-import asyncio
+import hashlib
 import logging
 import os
 from pathlib import Path
 from typing import Any
 
-from neuro_san.interfaces.coded_tool import CodedTool
-
+from coded_tools.hackathon.house_move.case_session import CaseSession
 from coded_tools.hackathon.house_move.case_store import CaseStore
+from coded_tools.hackathon.house_move.case_tool import CaseTool
 from coded_tools.hackathon.house_move.statement_parser import StatementParser
 
 logger = logging.getLogger(__name__)
 
 
-class ImportStatement(CodedTool):
+class ImportStatement(CaseTool):
     """
-    Reads a statement the customer uploaded (CSV, OFX or QFX) from the uploads folder, stores the parsed transactions
-    in the case store, records the customer's consent and deletes the uploaded file. Only counts and the date range
-    go back to the LLM; the Discovery agent reads the transactions through get_transactions as usual.
+    Reads a statement the customer uploaded (CSV, OFX or QFX) from their own uploads folder, stores the parsed
+    transactions in the case store, records the customer's consent and deletes the uploaded file. Only counts and the
+    date range go back to the LLM; the Discovery agent reads the transactions through get_transactions as usual.
     """
 
     UPLOAD_ENV: str = "HOUSE_MOVE_UPLOAD_DIR"
     # Repository root is three folders up: coded_tools/hackathon/house_move/import_statement.py
     DEFAULT_UPLOAD_DIR: Path = Path(__file__).resolve().parents[3] / "uploads"
     MAX_BYTES: int = 5 * 1024 * 1024
+
+    @staticmethod
+    def owner_folder(owner_id: str) -> str:
+        """
+        :return: the uploads sub-folder for one signed-in owner. Each person's uploads are kept apart, so a file name
+                 alone never reaches someone else's statement. Shared with the upload page.
+        """
+        return hashlib.sha256(owner_id.encode("utf-8")).hexdigest()[:24]
 
     def __init__(self, case_store: CaseStore | None = None, upload_dir: Path | None = None):
         """
@@ -37,7 +45,7 @@ class ImportStatement(CodedTool):
         ).resolve()
         self._parser: StatementParser = StatementParser()
 
-    def invoke(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
+    def run(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
         """
         :param args: "customer_consent_words" (required) and "file_name" (or sly_data["uploaded_files"]).
         :param sly_data: reads "customer_id" (a standalone case) and optional "uploaded_files".
@@ -53,9 +61,13 @@ class ImportStatement(CodedTool):
         if not file_name:
             return "Error: no uploaded file. Ask the customer to upload a CSV or OFX statement."
 
-        path: Path = (self._upload_dir / file_name).resolve()
-        if path.parent != self._upload_dir:
-            return "Error: the file name must be a file in the uploads folder."
+        owner: str | None = sly_data.get(CaseSession.OWNER_KEY)
+        if not owner:
+            return "Error: not signed in. Sign in on the House Move portal first."
+        owner_dir: Path = (self._upload_dir / ImportStatement.owner_folder(owner)).resolve()
+        path: Path = (owner_dir / file_name).resolve()
+        if path.parent != owner_dir:
+            return "Error: the file name must be a file you uploaded."
         if not path.is_file():
             return f"Error: {file_name} has not been uploaded."
         if path.stat().st_size > ImportStatement.MAX_BYTES:
@@ -80,9 +92,3 @@ class ImportStatement(CodedTool):
             "to": rows[-1].get("date"),
             "file_deleted": True,
         }
-
-    async def async_invoke(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
-        """
-        Runs invoke in a worker thread because it reads files and the database.
-        """
-        return await asyncio.to_thread(self.invoke, args, sly_data)

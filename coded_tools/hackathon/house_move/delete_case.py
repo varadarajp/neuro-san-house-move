@@ -1,15 +1,14 @@
 """Right to erasure for standalone cases."""
 
-import asyncio
 from typing import Any
 
-from neuro_san.interfaces.coded_tool import CodedTool
-
 from coded_tools.hackathon.house_move.audit_log import AuditLog
+from coded_tools.hackathon.house_move.case_session import CaseSession
 from coded_tools.hackathon.house_move.case_store import CaseStore
+from coded_tools.hackathon.house_move.case_tool import CaseTool
 
 
-class DeleteCase(CodedTool):
+class DeleteCase(CaseTool):
     """
     Deletes everything held for a standalone case (profile, encrypted personal data, transactions, providers,
     consents and plan) and clears it from sly_data. The audit trail keeps one entry with the case ID only.
@@ -23,10 +22,10 @@ class DeleteCase(CodedTool):
         self._case_store: CaseStore | None = case_store
         self._audit_log: AuditLog = audit_log or AuditLog()
 
-    def invoke(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
+    def run(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
         """
         :param args: "customer_words", the customer's request to delete their data, quoted.
-        :param sly_data: reads "customer_id"; every key is cleared after deletion.
+        :param sly_data: reads "customer_id"; the case's data is cleared after deletion, the session is kept.
         :return: {"case_id", "deleted"}, or an "Error: ..." string.
         """
         case_id: str | None = sly_data.get("customer_id")
@@ -37,11 +36,7 @@ class DeleteCase(CodedTool):
             return "Error: quote the customer's request to delete their data. Nothing was deleted."
         deleted: bool = (self._case_store or CaseStore()).delete_case(case_id)
         self._audit_log.record({"customer_id": case_id}, "case_deleted", None, "customer asked to delete their data")
-        sly_data.clear()
+        for key in CaseSession.SERVER_KEYS:
+            if key != CaseSession.OWNER_KEY:
+                sly_data.pop(key, None)
         return {"case_id": case_id, "deleted": deleted}
-
-    async def async_invoke(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
-        """
-        Runs invoke in a worker thread because it writes to the database.
-        """
-        return await asyncio.to_thread(self.invoke, args, sly_data)

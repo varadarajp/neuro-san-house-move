@@ -30,14 +30,14 @@ class HouseMoveTestState:
         :return: sly_data with a profile, both councils, obligations and a dated plan.
         """
         sly_data: dict = {}
-        CustomerProfileLookup().invoke({"customer_id": "C-10042"}, sly_data)
+        CustomerProfileLookup().run({"customer_id": "C-10042"}, sly_data)
         sly_data["councils"] = {
             "LS1 3ED": {"council_name": "Leeds", "country": "England"},
             "HG1 1SY": {"council_name": "North Yorkshire", "country": "England"},
         }
         providers: list = [{"category": "energy", "provider_name": "Brightwatt Energy"}]
-        ObligationsRules().invoke({"facts": HouseMoveTestState.FACTS, "providers": providers}, sly_data)
-        BuildTimeline(today=date(2026, 10, 17)).invoke({}, sly_data)
+        ObligationsRules().run({"facts": HouseMoveTestState.FACTS, "providers": providers}, sly_data)
+        BuildTimeline(today=date(2026, 10, 17)).run({}, sly_data)
         return sly_data
 
     @staticmethod
@@ -55,8 +55,8 @@ class HouseMoveTestState:
             if task.get("obligation_id") == "broadband":
                 body += " Ref {{account_number}}."
             drafts.append({"task_id": task.get("task_id"), "subject": "Moving", "body": body})
-        UpdateTasks().invoke({"updates": updates}, sly_data)
-        SaveDrafts().invoke({"drafts": drafts}, sly_data)
+        UpdateTasks().run({"updates": updates}, sly_data)
+        SaveDrafts().run({"drafts": drafts}, sly_data)
         return sly_data
 
     @staticmethod

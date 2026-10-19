@@ -1,10 +1,9 @@
-from unittest import TestCase
-
 from coded_tools.hackathon.house_move.customer_profile_lookup import CustomerProfileLookup
 from coded_tools.hackathon.house_move.obligations_rules import ObligationsRules
+from tests.coded_tools.hackathon.house_move.house_move_test_case import HouseMoveTestCase
 
 
-class TestObligationsRules(TestCase):
+class TestObligationsRules(HouseMoveTestCase):
     """
     Unit tests for ObligationsRules, run against the real rules file and the synthetic customer.
     """
@@ -30,7 +29,7 @@ class TestObligationsRules(TestCase):
         Builds sly_data as it looks after the profile lookup and both council lookups.
         """
         sly_data: dict = {}
-        CustomerProfileLookup().invoke({"customer_id": "C-10042"}, sly_data)
+        CustomerProfileLookup().run({"customer_id": "C-10042"}, sly_data)
         sly_data["councils"] = {
             "LS1 3ED": {"council_name": "Leeds", "country": "England"},
             "HG1 1SY": {"council_name": "North Yorkshire", "country": new_country},
@@ -42,7 +41,7 @@ class TestObligationsRules(TestCase):
         Known facts make rules apply; the unanswered mail redirection question needs review.
         """
         sly_data: dict = self.sly_data_for("England")
-        result = ObligationsRules().invoke({"facts": self.MORGAN_FACTS, "providers": self.PROVIDERS}, sly_data)
+        result = ObligationsRules().run({"facts": self.MORGAN_FACTS, "providers": self.PROVIDERS}, sly_data)
         by_id: dict = {o.get("id"): o for o in result.get("obligations")}
 
         self.assertEqual("applies", by_id.get("dvla_licence").get("status"))
@@ -58,7 +57,7 @@ class TestObligationsRules(TestCase):
         """
         Moving from England to Scotland closes the old water account; the new home's water comes with council tax.
         """
-        result = ObligationsRules().invoke({"facts": self.MORGAN_FACTS}, self.sly_data_for("Scotland"))
+        result = ObligationsRules().run({"facts": self.MORGAN_FACTS}, self.sly_data_for("Scotland"))
         ids: set = {o.get("id") for o in result.get("obligations")}
         self.assertIn("scotland_water_via_council_tax", ids)
         self.assertIn("water_company", ids)
@@ -69,7 +68,7 @@ class TestObligationsRules(TestCase):
         A fact that is known to be false makes the rule not applicable.
         """
         facts: dict = {**self.MORGAN_FACTS, "has_pet": False}
-        result = ObligationsRules().invoke({"facts": facts}, self.sly_data_for("England"))
+        result = ObligationsRules().run({"facts": facts}, self.sly_data_for("England"))
         self.assertIn("pet_microchip", result.get("not_applicable"))
 
     def test_requires_council_lookup(self):
@@ -77,6 +76,6 @@ class TestObligationsRules(TestCase):
         Without council lookups for both postcodes, the tool asks for them.
         """
         sly_data: dict = {}
-        CustomerProfileLookup().invoke({"customer_id": "C-10042"}, sly_data)
-        result = ObligationsRules().invoke({"facts": self.MORGAN_FACTS}, sly_data)
+        CustomerProfileLookup().run({"customer_id": "C-10042"}, sly_data)
+        result = ObligationsRules().run({"facts": self.MORGAN_FACTS}, sly_data)
         self.assertTrue(result.startswith("Error: call council_lookup"))

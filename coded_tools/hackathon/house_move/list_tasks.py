@@ -2,16 +2,16 @@
 
 from typing import Any
 
-from neuro_san.interfaces.coded_tool import CodedTool
+from coded_tools.hackathon.house_move.case_tool import CaseTool
 
 
-class ListTasks(CodedTool):
+class ListTasks(CaseTool):
     """
     Returns the tasks in sly_data["tasks"], optionally only those owned by one agent or in one status.
     Specialists use it to find their own work; the Comms agent uses it to find tasks to draft.
     """
 
-    def invoke(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
+    def run(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
         """
         :param args: optional "agent" (for example "government_agent") and "status", one status or a list
                      (for example ["planned", "needs_action"]).
@@ -30,9 +30,3 @@ class ListTasks(CodedTool):
             if (agent is None or task.get("agent") == agent) and (not statuses or task.get("status") in statuses)
         ]
         return {"plan_dates": sly_data.get("plan_dates"), "tasks": selected}
-
-    async def async_invoke(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
-        """
-        Delegates to invoke: it only reads memory, so it does not block.
-        """
-        return self.invoke(args, sly_data)

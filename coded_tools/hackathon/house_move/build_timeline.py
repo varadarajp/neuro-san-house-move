@@ -1,22 +1,19 @@
 """Deterministic timeline builder: turns obligations into dated tasks."""
 
-import asyncio
 import json
 import logging
 from datetime import date
 from datetime import timedelta
 from typing import Any
 
-from neuro_san.interfaces.coded_tool import CodedTool
-
-from coded_tools.hackathon.house_move.case_store import CaseStore
+from coded_tools.hackathon.house_move.case_tool import CaseTool
 from coded_tools.hackathon.house_move.date_calc import DateCalc
 from coded_tools.hackathon.house_move.house_move_data_store import HouseMoveDataStore
 
 logger = logging.getLogger(__name__)
 
 
-class BuildTimeline(CodedTool):
+class BuildTimeline(CaseTool):
     """
     Dates every obligation in sly_data["obligations"] against the completion or exchange date.
     Task IDs follow the rules-file order, so they stay the same when the plan is rebuilt for a new date.
@@ -44,7 +41,7 @@ class BuildTimeline(CodedTool):
         self._data_store: HouseMoveDataStore = data_store or HouseMoveDataStore()
         self._today: date | None = today
 
-    def invoke(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
+    def run(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
         """
         :param args: optional "completion_date" and "exchange_date" (YYYY-MM-DD) to override the profile's dates,
                      for example when completion moves.
@@ -111,14 +108,7 @@ class BuildTimeline(CodedTool):
         }
         if previous_tasks:
             result["changes"] = self._compare(previous_tasks, tasks)
-        CaseStore.snapshot(sly_data)
         return result
-
-    async def async_invoke(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
-        """
-        Runs invoke in a worker thread because it reads files.
-        """
-        return await asyncio.to_thread(self.invoke, args, sly_data)
 
     @staticmethod
     def _division(sly_data: dict[str, Any]) -> str:

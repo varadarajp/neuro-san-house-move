@@ -6,20 +6,21 @@ import logging
 from typing import Any
 
 import httpx
-from neuro_san.interfaces.coded_tool import CodedTool
 
+from coded_tools.hackathon.house_move.case_tool import CaseTool
 from coded_tools.hackathon.house_move.house_move_data_store import HouseMoveDataStore
 
 logger = logging.getLogger(__name__)
 
 
-class CouncilLookup(CodedTool):
+class CouncilLookup(CaseTool):
     """
     Finds the local council and country for a UK postcode by calling postcodes.io live.
     If postcodes.io cannot be reached, it falls back to data/council_cache.json and says so in "source".
     Each result is also saved in sly_data["councils"], keyed by postcode, for the obligations rules engine.
     """
 
+    NEEDS_CASE: bool = False  # Can look up any postcode; the result is saved only if a case is open.
     API_URL: str = "https://api.postcodes.io/postcodes/{postcode}"
     TIMEOUT_SECONDS: float = 5.0
 
@@ -33,29 +34,29 @@ class CouncilLookup(CodedTool):
         self._data_store: HouseMoveDataStore = data_store or HouseMoveDataStore()
         self._transport: httpx.AsyncBaseTransport | None = transport
 
-    def invoke(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
-        """
-        Synchronous entry point for scripts and tests. The server calls async_invoke.
-        """
-        return asyncio.run(self.async_invoke(args, sly_data))
-
-    async def async_invoke(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
+    async def arun(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
         """
         :param args: "postcode", a UK postcode in any spacing or case.
         :param sly_data: receives sly_data["councils"][postcode].
         :return: {"postcode", "council_name", "council_code", "country", "source"}, or an "Error: ..." string.
         """
-        postcode: str = self._format(args.get("postcode", ""))
+        council: dict[str, Any] | str = await self.lookup(args.get("postcode", ""))
+        if isinstance(council, str):
+            return council
+        sly_data.setdefault("councils", {})[council.get("postcode")] = council
+        return council
+
+    async def lookup(self, raw_postcode: str) -> dict[str, Any] | str:
+        """
+        Looks a postcode up without touching sly_data, so other tools can use it inside their own session.
+        :return: the council record, or an "Error: ..." string.
+        """
+        postcode: str = self._format(raw_postcode or "")
         if not postcode:
             return "Error: please give a postcode."
-
         council: dict[str, Any] | str | None = await self._fetch_live(postcode)
         if council is None:
             council = await asyncio.to_thread(self._from_cache, postcode)
-        if isinstance(council, str):
-            return council
-
-        sly_data.setdefault("councils", {})[postcode] = council
         return council
 
     async def locate(self, postcode: str | None, sly_data: dict[str, Any]) -> dict[str, Any] | str:
@@ -72,7 +73,10 @@ class CouncilLookup(CodedTool):
         known: dict[str, Any] | None = (sly_data.get("councils") or {}).get(formatted)
         if known and known.get("latitude") is not None:
             return known
-        return await self.async_invoke({"postcode": formatted}, sly_data)
+        council: dict[str, Any] | str = await self.lookup(formatted)
+        if not isinstance(council, str):
+            sly_data.setdefault("councils", {})[council.get("postcode")] = council
+        return council
 
     async def _fetch_live(self, postcode: str) -> dict[str, Any] | str | None:
         """

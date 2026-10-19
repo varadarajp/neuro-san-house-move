@@ -1,18 +1,16 @@
 """Mock inbox: scripted provider replies to notifications that have been sent."""
 
-import asyncio
 import json
 import logging
 from typing import Any
 
-from neuro_san.interfaces.coded_tool import CodedTool
-
+from coded_tools.hackathon.house_move.case_tool import CaseTool
 from coded_tools.hackathon.house_move.house_move_data_store import HouseMoveDataStore
 
 logger = logging.getLogger(__name__)
 
 
-class CheckInbox(CodedTool):
+class CheckInbox(CaseTool):
     """
     Returns new provider replies from data/inbox_mock.json. A reply only arrives once its task has been sent at
     least once (it has a sent_ref), whatever its status now: a task re-drafted after a date change still gets
@@ -27,7 +25,7 @@ class CheckInbox(CodedTool):
         """
         self._data_store: HouseMoveDataStore = data_store or HouseMoveDataStore()
 
-    def invoke(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
+    def run(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
         """
         :param args: not used.
         :param sly_data: reads "tasks" and "processed_replies".
@@ -58,9 +56,3 @@ class CheckInbox(CodedTool):
                 }
             )
         return {"replies": new_replies}
-
-    async def async_invoke(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
-        """
-        Runs invoke in a worker thread because it reads files.
-        """
-        return await asyncio.to_thread(self.invoke, args, sly_data)

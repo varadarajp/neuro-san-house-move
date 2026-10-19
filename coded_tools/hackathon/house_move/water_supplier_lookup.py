@@ -5,15 +5,14 @@ import json
 import logging
 from typing import Any
 
-from neuro_san.interfaces.coded_tool import CodedTool
-
+from coded_tools.hackathon.house_move.case_tool import CaseTool
 from coded_tools.hackathon.house_move.council_lookup import CouncilLookup
 from coded_tools.hackathon.house_move.house_move_data_store import HouseMoveDataStore
 
 logger = logging.getLogger(__name__)
 
 
-class WaterSupplierLookup(CodedTool):
+class WaterSupplierLookup(CaseTool):
     """
     Names the water supplier and sewerage provider for a postcode. There is no public API for this, so England and
     Wales use a small checked table by postcode district (data/water_suppliers.json) and always include the official
@@ -35,13 +34,7 @@ class WaterSupplierLookup(CodedTool):
         self._council_lookup: CouncilLookup = council_lookup or CouncilLookup()
         self._data_store: HouseMoveDataStore = data_store or HouseMoveDataStore()
 
-    def invoke(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
-        """
-        Synchronous entry point for scripts and tests. The server calls async_invoke.
-        """
-        return asyncio.run(self.async_invoke(args, sly_data))
-
-    async def async_invoke(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
+    async def arun(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
         """
         :param args: optional "postcode" (defaults to the new address).
         :param sly_data: reads "customer_profile" and "councils".

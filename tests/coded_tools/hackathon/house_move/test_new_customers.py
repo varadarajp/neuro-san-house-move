@@ -1,14 +1,14 @@
 from datetime import date
-from unittest import TestCase
 
 from coded_tools.hackathon.house_move.build_timeline import BuildTimeline
 from coded_tools.hackathon.house_move.customer_profile_lookup import CustomerProfileLookup
 from coded_tools.hackathon.house_move.get_transactions import GetTransactions
 from coded_tools.hackathon.house_move.house_move_data_store import HouseMoveDataStore
 from coded_tools.hackathon.house_move.obligations_rules import ObligationsRules
+from tests.coded_tools.hackathon.house_move.house_move_test_case import HouseMoveTestCase
 
 
-class TestNewCustomers(TestCase):
+class TestNewCustomers(HouseMoveTestCase):
     """
     Cross-border test customers: each move produces the obligations its countries call for.
     Councils come from the fallback cache, which holds the same values postcodes.io returned.
@@ -35,14 +35,14 @@ class TestNewCustomers(TestCase):
         sly_data: dict = {}
         store = HouseMoveDataStore()
         profile: dict = store.get_customer(customer_id)
-        CustomerProfileLookup().invoke({"customer_id": customer_id}, sly_data)
-        GetTransactions().invoke({}, sly_data)
+        CustomerProfileLookup().run({"customer_id": customer_id}, sly_data)
+        GetTransactions().run({}, sly_data)
         sly_data["councils"] = {
             address.get("postcode"): store.get_cached_council(address.get("postcode"))
             for address in (profile.get("old_address"), profile.get("new_address"))
         }
-        result: dict = ObligationsRules().invoke({"facts": facts, "providers": providers or []}, sly_data)
-        BuildTimeline(today=date(2026, 10, 18)).invoke({}, sly_data)
+        result: dict = ObligationsRules().run({"facts": facts, "providers": providers or []}, sly_data)
+        BuildTimeline(today=date(2026, 10, 18)).run({}, sly_data)
         sly_data["ids"] = {o.get("id") for o in result.get("obligations") if o.get("status") == "applies"}
         sly_data["orgs"] = {t.get("obligation_id"): t for t in sly_data.get("tasks")}
         return sly_data
@@ -53,8 +53,8 @@ class TestNewCustomers(TestCase):
         """
         for customer_id in ("C-20001", "C-20002", "C-20003", "C-20004"):
             sly_data: dict = {}
-            CustomerProfileLookup().invoke({"customer_id": customer_id}, sly_data)
-            summary: dict = GetTransactions().invoke({}, sly_data)
+            CustomerProfileLookup().run({"customer_id": customer_id}, sly_data)
+            summary: dict = GetTransactions().run({}, sly_data)
             self.assertTrue(summary.get("payees"), customer_id)
             self.assertTrue(sly_data.get("mandates"), customer_id)
 

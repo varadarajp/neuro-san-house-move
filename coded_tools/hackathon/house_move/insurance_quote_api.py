@@ -2,10 +2,10 @@
 
 from typing import Any
 
-from neuro_san.interfaces.coded_tool import CodedTool
+from coded_tools.hackathon.house_move.case_tool import CaseTool
 
 
-class InsuranceQuoteApi(CodedTool):
+class InsuranceQuoteApi(CaseTool):
     """
     Returns an indicative monthly premium band for the new home, by postcode area.
     Mock only: the result is always labelled indicative and is never a quote or a recommendation.
@@ -15,7 +15,7 @@ class InsuranceQuoteApi(CodedTool):
     DEFAULT_BAND: str = "£25 to £40 a month"
     LABEL: str = "Indicative only. Not a quote. Cover, price and terms depend on a full application."
 
-    def invoke(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
+    def run(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
         """
         :param args: optional "postcode". Falls back to the new address in sly_data["customer_profile"].
         :param sly_data: reads "customer_profile".
@@ -31,9 +31,3 @@ class InsuranceQuoteApi(CodedTool):
             "indicative_premium_band": InsuranceQuoteApi.BANDS_BY_AREA.get(area, InsuranceQuoteApi.DEFAULT_BAND),
             "label": InsuranceQuoteApi.LABEL,
         }
-
-    async def async_invoke(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
-        """
-        Delegates to invoke: no I/O.
-        """
-        return self.invoke(args, sly_data)

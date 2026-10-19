@@ -1,9 +1,8 @@
-from unittest import TestCase
-
 from coded_tools.hackathon.house_move.customer_profile_lookup import CustomerProfileLookup
+from tests.coded_tools.hackathon.house_move.house_move_test_case import HouseMoveTestCase
 
 
-class TestCustomerProfileLookup(TestCase):
+class TestCustomerProfileLookup(HouseMoveTestCase):
     """
     Unit tests for CustomerProfileLookup, run against the synthetic data files.
     """
@@ -13,7 +12,7 @@ class TestCustomerProfileLookup(TestCase):
         The LLM view has no street lines or email, and the full record goes into sly_data.
         """
         sly_data: dict = {}
-        result = CustomerProfileLookup().invoke({"customer_id": "C-10042"}, sly_data)
+        result = CustomerProfileLookup().run({"customer_id": "C-10042"}, sly_data)
 
         self.assertEqual(["Sam", "Alex"], result.get("first_names"))
         self.assertEqual({"town": "Leeds", "postcode": "LS1 3ED"}, result.get("old_address"))
@@ -28,7 +27,7 @@ class TestCustomerProfileLookup(TestCase):
         """
         With no argument, the customer ID already in sly_data is used.
         """
-        result = CustomerProfileLookup().invoke({}, {"customer_id": "C-10042"})
+        result = CustomerProfileLookup().run({}, {"customer_id": "C-10042"})
         self.assertEqual("C-10042", result.get("customer_id"))
 
     def test_errors(self):
@@ -36,5 +35,5 @@ class TestCustomerProfileLookup(TestCase):
         A missing or unknown customer ID returns an error string.
         """
         lookup = CustomerProfileLookup()
-        self.assertTrue(lookup.invoke({}, {}).startswith("Error:"))
-        self.assertTrue(lookup.invoke({"customer_id": "C-0"}, {}).startswith("Error:"))
+        self.assertTrue(lookup.run({}, {}).startswith("Error:"))
+        self.assertTrue(lookup.run({"customer_id": "C-0"}, {}).startswith("Error:"))

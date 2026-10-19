@@ -7,8 +7,9 @@ approved.
 
 > Hackathon build. Synthetic customer data only. Every send is mocked and logged; nothing leaves the machine.
 >
-> This repository holds only the House Move files. They use the same folder layout as neuro-san-studio, so you
-> copy them into a neuro-san-studio checkout to run them (see [Getting started](#getting-started)).
+> This repository is a complete [Neuro SAN Studio](https://github.com/cognizant-ai-lab/neuro-san-studio) project
+> with the House Move agent added, so it runs straight from a clone. The House Move files are listed under
+> [Project layout](#project-layout); everything else is the studio (Apache 2.0).
 
 ## Contents
 
@@ -41,7 +42,7 @@ out late, and then contact their bank and providers to fix the gaps.
 2. **Plans** a dated task list against the completion date, from rules with official sources, using UK working
    days and the bank holidays of the country they are moving to.
 3. **Drafts** every notification with placeholders, so personal data is filled in by code, not by the LLM.
-4. **Gets approval** for each draft. Nothing is sent without the customer's own words, recorded in an audit log.
+4. **Gets approval** for each draft. The send tools refuse anything without an approval recorded on the server.
 5. **Tracks** progress: mock sends, the bank's own address update, replanning when completion moves, and provider
    replies (for example a request for a meter serial number).
 6. **Finds local contacts** at the new address: nearest GP practices (NHS, live), schools for the children's ages
@@ -114,79 +115,66 @@ flowchart TD
 
 ## Data, privacy and safety
 
-- **Personal data stays out of the LLM.** Full names, street addresses, email and account references live in
-  `sly_data` and the encrypted vault. The LLM sees first names, towns and postcodes, and writes drafts with
-  placeholders such as `{{new_address}}` that code fills in at send time.
-- **Direct Debit references** (bank route) fill `{{account_number}}`, `{{policy_number}}` and `{{licence_number}}`,
-  so emails can go straight to providers.
+- **The server holds the state; the client holds a signed session.** Every stateful tool runs inside a session
+  (`case_session.py`, `case_tool.py`): it verifies an HMAC-signed session token, discards any case data the client
+  sent, reloads the real state from the case store, runs, and saves it back. Only `session_token` is on the
+  `allow.to_upstream` list, so profiles, Direct Debit references, drafts and the outbox never go back to the client.
+- **You can open only your own case.** The token says who you are. A bank customer's token lists the records they
+  may open; a standalone case opens only for the person who created it. Standalone case IDs carry 128 random bits.
+- **Personal data stays out of the LLM.** Full names, street addresses, email and account references stay on the
+  server. The LLM sees first names, towns and postcodes, and writes drafts with placeholders such as
+  `{{new_address}}` that code fills in at send time.
+- **Encrypted at rest** (`case_data/`, git-ignored): each case's plan state is one Fernet-encrypted blob per owner,
+  and a standalone customer's personal details are encrypted per field. Cases can be deleted on request and purged
+  after the move.
 - **Statements never go through the chat.** nsflow's paperclip pastes file text into the message, so the agents
-  refuse pasted statements and send users to the upload page. Imported files are deleted after reading.
-- **Consent is recorded:** statement import, each approval and data deletion need the customer's own words.
-- **Standalone case store** (`case_data/house_move_cases.sqlite`, git-ignored): profile and plan snapshot, a vault
-  encrypted per field with Fernet, transactions, listed providers and consents. Cases can be resumed by case ID,
-  deleted on request, and purged after the move (retention).
-- **Approval gate in code:** `send_notification` and `bank_address_api` refuse anything not approved; any approved
-  task that cannot go out is reported, never dropped silently.
-- **Audit trail:** every approval, send, direct update, replan, reply and deletion is appended to
+  refuse pasted statements and send users to the portal. Uploads go to the signed-in person's own folder and are
+  deleted after reading.
+- **Approval gate in code:** `send_notification` and `bank_address_api` refuse anything not approved in the
+  server's state; any approved task that cannot go out is reported, never dropped silently.
+- **Audit trail:** approvals, sends, direct updates, replans, replies and deletions are appended to
   `logs/house_move_audit.jsonl` with IDs and events only.
+
+### Security review status
+
+A review found four issues. Status:
+
+| Finding | Status |
+|---|---|
+| Client could send back forged state (for example tasks marked approved) | **Fixed:** server-side state, signed sessions; regression tests replay the attack |
+| Anyone could open any case by typing its ID; decrypted personal data went back to the client | **Fixed:** ownership checks, unguessable IDs, only the token goes upstream; regression tests |
+| "Consent" is text the LLM writes (`customer_words`), so it is not proof of what the customer said | **Open:** next step is a confirmation code checked against the customer's own message |
+| The agent that reads provider replies can also approve and send (prompt-injection risk) | **Open:** split reply handling into an agent with no send tools |
 
 ## Getting started
 
 Requirements: macOS or Linux, git, [uv](https://docs.astral.sh/uv/), an Anthropic API key.
 
-1. Get Neuro SAN Studio and this repository side by side:
+```bash
+git clone https://github.com/varadarajp/neuro-san-house-move.git
+cd neuro-san-house-move
+uv venv venv --python 3.12
+VIRTUAL_ENV=$PWD/venv uv pip install -r requirements.txt -r requirements-build.txt
+VIRTUAL_ENV=$PWD/venv uv pip install -r coded_tools/hackathon/house_move/requirements.txt
+```
 
-   ```bash
-   git clone https://github.com/cognizant-ai-lab/neuro-san-studio.git
-   git clone https://github.com/varadarajp/neuro-san-house-move.git
-   ```
+Put your key in `.env` (git-ignored):
 
-2. Copy the House Move files into the studio (the folders match):
+```text
+ANTHROPIC_API_KEY="sk-ant-..."
+```
 
-   ```bash
-   cd neuro-san-house-move
-   cp -R registries coded_tools apps build_scripts tests ../neuro-san-studio/
-   cd ../neuro-san-studio
-   ```
+The default LLM config falls back to Claude when no OpenAI key is set. Check it with
+`venv/bin/python -m neuro_san_studio check-llm-keys`.
 
-3. Register the network: add this line to `registries/manifest.hocon`, next to the other `include` lines:
-
-   ```hocon
-   include "registries/hackathon/manifest.hocon",
-   ```
-
-4. Create the environment:
-
-   ```bash
-   uv venv venv --python 3.12
-   VIRTUAL_ENV=$PWD/venv uv pip install -r requirements.txt -r requirements-build.txt
-   VIRTUAL_ENV=$PWD/venv uv pip install -r coded_tools/hackathon/house_move/requirements.txt
-   ```
-
-5. Put your key in `.env` (git-ignored by neuro-san-studio):
-
-   ```text
-   ANTHROPIC_API_KEY="sk-ant-..."
-   ```
-
-   The default LLM config falls back to Claude when no OpenAI key is set. Check it with
-   `venv/bin/python -m neuro_san_studio check-llm-keys`.
-
-6. Add these lines to the studio's `.gitignore`, so the local case database and uploads are never committed:
-
-   ```text
-   case_data/
-   uploads/
-   ```
-
-All commands below run from the neuro-san-studio folder. Start the server and the nsflow UI (server on port 8080,
+All commands below run from the repository folder. Start the server and the nsflow UI (server on port 8080,
 UI on <http://localhost:4173>):
 
 ```bash
 venv/bin/python -m neuro_san_studio run
 ```
 
-For the standalone route, also start the statement upload page (<http://127.0.0.1:8090>):
+Start the House Move portal (<http://127.0.0.1:8090>): sign-in and statement upload. Every journey needs it:
 
 ```bash
 venv/bin/python -m apps.house_move_upload.upload_server
@@ -204,6 +192,11 @@ Python code changes need a server restart; HOCON changes are picked up automatic
 
 In nsflow, open **hackathon → house_move**.
 
+**First, sign in.** Open the portal at <http://127.0.0.1:8090> and choose a demo bank customer (for example
+C-10042) or "I'm not a customer". The portal shows a session, for example `{"session_token": "v1...."}`. Paste it into
+nsflow's SlyData tab and tick "Use Edited Sly Data" for the first message. The demo sign-in stands in for the bank's
+own login: a session opens only that customer's record, or only the cases its owner creates.
+
 **Bank customer (about 5 minutes):**
 
 1. "Mortgage case M-55810 for customer C-10042 has a completion date set. Start the move journey."
@@ -220,23 +213,25 @@ In nsflow, open **hackathon → house_move**.
 
 **Standalone:**
 
-1. Paste into the SlyData panel and tick "Use Edited Sly Data" (this stands in for the app's secure form):
+1. Sign in on the portal as "I'm not a customer". In the SlyData tab, add the secure-form details next to the
+   session (this stands in for the app's own form) and tick "Use Edited Sly Data":
 
    ```json
-   {"intake_form": {"full_names": ["Jordan Lee"], "email": "jordan.lee@example.com",
-     "old_address_line1": "8 Cotham Vale", "new_address_line1": "21 Lenton Boulevard"}}
+   {"session_token": "v1....",
+    "intake_form": {"full_names": ["Jordan Lee"], "email": "jordan.lee@example.com",
+      "old_address_line1": "8 Cotham Vale", "new_address_line1": "21 Lenton Boulevard"}}
    ```
 
 2. "Hi, I'm moving house and I don't bank with you. I'm Jordan, moving from BS6 6RB to NG7 2NF on
    11 December 2026."
-3. Upload `coded_tools/hackathon/house_move/data/sample_statements/jordan_lee_bristol.csv` at
-   <http://127.0.0.1:8090>, then say "I've uploaded jordan_lee_bristol.csv. Yes, you can read it."
-4. Continue as above. Later, "My case reference is S-…" resumes the case in a new session.
+3. Upload `coded_tools/hackathon/house_move/data/sample_statements/jordan_lee_bristol.csv` on the portal
+   (same sign-in), then say "I've uploaded jordan_lee_bristol.csv. Yes, you can read it."
+4. Continue as above. Later, with the same session, "My case reference is S-…" resumes the case.
 
-The same journeys run from the command line:
+The same journeys run from the command line, passing the session from the portal:
 
 ```bash
-venv/bin/python -m neuro_san_studio chat hackathon/house_move --connection http --port 8080
+venv/bin/python -m neuro_san.client.agent_cli --agent hackathon/house_move --http --port 8080 --sly_data '{"session_token": "v1...."}'
 ```
 
 ## Test customers
@@ -255,14 +250,17 @@ are fictional.
 
 ## Project layout
 
+House Move files (everything else is Neuro SAN Studio):
+
 ```text
 registries/hackathon/house_move.hocon         the agent network
+registries/manifest.hocon                     includes registries/hackathon/manifest.hocon (one added line)
 coded_tools/hackathon/house_move/             coded tools (one class per file)
 coded_tools/hackathon/house_move/data/        rules, synthetic data, directories, schools extract, samples
-apps/house_move_upload/upload_server.py       statement upload page
+apps/house_move_upload/upload_server.py       portal: demo sign-in and statement upload
 build_scripts/build_house_move_schools.py     builds the schools extract from GIAS
 tests/coded_tools/hackathon/house_move/       unit tests
-tests/apps/house_move_upload/                 upload page tests
+tests/apps/house_move_upload/                 portal tests
 House_Move_Agent.pptx                         pitch deck
 ```
 
@@ -272,9 +270,11 @@ House_Move_Agent.pptx                         pitch deck
 venv/bin/python -m pytest tests/coded_tools/hackathon tests/apps/house_move_upload -q
 ```
 
-61 tests cover the rules engine (including Scotland, Wales and Northern Ireland), working-day dates, the approval
-gate, mock sending, replanning, replies, the case store and encryption, statement parsing, the upload page, and the
-GP, school and water finders. Network calls are mocked in tests.
+70 tests cover the rules engine (including Scotland, Wales and Northern Ireland), working-day dates, the approval
+gate, mock sending, replanning, replies, the case store and encryption, statement parsing, the portal, and the GP,
+school and water finders. `test_session_security.py` replays the review's attacks through the real session path:
+forged approved state, opening another customer's record, missing or tampered tokens, guessing case IDs, reading
+another person's upload, and parallel tool calls. Network calls are mocked in tests.
 
 ## Data sources
 
@@ -295,7 +295,9 @@ GP, school and water finders. Network calls are mocked in tests.
   the standalone "your banks" task.
 - Water companies are confirmed for Bristol and Darlington only; other districts point to the official checker.
 - Schools cover England only; Wales, Scotland and Northern Ireland get pointers to their own admissions routes.
-- The upload page address is fixed (`127.0.0.1:8090`) and only works on the machine running the demo.
+- The portal address is fixed (`127.0.0.1:8090`) and only works on the machine running the demo.
+- The demo sign-in lets anyone pick a demo customer; production would use the bank's own login.
+- Two review findings are still open (see [Security review status](#security-review-status)).
 - The full draft turn takes several minutes: four specialists are each called twice (Determine, then Fulfill).
 - The vault key is a local file; production would use a managed key service.
 

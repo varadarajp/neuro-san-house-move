@@ -2,12 +2,10 @@
 
 from typing import Any
 
-from neuro_san.interfaces.coded_tool import CodedTool
-
-from coded_tools.hackathon.house_move.case_store import CaseStore
+from coded_tools.hackathon.house_move.case_tool import CaseTool
 
 
-class UpdateTasks(CodedTool):
+class UpdateTasks(CaseTool):
     """
     Records a specialist's handling details on tasks in sly_data["tasks"]: the action, what the customer needs,
     the channel, the official link and the inputs the Comms agent needs for a draft.
@@ -27,7 +25,7 @@ class UpdateTasks(CodedTool):
         "notes",
     )
 
-    def invoke(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
+    def run(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
         """
         :param args: "updates", a list of {"task_id", "action", "what_customer_needs", "channel", "contact_url",
                      "draft_inputs", "notes"}.
@@ -62,11 +60,4 @@ class UpdateTasks(CodedTool):
                     task[field] = update.get(field)
             task.setdefault("history", []).append("handling details recorded")
             updated.append(task.get("task_id"))
-        CaseStore.snapshot(sly_data)
         return {"updated": updated, "rejected": rejected}
-
-    async def async_invoke(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
-        """
-        Delegates to invoke: it only changes memory, so it does not block.
-        """
-        return self.invoke(args, sly_data)

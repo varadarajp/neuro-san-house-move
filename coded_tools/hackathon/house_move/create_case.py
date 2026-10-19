@@ -4,19 +4,19 @@ import asyncio
 from datetime import date
 from typing import Any
 
-from neuro_san.interfaces.coded_tool import CodedTool
-
+from coded_tools.hackathon.house_move.case_session import CaseSession
 from coded_tools.hackathon.house_move.case_store import CaseStore
+from coded_tools.hackathon.house_move.case_tool import CaseTool
 from coded_tools.hackathon.house_move.council_lookup import CouncilLookup
 
 
-class CreateCase(CodedTool):
+class CreateCase(CaseTool):
     """
     Creates a case from the few facts gathered in chat: first names, both postcodes and the move date.
     Postcodes are checked with council_lookup, which also records both councils.
     Personal details (full names, street lines, email) never come through chat: the app's secure form puts them in
     sly_data["intake_form"], and this tool moves them straight into the encrypted vault and removes them from
-    sly_data. The case then looks like a CRM record to every other tool.
+    sly_data. The case belongs to the signed-in owner and looks like a CRM record to every other tool.
     """
 
     FACT_NAMES: tuple[str, ...] = (
@@ -31,6 +31,8 @@ class CreateCase(CodedTool):
         "has_young_child",
     )
 
+    NEEDS_CASE: bool = False  # This is the tool that creates a case.
+
     def __init__(self, case_store: CaseStore | None = None, council_lookup: CouncilLookup | None = None):
         """
         :param case_store: where the case is saved. Defaults to the SQLite case store.
@@ -39,13 +41,7 @@ class CreateCase(CodedTool):
         self._case_store: CaseStore | None = case_store
         self._council_lookup: CouncilLookup = council_lookup or CouncilLookup()
 
-    def invoke(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
-        """
-        Synchronous entry point for scripts and tests. The server calls async_invoke.
-        """
-        return asyncio.run(self.async_invoke(args, sly_data))
-
-    async def async_invoke(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
+    async def arun(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
         """
         :param args: "first_names" (list), "old_postcode", "new_postcode", "move_date" (YYYY-MM-DD), optional
                      "move_date_is_estimate", "exchange_date", "old_property" (sold, let, rented_ended, kept) and
@@ -65,21 +61,22 @@ class CreateCase(CodedTool):
 
         councils: dict[str, dict[str, Any]] = {}
         for key in ("old_postcode", "new_postcode"):
-            council: dict[str, Any] | str = await self._council_lookup.async_invoke(
-                {"postcode": args.get(key, "")}, sly_data
-            )
+            council: dict[str, Any] | str = await self._council_lookup.lookup(args.get(key, ""))
             if isinstance(council, str):
                 return f"Error with the {key.replace('_', ' ')}: {council}"
             councils[key] = council
+            sly_data.setdefault("councils", {})[council.get("postcode")] = council
 
         profile: dict[str, Any] = self._profile(args, first_names, councils, move_date, exchange_date)
         form: dict[str, Any] = sly_data.pop("intake_form", None) or {}
         store: CaseStore = self._case_store or await asyncio.to_thread(CaseStore)
-        case_id: str = await asyncio.to_thread(store.create_case, profile, form)
+        owner: str | None = sly_data.get(CaseSession.OWNER_KEY)
+        if not owner:
+            return "Error: not signed in. Sign in on the House Move portal first."
+        case_id: str = await asyncio.to_thread(store.create_case, profile, form, owner)
 
         sly_data["customer_id"] = case_id
         sly_data["customer_profile"] = await asyncio.to_thread(store.get_customer, case_id)
-        await asyncio.to_thread(store.save_state, sly_data)
         return {
             "case_id": case_id,
             "first_names": first_names,
@@ -91,6 +88,13 @@ class CreateCase(CodedTool):
             "personal_details_from_form": sorted(key for key in form if key in CaseStore.PERSONAL_FIELDS),
             "next": "Ask how they want to share who they pay: upload a statement, or list providers.",
         }
+
+    def after_run(self, result: Any, sly_data: dict[str, Any], session: CaseSession) -> None:
+        """
+        Makes the new case the owner's active case, keeping the councils just looked up.
+        """
+        if isinstance(result, dict) and result.get("case_id"):
+            session.select_case(sly_data, result.get("case_id"), load=False)
 
     @staticmethod
     def _profile(

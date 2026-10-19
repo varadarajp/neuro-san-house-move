@@ -1,19 +1,16 @@
 """Deterministic rules engine that decides which organisations a moving customer must tell."""
 
-import asyncio
 import json
 import logging
 from typing import Any
 
-from neuro_san.interfaces.coded_tool import CodedTool
-
-from coded_tools.hackathon.house_move.case_store import CaseStore
+from coded_tools.hackathon.house_move.case_tool import CaseTool
 from coded_tools.hackathon.house_move.house_move_data_store import HouseMoveDataStore
 
 logger = logging.getLogger(__name__)
 
 
-class ObligationsRules(CodedTool):
+class ObligationsRules(CaseTool):
     """
     Evaluates data/obligations_rules.json against the customer's facts.
     No LLM judgment happens here: a rule applies, does not apply, or needs review because a fact is unknown.
@@ -31,7 +28,7 @@ class ObligationsRules(CodedTool):
         """
         self._data_store: HouseMoveDataStore = data_store or HouseMoveDataStore()
 
-    def invoke(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
+    def run(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
         """
         :param args: "facts", a dict of household facts such as {"has_vehicle": true}; and "providers",
                      a list of {"category", "provider_name"} from discovery.
@@ -60,7 +57,6 @@ class ObligationsRules(CodedTool):
                 obligations.append(self._to_obligation(rule, status, missing, facts, providers))
 
         sly_data["obligations"] = obligations
-        CaseStore.snapshot(sly_data)
         used_categories: set[str] = {rule.get("provider_category") for rule in rules}
         logger.info("Evaluated %d rules: %d obligations", len(rules), len(obligations))
         return {
@@ -76,12 +72,6 @@ class ObligationsRules(CodedTool):
                 "new_council": facts.get("new_council"),
             },
         }
-
-    async def async_invoke(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
-        """
-        Runs invoke in a worker thread because it reads files.
-        """
-        return await asyncio.to_thread(self.invoke, args, sly_data)
 
     @staticmethod
     def _location_facts(sly_data: dict[str, Any]) -> dict[str, Any] | str:

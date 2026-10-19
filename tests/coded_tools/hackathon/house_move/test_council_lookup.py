@@ -1,11 +1,10 @@
-from unittest import TestCase
-
 import httpx
 
 from coded_tools.hackathon.house_move.council_lookup import CouncilLookup
+from tests.coded_tools.hackathon.house_move.house_move_test_case import HouseMoveTestCase
 
 
-class TestCouncilLookup(TestCase):
+class TestCouncilLookup(HouseMoveTestCase):
     """
     Unit tests for CouncilLookup. postcodes.io is replaced by a mock transport.
     """
@@ -32,7 +31,7 @@ class TestCouncilLookup(TestCase):
             return httpx.Response(200, json=TestCouncilLookup.LEEDS_RESPONSE)
 
         sly_data: dict = {}
-        result = CouncilLookup(transport=httpx.MockTransport(handler)).invoke({"postcode": "ls13ed"}, sly_data)
+        result = CouncilLookup(transport=httpx.MockTransport(handler)).run({"postcode": "ls13ed"}, sly_data)
 
         self.assertEqual(["https://api.postcodes.io/postcodes/LS13ED"], requested)
         self.assertEqual("Leeds", result.get("council_name"))
@@ -49,7 +48,7 @@ class TestCouncilLookup(TestCase):
             # Nested to simulate an outage; MockTransport needs a plain callable.
             raise httpx.ConnectError("offline", request=request)
 
-        result = CouncilLookup(transport=httpx.MockTransport(handler)).invoke({"postcode": "HG1 1SY"}, {})
+        result = CouncilLookup(transport=httpx.MockTransport(handler)).run({"postcode": "HG1 1SY"}, {})
         self.assertEqual("North Yorkshire", result.get("council_name"))
         self.assertTrue(result.get("source").startswith("cache"))
 
@@ -58,5 +57,5 @@ class TestCouncilLookup(TestCase):
         A 404 from postcodes.io is reported as an invalid postcode, without using the cache.
         """
         transport = httpx.MockTransport(lambda request: httpx.Response(404, json={"status": 404}))
-        result = CouncilLookup(transport=transport).invoke({"postcode": "ZZ9 9ZZ"}, {})
+        result = CouncilLookup(transport=transport).run({"postcode": "ZZ9 9ZZ"}, {})
         self.assertEqual("Error: ZZ9 9ZZ is not a valid UK postcode.", result)

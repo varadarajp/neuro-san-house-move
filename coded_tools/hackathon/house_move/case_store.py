@@ -18,31 +18,20 @@ logger = logging.getLogger(__name__)
 
 class CaseStore:
     """
-    Persists standalone cases (IDs starting "S-"), so a customer who is not a bank customer can start, leave and
-    resume a move. Four kinds of data are kept apart:
-    - cases: the non-personal profile (first names, postcodes, dates, facts) and a snapshot of the plan state.
-    - vault: personal data (full names, street lines, email), encrypted per field by PersonalDataVault.
-    - transactions and manual providers: what the customer gave for discovery. Raw statement files are never kept.
+    Server-side store behind every session (see CaseSession). The client never holds case data: it holds a signed
+    session token, and everything else lives here.
+    - cases: standalone cases (IDs starting "S-") with their owner and non-personal profile.
+    - vault: a standalone customer's personal data (full names, street lines, email), encrypted per field.
+    - case_state: the plan state of every case, bank or standalone, per owner, encrypted as one blob.
+    - active_cases: which case each signed-in owner is working on.
+    - transactions and manual providers: what a standalone customer gave for discovery. Raw files are never kept.
     - consents: the customer's own words agreeing to each use of their data.
-    Bank-customer cases (C-...) never touch this store.
     """
 
     PREFIX: str = "S-"
     DB_ENV: str = "HOUSE_MOVE_CASE_DB"
     # Repository root is three folders up: coded_tools/hackathon/house_move/case_store.py
     DEFAULT_DB: Path = Path(__file__).resolve().parents[3] / "case_data" / "house_move_cases.sqlite"
-    # sly_data keys that make up a case's plan state. Personal data is not among them.
-    STATE_KEYS: tuple[str, ...] = (
-        "councils",
-        "obligations",
-        "tasks",
-        "previous_tasks",
-        "plan_dates",
-        "drafts",
-        "outbox",
-        "audit_log",
-        "processed_replies",
-    )
     PERSONAL_FIELDS: tuple[str, ...] = ("full_names", "email", "old_address_line1", "new_address_line1")
     SCHEMA: str = """
         CREATE TABLE IF NOT EXISTS cases (
@@ -55,7 +44,13 @@ class CaseStore:
             case_id TEXT, category TEXT, provider_name TEXT);
         CREATE TABLE IF NOT EXISTS consents (
             case_id TEXT, kind TEXT, words TEXT, at TEXT);
+        CREATE TABLE IF NOT EXISTS case_state (
+            owner_id TEXT, case_id TEXT, token BLOB, updated_at TEXT, PRIMARY KEY (owner_id, case_id));
+        CREATE TABLE IF NOT EXISTS active_cases (
+            owner_id TEXT PRIMARY KEY, case_id TEXT, updated_at TEXT);
     """
+    # 16 random bytes, URL-safe: a case reference cannot be guessed, and ownership is checked anyway.
+    ID_BYTES: int = 16
 
     def __init__(self, db_path: Path | None = None, vault: PersonalDataVault | None = None):
         """
@@ -67,6 +62,10 @@ class CaseStore:
         self._vault: PersonalDataVault = vault or PersonalDataVault(self._db_path.with_suffix(".key"))
         with closing(self._connect()) as connection, connection:
             connection.executescript(CaseStore.SCHEMA)
+            columns: set[str] = {row[1] for row in connection.execute("PRAGMA table_info(cases)")}
+            if "owner_id" not in columns:
+                # Cases created before ownership existed get no owner, so nobody can open them.
+                connection.execute("ALTER TABLE cases ADD COLUMN owner_id TEXT")
 
     @staticmethod
     def is_case(customer_id: str | None) -> bool:
@@ -75,17 +74,22 @@ class CaseStore:
         """
         return bool(customer_id) and customer_id.startswith(CaseStore.PREFIX)
 
-    def create_case(self, profile: dict[str, Any], personal: dict[str, Any]) -> str:
+    def create_case(self, profile: dict[str, Any], personal: dict[str, Any], owner_id: str) -> str:
         """
         :param profile: non-personal facts, in the shape of the CRM record minus names, street lines and email.
         :param personal: any of PERSONAL_FIELDS; full_names is a list.
-        :return: the new case ID, for example "S-3F9A1C".
+        :param owner_id: the signed-in owner, from the verified session token. Only they can open the case.
+        :return: the new case ID, for example "S-Hk3x...".
         """
-        case_id: str = CaseStore.PREFIX + secrets.token_hex(3).upper()
+        if not owner_id:
+            raise ValueError("A standalone case needs an owner")
+        case_id: str = CaseStore.PREFIX + secrets.token_urlsafe(CaseStore.ID_BYTES)
         now: str = self._now()
         with closing(self._connect()) as connection, connection:
             connection.execute(
-                "INSERT INTO cases VALUES (?, ?, ?, ?, ?)", (case_id, now, now, json.dumps(profile), json.dumps({}))
+                "INSERT INTO cases (case_id, created_at, updated_at, profile_json, state_json, owner_id) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (case_id, now, now, json.dumps(profile), json.dumps({}), owner_id),
             )
         self.save_personal(case_id, personal)
         logger.info("Created standalone case %s", case_id)
@@ -228,43 +232,58 @@ class CaseStore:
             ).fetchall()
         return [{"kind": kind, "words": words, "at": at} for kind, words, at in rows]
 
-    @classmethod
-    def snapshot(cls, sly_data: dict[str, Any]) -> bool:
+    def case_owner(self, case_id: str) -> str | None:
         """
-        Saves the plan state if sly_data belongs to a standalone case. For bank customers it returns at once without
-        opening the database, so the tools that change the plan can call it unconditionally.
-        :return: true if a snapshot was written.
-        """
-        if not cls.is_case(sly_data.get("customer_id")):
-            return False
-        return cls().save_state(sly_data)
-
-    def save_state(self, sly_data: dict[str, Any]) -> bool:
-        """
-        Snapshots the plan state from sly_data for a standalone case, so the case can be resumed in a new session.
-        Called by the tools that change the plan. Does nothing for bank customers.
-        :return: true if a snapshot was written.
-        """
-        case_id: str | None = sly_data.get("customer_id")
-        if not CaseStore.is_case(case_id):
-            return False
-        state: dict[str, Any] = {key: sly_data.get(key) for key in CaseStore.STATE_KEYS if key in sly_data}
-        with closing(self._connect()) as connection, connection:
-            updated: int = connection.execute(
-                "UPDATE cases SET state_json = ?, updated_at = ? WHERE case_id = ?",
-                (json.dumps(state), self._now(), case_id),
-            ).rowcount
-        return updated == 1
-
-    def load_state(self, case_id: str) -> dict[str, Any]:
-        """
-        :return: the last plan-state snapshot, or an empty dict.
+        :return: the owner of a standalone case, or None if it does not exist or has no owner.
         """
         with closing(self._connect()) as connection:
             row: tuple | None = connection.execute(
-                "SELECT state_json FROM cases WHERE case_id = ?", (case_id,)
+                "SELECT owner_id FROM cases WHERE case_id = ?", (case_id,)
             ).fetchone()
-        return json.loads(row[0]) if row and row[0] else {}
+        return row[0] if row else None
+
+    def set_active(self, owner_id: str, case_id: str | None) -> None:
+        """
+        Records which case the owner is working on, or clears it with None.
+        """
+        with closing(self._connect()) as connection, connection:
+            if case_id is None:
+                connection.execute("DELETE FROM active_cases WHERE owner_id = ?", (owner_id,))
+            else:
+                connection.execute(
+                    "INSERT OR REPLACE INTO active_cases VALUES (?, ?, ?)", (owner_id, case_id, self._now())
+                )
+
+    def get_active(self, owner_id: str) -> str | None:
+        """
+        :return: the case the owner was last working on, or None.
+        """
+        with closing(self._connect()) as connection:
+            row: tuple | None = connection.execute(
+                "SELECT case_id FROM active_cases WHERE owner_id = ?", (owner_id,)
+            ).fetchone()
+        return row[0] if row else None
+
+    def save_case_state(self, owner_id: str, case_id: str, state: dict[str, Any]) -> None:
+        """
+        Stores a case's plan state for its owner, encrypted, because drafts and the outbox hold personal data.
+        """
+        token: bytes = self._vault.encrypt(json.dumps(state))
+        with closing(self._connect()) as connection, connection:
+            connection.execute(
+                "INSERT OR REPLACE INTO case_state VALUES (?, ?, ?, ?)", (owner_id, case_id, token, self._now())
+            )
+
+    def load_case_state(self, owner_id: str, case_id: str) -> dict[str, Any]:
+        """
+        :return: the owner's saved plan state for the case, or an empty dict.
+        """
+        with closing(self._connect()) as connection:
+            row: tuple | None = connection.execute(
+                "SELECT token FROM case_state WHERE owner_id = ? AND case_id = ?", (owner_id, case_id)
+            ).fetchone()
+        plain: str | None = self._vault.decrypt(row[0]) if row else None
+        return json.loads(plain) if plain else {}
 
     def delete_case(self, case_id: str) -> bool:
         """
@@ -273,7 +292,7 @@ class CaseStore:
         """
         with closing(self._connect()) as connection, connection:
             existed: int = connection.execute("DELETE FROM cases WHERE case_id = ?", (case_id,)).rowcount
-            for table in ("vault", "transactions", "manual_providers", "consents"):
+            for table in ("vault", "transactions", "manual_providers", "consents", "case_state", "active_cases"):
                 connection.execute(f"DELETE FROM {table} WHERE case_id = ?", (case_id,))  # noqa: S608 - fixed names
         logger.info("Deleted standalone case %s", case_id)
         return existed == 1

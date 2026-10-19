@@ -2,13 +2,11 @@
 
 from typing import Any
 
-from neuro_san.interfaces.coded_tool import CodedTool
-
 from coded_tools.hackathon.house_move.audit_log import AuditLog
-from coded_tools.hackathon.house_move.case_store import CaseStore
+from coded_tools.hackathon.house_move.case_tool import CaseTool
 
 
-class ApproveDrafts(CodedTool):
+class ApproveDrafts(CaseTool):
     """
     Moves tasks from "awaiting_approval" to "approved" or "skipped", as the customer said.
     Only a task with a saved draft that is awaiting approval can be approved, and the customer's own words are
@@ -23,7 +21,7 @@ class ApproveDrafts(CodedTool):
         """
         self._audit_log: AuditLog = audit_log or AuditLog()
 
-    def invoke(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
+    def run(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
         """
         :param args: "customer_words" (the customer's approval, quoted), and "approve" and/or "skip", each a list of
                      draft or task IDs, or ["all"] for every draft awaiting approval.
@@ -52,14 +50,7 @@ class ApproveDrafts(CodedTool):
             task.setdefault("history", []).append(f"{decision} by customer")
             self._audit_log.record(sly_data, decision, task_id, f'draft {task.get("draft_id")}: "{customer_words}"')
             result[decision].append(task_id)
-        CaseStore.snapshot(sly_data)
         return result
-
-    async def async_invoke(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
-        """
-        Delegates to invoke: the audit append is a small local write.
-        """
-        return self.invoke(args, sly_data)
 
     @staticmethod
     def _resolve(ids: list[str], tasks: list[dict[str, Any]]) -> set[str]:

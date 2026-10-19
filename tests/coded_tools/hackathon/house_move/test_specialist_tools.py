@@ -1,14 +1,13 @@
-from unittest import TestCase
-
 from coded_tools.hackathon.house_move.audit_log import AuditLog
 from coded_tools.hackathon.house_move.bank_address_api import BankAddressApi
 from coded_tools.hackathon.house_move.gov_service_directory import GovServiceDirectory
 from coded_tools.hackathon.house_move.insurance_quote_api import InsuranceQuoteApi
 from coded_tools.hackathon.house_move.provider_directory import ProviderDirectory
+from tests.coded_tools.hackathon.house_move.house_move_test_case import HouseMoveTestCase
 from tests.coded_tools.hackathon.house_move.house_move_test_state import HouseMoveTestState
 
 
-class TestSpecialistTools(TestCase):
+class TestSpecialistTools(HouseMoveTestCase):
     """
     Unit tests for the specialists' mock tools.
     """
@@ -38,7 +37,7 @@ class TestSpecialistTools(TestCase):
         """
         The quote is a band for the postcode area and always carries the indicative label.
         """
-        result = InsuranceQuoteApi().invoke({}, HouseMoveTestState.planned())
+        result = InsuranceQuoteApi().run({}, HouseMoveTestState.planned())
         self.assertEqual("HG", result.get("postcode_area"))
         self.assertTrue(result.get("label").startswith("Indicative only"))
 
@@ -49,15 +48,15 @@ class TestSpecialistTools(TestCase):
         sly_data: dict = HouseMoveTestState.planned()
         task: dict = HouseMoveTestState.task_for(sly_data, "bank_address")
 
-        refused = BankAddressApi(AuditLog(None)).invoke({}, sly_data)
+        refused = BankAddressApi(AuditLog(None)).run({}, sly_data)
         self.assertTrue(refused.startswith("Error: the customer has not approved"))
         self.assertEqual("planned", task.get("status"))
 
         task["status"] = "approved"
-        result = BankAddressApi(AuditLog(None)).invoke({}, sly_data)
+        result = BankAddressApi(AuditLog(None)).run({}, sly_data)
         self.assertEqual("scheduled", result.get("status"))
         self.assertEqual("2026-11-27", result.get("effective_date"))
         self.assertEqual(
-            result, BankAddressApi(AuditLog(None)).invoke({}, {**sly_data, "tasks": [{**task, "status": "approved"}]})
+            result, BankAddressApi(AuditLog(None)).run({}, {**sly_data, "tasks": [{**task, "status": "approved"}]})
         )
         self.assertEqual("confirmed", task.get("status"))

@@ -1,11 +1,11 @@
 from datetime import date
-from unittest import TestCase
 
 from coded_tools.hackathon.house_move.build_timeline import BuildTimeline
 from coded_tools.hackathon.house_move.date_calc import DateCalc
+from tests.coded_tools.hackathon.house_move.house_move_test_case import HouseMoveTestCase
 
 
-class TestBuildTimeline(TestCase):
+class TestBuildTimeline(HouseMoveTestCase):
     """
     Unit tests for BuildTimeline and DateCalc.
     """
@@ -48,7 +48,7 @@ class TestBuildTimeline(TestCase):
         """
         Tasks are dated from the right anchor, sorted by date, and needs-review items are listed apart.
         """
-        result = BuildTimeline(today=self.TODAY).invoke({}, self.sly_data())
+        result = BuildTimeline(today=self.TODAY).run({}, self.sly_data())
         due: dict = {t.get("obligation_id"): t.get("due_date") for t in result.get("tasks")}
 
         self.assertEqual("2026-11-06", due.get("broadband"))
@@ -65,8 +65,8 @@ class TestBuildTimeline(TestCase):
         Rebuilding with a new completion date keeps task IDs and saves the old plan.
         """
         sly_data: dict = self.sly_data()
-        first = BuildTimeline(today=self.TODAY).invoke({}, sly_data)
-        second = BuildTimeline(today=self.TODAY).invoke({"completion_date": "2026-12-11"}, sly_data)
+        first = BuildTimeline(today=self.TODAY).run({}, sly_data)
+        second = BuildTimeline(today=self.TODAY).run({"completion_date": "2026-12-11"}, sly_data)
 
         first_ids: dict = {t.get("obligation_id"): t.get("task_id") for t in first.get("tasks")}
         second_ids: dict = {t.get("obligation_id"): t.get("task_id") for t in second.get("tasks")}
@@ -79,8 +79,8 @@ class TestBuildTimeline(TestCase):
         A rebuild for a new completion date lists each moved task with its old and new date.
         """
         sly_data: dict = self.sly_data()
-        BuildTimeline(today=self.TODAY).invoke({}, sly_data)
-        result = BuildTimeline(today=self.TODAY).invoke({"completion_date": "2026-12-11"}, sly_data)
+        BuildTimeline(today=self.TODAY).run({}, sly_data)
+        result = BuildTimeline(today=self.TODAY).run({"completion_date": "2026-12-11"}, sly_data)
         moved: dict = {m.get("org"): (m.get("from"), m.get("to")) for m in result.get("changes").get("moved")}
 
         self.assertEqual(("2026-11-06", "2026-11-20"), moved.get("broadband"))
@@ -95,7 +95,7 @@ class TestBuildTimeline(TestCase):
             {**self.obligation("gp", 14), "timing": {"anchor": "completion", "offset_days": 14, "window": "after"}},
             {**self.obligation("tv", -12), "timing": {"anchor": "completion", "offset_days": -12, "window": "before"}},
         ]
-        result = BuildTimeline(today=self.TODAY).invoke({"completion_date": "2026-12-11"}, sly_data)
+        result = BuildTimeline(today=self.TODAY).run({"completion_date": "2026-12-11"}, sly_data)
         due: dict = {t.get("obligation_id"): t.get("due_date") for t in result.get("tasks")}
         self.assertEqual("2026-12-29", due.get("gp"))
         self.assertEqual("2026-11-27", due.get("tv"))
@@ -104,9 +104,9 @@ class TestBuildTimeline(TestCase):
         """
         A due date before today is flagged, and an empty plan asks for the rules step first.
         """
-        result = BuildTimeline(today=date(2026, 11, 10)).invoke({}, self.sly_data())
+        result = BuildTimeline(today=date(2026, 11, 10)).run({}, self.sly_data())
         self.assertTrue(any("broadband" in warning for warning in result.get("warnings")))
-        self.assertTrue(BuildTimeline().invoke({}, {}).startswith("Error:"))
+        self.assertTrue(BuildTimeline().run({}, {}).startswith("Error:"))
 
     def test_working_days_skip_weekends_and_bank_holidays(self):
         """

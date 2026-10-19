@@ -7,8 +7,8 @@ import string
 from typing import Any
 
 import httpx
-from neuro_san.interfaces.coded_tool import CodedTool
 
+from coded_tools.hackathon.house_move.case_tool import CaseTool
 from coded_tools.hackathon.house_move.council_lookup import CouncilLookup
 from coded_tools.hackathon.house_move.geo_distance import GeoDistance
 from coded_tools.hackathon.house_move.house_move_data_store import HouseMoveDataStore
@@ -16,7 +16,7 @@ from coded_tools.hackathon.house_move.house_move_data_store import HouseMoveData
 logger = logging.getLogger(__name__)
 
 
-class GpFinder(CodedTool):
+class GpFinder(CaseTool):
     """
     Lists the GP practices nearest a postcode in England or Wales, with address, phone and straight-line distance.
     Practices come from the NHS Organisation Data Service (ODS), searched by postcode district; their locations come
@@ -55,13 +55,7 @@ class GpFinder(CodedTool):
         self._transport: httpx.AsyncBaseTransport | None = transport
         self._data_store: HouseMoveDataStore = data_store or HouseMoveDataStore()
 
-    def invoke(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
-        """
-        Synchronous entry point for scripts and tests. The server calls async_invoke.
-        """
-        return asyncio.run(self.async_invoke(args, sly_data))
-
-    async def async_invoke(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
+    async def arun(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
         """
         :param args: optional "postcode" (defaults to the new address) and "limit" (default 5).
         :param sly_data: reads "customer_profile" and "councils".

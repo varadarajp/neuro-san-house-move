@@ -1,20 +1,17 @@
 """Saves the Comms agent's drafts and puts each task into awaiting_approval."""
 
-import asyncio
 import json
 import logging
 from typing import Any
 
-from neuro_san.interfaces.coded_tool import CodedTool
-
-from coded_tools.hackathon.house_move.case_store import CaseStore
+from coded_tools.hackathon.house_move.case_tool import CaseTool
 from coded_tools.hackathon.house_move.draft_renderer import DraftRenderer
 from coded_tools.hackathon.house_move.house_move_data_store import HouseMoveDataStore
 
 logger = logging.getLogger(__name__)
 
 
-class SaveDrafts(CodedTool):
+class SaveDrafts(CaseTool):
     """
     Stores drafts in sly_data["drafts"], keyed by draft ID, with the placeholder version the LLM wrote and the
     rendered version that holds real personal data. Only the placeholder version and the customer's gaps go back
@@ -29,7 +26,7 @@ class SaveDrafts(CodedTool):
         """
         self._data_store: HouseMoveDataStore = data_store or HouseMoveDataStore()
 
-    def invoke(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
+    def run(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
         """
         :param args: "drafts", a list of {"task_id", "subject", "body"} using {{placeholders}}.
         :param sly_data: reads "tasks", "customer_profile", "plan_dates"; writes "drafts" and task statuses.
@@ -79,11 +76,4 @@ class SaveDrafts(CodedTool):
             task["status"] = "awaiting_approval"
             task.setdefault("history", []).append(f"draft {draft_id} saved")
             saved.append({"draft_id": draft_id, "task_id": task.get("task_id"), "gaps_for_customer": gaps})
-        CaseStore.snapshot(sly_data)
         return {"saved": saved, "rejected": rejected}
-
-    async def async_invoke(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
-        """
-        Runs invoke in a worker thread because it reads files.
-        """
-        return await asyncio.to_thread(self.invoke, args, sly_data)

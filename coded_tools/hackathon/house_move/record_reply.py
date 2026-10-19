@@ -2,13 +2,11 @@
 
 from typing import Any
 
-from neuro_san.interfaces.coded_tool import CodedTool
-
 from coded_tools.hackathon.house_move.audit_log import AuditLog
-from coded_tools.hackathon.house_move.case_store import CaseStore
+from coded_tools.hackathon.house_move.case_tool import CaseTool
 
 
-class RecordReply(CodedTool):
+class RecordReply(CaseTool):
     """
     Stores the facts an LLM extracted from a provider reply on the task, and sets the task's next status:
     "confirmed" when nothing more is needed, or "needs_action" with a follow-up when the provider asked for something.
@@ -22,7 +20,7 @@ class RecordReply(CodedTool):
         """
         self._audit_log: AuditLog = audit_log or AuditLog()
 
-    def invoke(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
+    def run(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
         """
         :param args: "reply_id", "task_id", "outcome" (confirmed or needs_action), optional "facts" (an object of
                      what the provider told us) and "requested_info" (a list of what they asked for).
@@ -50,16 +48,9 @@ class RecordReply(CodedTool):
         if requested:
             detail += f"; provider asked for {', '.join(requested)}"
         self._audit_log.record(sly_data, "reply", task.get("task_id"), detail)
-        CaseStore.snapshot(sly_data)
         return {
             "task_id": task.get("task_id"),
             "status": outcome,
             "reply_facts": task.get("reply_facts"),
             "follow_up": requested,
         }
-
-    async def async_invoke(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
-        """
-        Delegates to invoke: the audit append is a small local write.
-        """
-        return self.invoke(args, sly_data)

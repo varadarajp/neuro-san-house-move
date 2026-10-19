@@ -1,22 +1,20 @@
 """Mock transaction feed for the House Move Agent's Discovery agent."""
 
-import asyncio
 import json
 import logging
 from datetime import date
 from datetime import timedelta
 from typing import Any
 
-from neuro_san.interfaces.coded_tool import CodedTool
-
 from coded_tools.hackathon.house_move.case_store import CaseStore
+from coded_tools.hackathon.house_move.case_tool import CaseTool
 from coded_tools.hackathon.house_move.house_move_data_store import HouseMoveDataStore
 from coded_tools.hackathon.house_move.merchant_normaliser import MerchantNormaliser
 
 logger = logging.getLogger(__name__)
 
 
-class GetTransactions(CodedTool):
+class GetTransactions(CaseTool):
     """
     Summarizes a customer's outgoing payments by payee.
     Raw rows stay in the data store. The LLM sees one line per normalized payee: how often it was paid,
@@ -43,7 +41,7 @@ class GetTransactions(CodedTool):
         self._today: date | None = today
         self._case_store: CaseStore | None = case_store
 
-    def invoke(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
+    def run(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
         """
         :param args: optional "days" (look-back window, default 90) and "customer_id".
         :param sly_data: "customer_id" set by the profile lookup is used when args has none.
@@ -87,12 +85,6 @@ class GetTransactions(CodedTool):
             "payees": self._group_by_payee(in_window),
             "customer_stated_providers": stated,
         }
-
-    async def async_invoke(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
-        """
-        Runs invoke in a worker thread because it reads files.
-        """
-        return await asyncio.to_thread(self.invoke, args, sly_data)
 
     def _group_by_payee(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """

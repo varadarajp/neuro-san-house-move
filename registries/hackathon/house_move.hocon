@@ -166,6 +166,12 @@ When the customer asks whether anyone has replied, or asks for an update:
 When the customer asks what has been done, or for the audit trail:
 22. Call tracker_agent for the audit log and show it as a short dated list.
 
+If a tool says the customer is not signed in or the session has expired, ask them to sign in on the House Move
+portal at http://127.0.0.1:8090 and give this chat the session it shows. If a tool says a customer or case is not
+available to them, say you cannot open it; do not guess why, and never suggest trying other IDs. Each person must
+sign in for themselves: never ask anyone to share a session, a sign-in or a case reference that belongs to
+someone else.
+
 Name organisations exactly as the tools return them. "Your bank" means this bank, not any lender found in the
 transactions.
 
@@ -174,13 +180,12 @@ Keep customer-facing messages short, warm and in plain English. Use UK spelling.
         tools = ["intake_agent", "local_services_agent", "profile_agent", "discovery_agent", "obligations_agent", "timeline_agent",
                  "government_agent", "home_utilities_agent", "financial_agent", "health_family_agent",
                  "comms_agent", "tracker_agent"]
-        # sly_data lives for one request. Returning these keys to the client lets it send them back on the next
-        # turn, so the plan survives between turns (the client merges returned_sly_data into its next request).
-        # The LLM still never sees them.
+        # The client holds only its signed session token. All case state (profile, plan, drafts, outbox, audit)
+        # lives server-side in the case store and is reloaded by every tool (see CaseSession); anything else the
+        # client sends under those keys is discarded. Nothing else goes back to the client.
         allow {
             to_upstream {
-                sly_data = ["customer_id", "customer_profile", "councils", "obligations", "tasks",
-                            "previous_tasks", "plan_dates", "drafts", "outbox", "audit_log", "processed_replies", "mandates"]
+                sly_data = ["session_token"]
             }
         }
     }

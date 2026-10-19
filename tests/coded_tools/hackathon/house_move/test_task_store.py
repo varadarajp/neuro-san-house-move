@@ -1,11 +1,10 @@
-from unittest import TestCase
-
 from coded_tools.hackathon.house_move.list_tasks import ListTasks
 from coded_tools.hackathon.house_move.update_tasks import UpdateTasks
+from tests.coded_tools.hackathon.house_move.house_move_test_case import HouseMoveTestCase
 from tests.coded_tools.hackathon.house_move.house_move_test_state import HouseMoveTestState
 
 
-class TestTaskStore(TestCase):
+class TestTaskStore(HouseMoveTestCase):
     """
     Unit tests for ListTasks and UpdateTasks.
     """
@@ -15,13 +14,13 @@ class TestTaskStore(TestCase):
         Filtering by agent returns only that agent's tasks; an unknown status returns none.
         """
         sly_data: dict = HouseMoveTestState.planned()
-        government = ListTasks().invoke({"agent": "government_agent"}, sly_data)
+        government = ListTasks().run({"agent": "government_agent"}, sly_data)
         self.assertEqual(
             {"dvla_licence", "dvla_v5c", "council_tax_old", "council_tax_new", "electoral_register"},
             {task.get("obligation_id") for task in government.get("tasks")},
         )
-        self.assertEqual([], ListTasks().invoke({"status": "sent"}, sly_data).get("tasks"))
-        self.assertTrue(ListTasks().invoke({}, {}).startswith("Error:"))
+        self.assertEqual([], ListTasks().run({"status": "sent"}, sly_data).get("tasks"))
+        self.assertTrue(ListTasks().run({}, {}).startswith("Error:"))
 
     def test_update_records_details_but_not_dates_or_status(self):
         """
@@ -30,7 +29,7 @@ class TestTaskStore(TestCase):
         sly_data: dict = HouseMoveTestState.planned()
         task: dict = HouseMoveTestState.task_for(sly_data, "broadband")
         due_date: str = task.get("due_date")
-        result = UpdateTasks().invoke(
+        result = UpdateTasks().run(
             {
                 "updates": [
                     {

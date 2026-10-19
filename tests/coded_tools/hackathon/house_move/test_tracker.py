@@ -1,5 +1,4 @@
 from datetime import date
-from unittest import TestCase
 
 from coded_tools.hackathon.house_move.approve_drafts import ApproveDrafts
 from coded_tools.hackathon.house_move.audit_log import AuditLog
@@ -13,10 +12,11 @@ from coded_tools.hackathon.house_move.record_reply import RecordReply
 from coded_tools.hackathon.house_move.save_drafts import SaveDrafts
 from coded_tools.hackathon.house_move.send_notification import SendNotification
 from coded_tools.hackathon.house_move.update_tasks import UpdateTasks
+from tests.coded_tools.hackathon.house_move.house_move_test_case import HouseMoveTestCase
 from tests.coded_tools.hackathon.house_move.house_move_test_state import HouseMoveTestState
 
 
-class TestTracker(TestCase):
+class TestTracker(HouseMoveTestCase):
     """
     Unit tests for the Tracker's tools: approval gate, mock send, replan corrections, replies and the audit view.
     """
@@ -29,9 +29,9 @@ class TestTracker(TestCase):
         :return: drafted sly_data with every draft approved, sent, and the bank update done.
         """
         sly_data: dict = HouseMoveTestState.drafted()
-        ApproveDrafts(self.NO_FILE).invoke({"approve": ["all"], "customer_words": "approve all"}, sly_data)
-        SendNotification(audit_log=self.NO_FILE).invoke({"task_ids": ["all"]}, sly_data)
-        BankAddressApi(self.NO_FILE).invoke({}, sly_data)
+        ApproveDrafts(self.NO_FILE).run({"approve": ["all"], "customer_words": "approve all"}, sly_data)
+        SendNotification(audit_log=self.NO_FILE).run({"task_ids": ["all"]}, sly_data)
+        BankAddressApi(self.NO_FILE).run({}, sly_data)
         return sly_data
 
     def test_approval_needs_customer_words_and_awaiting_status(self):
@@ -42,14 +42,14 @@ class TestTracker(TestCase):
         broadband: dict = HouseMoveTestState.task_for(sly_data, "broadband")
         tool = ApproveDrafts(self.NO_FILE)
 
-        self.assertTrue(tool.invoke({"approve": ["all"]}, sly_data).startswith("Error:"))
-        result = tool.invoke(
+        self.assertTrue(tool.run({"approve": ["all"]}, sly_data).startswith("Error:"))
+        result = tool.run(
             {"approve": ["all"], "skip": [broadband.get("draft_id")], "customer_words": "all except broadband"},
             sly_data,
         )
         self.assertEqual("skipped", broadband.get("status"))
         self.assertEqual(17, len(result.get("approved")))
-        again = tool.invoke({"approve": [broadband.get("task_id")], "customer_words": "yes"}, sly_data)
+        again = tool.run({"approve": [broadband.get("task_id")], "customer_words": "yes"}, sly_data)
         self.assertEqual([f"{broadband.get('task_id')} (skipped)"], again.get("not_awaiting_approval"))
         self.assertIn('"all except broadband"', sly_data.get("audit_log")[0].get("detail"))
 
@@ -62,12 +62,12 @@ class TestTracker(TestCase):
         broadband: dict = HouseMoveTestState.task_for(sly_data, "broadband")
         sender = SendNotification(audit_log=self.NO_FILE)
 
-        refused = sender.invoke({"task_ids": [energy.get("task_id")]}, sly_data)
+        refused = sender.run({"task_ids": [energy.get("task_id")]}, sly_data)
         self.assertEqual([], refused.get("sent_to_organisation") + refused.get("packs_for_customer"))
         self.assertIn("not approved", refused.get("refused")[0])
 
-        ApproveDrafts(self.NO_FILE).invoke({"approve": ["all"], "customer_words": "approve all"}, sly_data)
-        result = sender.invoke({"task_ids": ["all"]}, sly_data)
+        ApproveDrafts(self.NO_FILE).run({"approve": ["all"], "customer_words": "approve all"}, sly_data)
+        result = sender.run({"task_ids": ["all"]}, sly_data)
         to_org: list = [item.get("task_id") for item in result.get("sent_to_organisation")]
         to_customer: list = [item.get("task_id") for item in result.get("packs_for_customer")]
 
@@ -83,9 +83,9 @@ class TestTracker(TestCase):
         the provider instead of becoming a customer pack.
         """
         sly_data: dict = HouseMoveTestState.drafted()
-        GetTransactions().invoke({}, sly_data)
+        GetTransactions().run({}, sly_data)
         broadband: dict = HouseMoveTestState.task_for(sly_data, "broadband")
-        saved = SaveDrafts().invoke(
+        saved = SaveDrafts().run(
             {
                 "drafts": [
                     {
@@ -99,8 +99,8 @@ class TestTracker(TestCase):
         )
         self.assertEqual([], saved.get("saved")[0].get("gaps_for_customer"))
 
-        ApproveDrafts(self.NO_FILE).invoke({"approve": [broadband.get("task_id")], "customer_words": "yes"}, sly_data)
-        result = SendNotification(audit_log=self.NO_FILE).invoke({"task_ids": [broadband.get("task_id")]}, sly_data)
+        ApproveDrafts(self.NO_FILE).run({"approve": [broadband.get("task_id")], "customer_words": "yes"}, sly_data)
+        result = SendNotification(audit_log=self.NO_FILE).run({"task_ids": [broadband.get("task_id")]}, sly_data)
         self.assertEqual(broadband.get("task_id"), result.get("sent_to_organisation")[0].get("task_id"))
         self.assertIn("Ref FB-55120934", sly_data.get("outbox")[-1].get("body"))
 
@@ -110,14 +110,14 @@ class TestTracker(TestCase):
         """
         sly_data: dict = HouseMoveTestState.drafted()
         tv: dict = HouseMoveTestState.task_for(sly_data, "tv_licensing")
-        result = UpdateTasks().invoke(
+        result = UpdateTasks().run(
             {"updates": [{"task_id": tv.get("task_id"), "action": "x", "channel": "direct"}]}, sly_data
         )
         self.assertEqual([], result.get("updated"))
         self.assertIn("only this bank's own address update can be direct", result.get("rejected")[0])
 
-        ApproveDrafts(self.NO_FILE).invoke({"approve": ["all"], "customer_words": "approve all"}, sly_data)
-        sent = SendNotification(audit_log=self.NO_FILE).invoke({"task_ids": ["all"]}, sly_data)
+        ApproveDrafts(self.NO_FILE).run({"approve": ["all"], "customer_words": "approve all"}, sly_data)
+        sent = SendNotification(audit_log=self.NO_FILE).run({"task_ids": ["all"]}, sly_data)
         bank: dict = HouseMoveTestState.task_for(sly_data, "bank_address")
         self.assertEqual([bank.get("task_id")], sent.get("direct_updates_pending"))
 
@@ -129,11 +129,11 @@ class TestTracker(TestCase):
         sly_data: dict = HouseMoveTestState.drafted()
         tv: dict = HouseMoveTestState.task_for(sly_data, "tv_licensing")
         tv["channel"] = "direct"
-        ApproveDrafts(self.NO_FILE).invoke({"approve": ["all"], "customer_words": "approve all"}, sly_data)
+        ApproveDrafts(self.NO_FILE).run({"approve": ["all"], "customer_words": "approve all"}, sly_data)
         broadband: dict = HouseMoveTestState.task_for(sly_data, "broadband")
         del sly_data.get("drafts")[broadband.get("draft_id")]
 
-        sent = SendNotification(audit_log=self.NO_FILE).invoke({"task_ids": ["all"]}, sly_data)
+        sent = SendNotification(audit_log=self.NO_FILE).run({"task_ids": ["all"]}, sly_data)
         packs: list = [item.get("task_id") for item in sent.get("packs_for_customer")]
         self.assertIn(tv.get("task_id"), packs)
         self.assertEqual(1, len(sent.get("refused")))
@@ -148,12 +148,12 @@ class TestTracker(TestCase):
         energy: dict = HouseMoveTestState.task_for(sly_data, "energy_supplier")
         energy["status"] = "approved"  # pretend this one was approved but not yet sent
 
-        BuildTimeline(today=self.TODAY).invoke({"completion_date": "2026-12-11"}, sly_data)
+        BuildTimeline(today=self.TODAY).run({"completion_date": "2026-12-11"}, sly_data)
         rebuilt_energy: dict = HouseMoveTestState.task_for(sly_data, "energy_supplier")
         self.assertEqual("approved", rebuilt_energy.get("status"))
         self.assertIsNotNone(rebuilt_energy.get("draft_id"))
 
-        groups = PlanCorrections(self.NO_FILE).invoke({}, sly_data)
+        groups = PlanCorrections(self.NO_FILE).run({}, sly_data)
         orgs: dict = {name: [line.get("org") for line in lines] for name, lines in groups.items()}
         self.assertIn("Broadband provider", orgs.get("needs_rebooking"))
         self.assertIn("Your bank (direct update)", orgs.get("needs_rebooking"))
@@ -162,10 +162,8 @@ class TestTracker(TestCase):
         self.assertIn("Home insurance", orgs.get("unchanged"))
         self.assertEqual("needs_action", HouseMoveTestState.task_for(sly_data, "tv_licensing").get("status"))
 
-        ApproveDrafts(self.NO_FILE).invoke({"approve": ["all"], "customer_words": "ok"}, sly_data)
-        resent = SendNotification(audit_log=self.NO_FILE).invoke(
-            {"task_ids": [rebuilt_energy.get("task_id")]}, sly_data
-        )
+        ApproveDrafts(self.NO_FILE).run({"approve": ["all"], "customer_words": "ok"}, sly_data)
+        resent = SendNotification(audit_log=self.NO_FILE).run({"task_ids": [rebuilt_energy.get("task_id")]}, sly_data)
         self.assertEqual(1, len(resent.get("sent_to_organisation")))
         self.assertIn("11 December 2026", sly_data.get("outbox")[-1].get("body"))
 
@@ -173,20 +171,20 @@ class TestTracker(TestCase):
         """
         Replies arrive only for sent tasks, and recording one updates the task and stops it reappearing.
         """
-        self.assertEqual([], CheckInbox().invoke({}, HouseMoveTestState.drafted()).get("replies"))
+        self.assertEqual([], CheckInbox().run({}, HouseMoveTestState.drafted()).get("replies"))
 
         sly_data: dict = self.approved_and_sent()
-        replies: list = CheckInbox().invoke({}, sly_data).get("replies")
+        replies: list = CheckInbox().run({}, sly_data).get("replies")
         self.assertEqual(["R-1", "R-2", "R-3"], [reply.get("reply_id") for reply in replies])
 
         energy_reply: dict = replies[0]
         tool = RecordReply(self.NO_FILE)
         self.assertTrue(
-            tool.invoke(
+            tool.run(
                 {"reply_id": "R-1", "task_id": energy_reply.get("task_id"), "outcome": "needs_action"}, sly_data
             ).startswith("Error:")
         )
-        result = tool.invoke(
+        result = tool.run(
             {
                 "reply_id": "R-1",
                 "task_id": energy_reply.get("task_id"),
@@ -197,7 +195,7 @@ class TestTracker(TestCase):
             sly_data,
         )
         self.assertEqual("needs_action", result.get("status"))
-        self.assertEqual(["R-2", "R-3"], [r.get("reply_id") for r in CheckInbox().invoke({}, sly_data).get("replies")])
+        self.assertEqual(["R-2", "R-3"], [r.get("reply_id") for r in CheckInbox().run({}, sly_data).get("replies")])
 
     def test_replies_still_arrive_after_redraft(self):
         """
@@ -206,7 +204,7 @@ class TestTracker(TestCase):
         sly_data: dict = self.approved_and_sent()
         energy: dict = HouseMoveTestState.task_for(sly_data, "energy_supplier")
         energy["status"] = "awaiting_approval"
-        replies: list = CheckInbox().invoke({}, sly_data).get("replies")
+        replies: list = CheckInbox().run({}, sly_data).get("replies")
         self.assertIn("R-1", [reply.get("reply_id") for reply in replies])
 
     def test_audit_view(self):
@@ -214,6 +212,6 @@ class TestTracker(TestCase):
         Every approval, send and direct update is in the audit log, without personal data.
         """
         sly_data: dict = self.approved_and_sent()
-        counts: dict = GetAuditLog().invoke({}, sly_data).get("counts")
+        counts: dict = GetAuditLog().run({}, sly_data).get("counts")
         self.assertEqual({"approved": 18, "sent": 17, "direct_update": 1}, counts)
         self.assertNotIn("Mayfield", str(sly_data.get("audit_log")))

@@ -1,11 +1,10 @@
-from unittest import TestCase
-
 from coded_tools.hackathon.house_move.letter_templates import LetterTemplates
 from coded_tools.hackathon.house_move.save_drafts import SaveDrafts
+from tests.coded_tools.hackathon.house_move.house_move_test_case import HouseMoveTestCase
 from tests.coded_tools.hackathon.house_move.house_move_test_state import HouseMoveTestState
 
 
-class TestDrafts(TestCase):
+class TestDrafts(HouseMoveTestCase):
     """
     Unit tests for LetterTemplates, SaveDrafts and the DraftRenderer they use.
     """
@@ -26,7 +25,7 @@ class TestDrafts(TestCase):
         sly_data: dict = HouseMoveTestState.planned()
         task: dict = HouseMoveTestState.task_for(sly_data, "energy_supplier")
         body: str = "Please close our account. We move on {{move_date}} to {{new_address}}. Ref {{account_number}}."
-        result = SaveDrafts().invoke(
+        result = SaveDrafts().run(
             {"drafts": [{"task_id": task.get("task_id"), "subject": "Moving: {{full_names}}", "body": body}]},
             sly_data,
         )
@@ -47,7 +46,7 @@ class TestDrafts(TestCase):
         """
         sly_data: dict = HouseMoveTestState.planned()
         task: dict = HouseMoveTestState.task_for(sly_data, "energy_supplier")
-        SaveDrafts().invoke(
+        SaveDrafts().run(
             {"drafts": [{"task_id": task.get("task_id"), "subject": "x", "body": "Dear {{org_name}}"}]}, sly_data
         )
         self.assertEqual(
@@ -60,7 +59,7 @@ class TestDrafts(TestCase):
         """
         sly_data: dict = HouseMoveTestState.planned()
         task: dict = HouseMoveTestState.task_for(sly_data, "broadband")
-        result = SaveDrafts().invoke(
+        result = SaveDrafts().run(
             {"drafts": [{"task_id": task.get("task_id"), "subject": "Hi", "body": "{{bank_sort_code}}"}]}, sly_data
         )
         self.assertEqual([], result.get("saved"))

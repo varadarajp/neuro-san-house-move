@@ -3,12 +3,11 @@
 import hashlib
 from typing import Any
 
-from neuro_san.interfaces.coded_tool import CodedTool
-
 from coded_tools.hackathon.house_move.audit_log import AuditLog
+from coded_tools.hackathon.house_move.case_tool import CaseTool
 
 
-class BankAddressApi(CodedTool):
+class BankAddressApi(CaseTool):
     """
     Schedules the customer's address change on the bank's own systems for the completion date.
     Approval gate: it refuses unless the bank_address task in sly_data["tasks"] has status "approved".
@@ -23,7 +22,7 @@ class BankAddressApi(CodedTool):
         """
         self._audit_log: AuditLog = audit_log or AuditLog()
 
-    def invoke(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
+    def run(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
         """
         :param args: not used. Everything comes from sly_data so the LLM never handles the address.
         :param sly_data: reads "customer_id", "customer_profile", "plan_dates" and "tasks"; updates the task.
@@ -48,9 +47,3 @@ class BankAddressApi(CodedTool):
         task.setdefault("history", []).append(f"bank address change scheduled for {effective_date}, ref {ref}")
         self._audit_log.record(sly_data, "direct_update", task.get("task_id"), f"{ref}, effective {effective_date}")
         return {"status": "scheduled", "ref": ref, "effective_date": effective_date}
-
-    async def async_invoke(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
-        """
-        Delegates to invoke: no I/O.
-        """
-        return self.invoke(args, sly_data)

@@ -1,6 +1,5 @@
 """Mock sender: dispatches approved drafts, logging only. Nothing leaves the process."""
 
-import asyncio
 import hashlib
 import json
 import logging
@@ -8,17 +7,15 @@ from datetime import UTC
 from datetime import datetime
 from typing import Any
 
-from neuro_san.interfaces.coded_tool import CodedTool
-
 from coded_tools.hackathon.house_move.audit_log import AuditLog
-from coded_tools.hackathon.house_move.case_store import CaseStore
+from coded_tools.hackathon.house_move.case_tool import CaseTool
 from coded_tools.hackathon.house_move.draft_renderer import DraftRenderer
 from coded_tools.hackathon.house_move.house_move_data_store import HouseMoveDataStore
 
 logger = logging.getLogger(__name__)
 
 
-class SendNotification(CodedTool):
+class SendNotification(CaseTool):
     """
     Sends approved drafts (mock). Each draft is rendered again at send time, so a draft approved before a date change
     goes out with the new date. A draft with no gaps is "sent to the organisation"; one that still needs the
@@ -40,7 +37,7 @@ class SendNotification(CodedTool):
         self._data_store: HouseMoveDataStore = data_store or HouseMoveDataStore()
         self._audit_log: AuditLog = audit_log or AuditLog()
 
-    def invoke(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
+    def run(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
         """
         :param args: "task_ids", a list of task IDs, or ["all"] for every approved task.
         :param sly_data: reads "tasks" and "drafts"; writes "outbox", task statuses and "audit_log".
@@ -82,19 +79,12 @@ class SendNotification(CodedTool):
                 continue
             item: dict[str, Any] = self._send(task, sly_data, renderer)
             (to_organisation if item.get("delivery") == SendNotification.TO_ORGANISATION else to_customer).append(item)
-        CaseStore.snapshot(sly_data)
         return {
             "sent_to_organisation": to_organisation,
             "packs_for_customer": to_customer,
             "refused": refused,
             "direct_updates_pending": direct_updates_pending,
         }
-
-    async def async_invoke(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
-        """
-        Runs invoke in a worker thread because it reads files.
-        """
-        return await asyncio.to_thread(self.invoke, args, sly_data)
 
     @staticmethod
     def _refusal(task: dict[str, Any], sly_data: dict[str, Any]) -> str | None:
