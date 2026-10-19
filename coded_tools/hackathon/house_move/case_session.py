@@ -39,6 +39,7 @@ class CaseSession:
         "audit_log",
         "processed_replies",
         "mandates",
+        "approvals",
     )
     # Everything the server sets. Any of these sent by the client is discarded before a tool runs.
     SERVER_KEYS: tuple[str, ...] = STATE_KEYS + ("customer_id", "customer_profile", OWNER_KEY)

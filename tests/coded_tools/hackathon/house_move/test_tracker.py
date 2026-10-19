@@ -1,6 +1,5 @@
 from datetime import date
 
-from coded_tools.hackathon.house_move.approve_drafts import ApproveDrafts
 from coded_tools.hackathon.house_move.audit_log import AuditLog
 from coded_tools.hackathon.house_move.bank_address_api import BankAddressApi
 from coded_tools.hackathon.house_move.build_timeline import BuildTimeline
@@ -29,29 +28,10 @@ class TestTracker(HouseMoveTestCase):
         :return: drafted sly_data with every draft approved, sent, and the bank update done.
         """
         sly_data: dict = HouseMoveTestState.drafted()
-        ApproveDrafts(self.NO_FILE).run({"approve": ["all"], "customer_words": "approve all"}, sly_data)
+        HouseMoveTestState.approve_everything(sly_data)
         SendNotification(audit_log=self.NO_FILE).run({"task_ids": ["all"]}, sly_data)
         BankAddressApi(self.NO_FILE).run({}, sly_data)
         return sly_data
-
-    def test_approval_needs_customer_words_and_awaiting_status(self):
-        """
-        Without the customer's words nothing changes; skips win over approvals; non-awaiting tasks are reported.
-        """
-        sly_data: dict = HouseMoveTestState.drafted()
-        broadband: dict = HouseMoveTestState.task_for(sly_data, "broadband")
-        tool = ApproveDrafts(self.NO_FILE)
-
-        self.assertTrue(tool.run({"approve": ["all"]}, sly_data).startswith("Error:"))
-        result = tool.run(
-            {"approve": ["all"], "skip": [broadband.get("draft_id")], "customer_words": "all except broadband"},
-            sly_data,
-        )
-        self.assertEqual("skipped", broadband.get("status"))
-        self.assertEqual(17, len(result.get("approved")))
-        again = tool.run({"approve": [broadband.get("task_id")], "customer_words": "yes"}, sly_data)
-        self.assertEqual([f"{broadband.get('task_id')} (skipped)"], again.get("not_awaiting_approval"))
-        self.assertIn('"all except broadband"', sly_data.get("audit_log")[0].get("detail"))
 
     def test_send_refuses_unapproved_and_marks_sent(self):
         """
@@ -66,7 +46,7 @@ class TestTracker(HouseMoveTestCase):
         self.assertEqual([], refused.get("sent_to_organisation") + refused.get("packs_for_customer"))
         self.assertIn("not approved", refused.get("refused")[0])
 
-        ApproveDrafts(self.NO_FILE).run({"approve": ["all"], "customer_words": "approve all"}, sly_data)
+        HouseMoveTestState.approve_everything(sly_data)
         result = sender.run({"task_ids": ["all"]}, sly_data)
         to_org: list = [item.get("task_id") for item in result.get("sent_to_organisation")]
         to_customer: list = [item.get("task_id") for item in result.get("packs_for_customer")]
@@ -99,7 +79,7 @@ class TestTracker(HouseMoveTestCase):
         )
         self.assertEqual([], saved.get("saved")[0].get("gaps_for_customer"))
 
-        ApproveDrafts(self.NO_FILE).run({"approve": [broadband.get("task_id")], "customer_words": "yes"}, sly_data)
+        HouseMoveTestState.approve(sly_data, [broadband.get("task_id")])
         result = SendNotification(audit_log=self.NO_FILE).run({"task_ids": [broadband.get("task_id")]}, sly_data)
         self.assertEqual(broadband.get("task_id"), result.get("sent_to_organisation")[0].get("task_id"))
         self.assertIn("Ref FB-55120934", sly_data.get("outbox")[-1].get("body"))
@@ -116,7 +96,7 @@ class TestTracker(HouseMoveTestCase):
         self.assertEqual([], result.get("updated"))
         self.assertIn("only this bank's own address update can be direct", result.get("rejected")[0])
 
-        ApproveDrafts(self.NO_FILE).run({"approve": ["all"], "customer_words": "approve all"}, sly_data)
+        HouseMoveTestState.approve_everything(sly_data)
         sent = SendNotification(audit_log=self.NO_FILE).run({"task_ids": ["all"]}, sly_data)
         bank: dict = HouseMoveTestState.task_for(sly_data, "bank_address")
         self.assertEqual([bank.get("task_id")], sent.get("direct_updates_pending"))
@@ -129,7 +109,7 @@ class TestTracker(HouseMoveTestCase):
         sly_data: dict = HouseMoveTestState.drafted()
         tv: dict = HouseMoveTestState.task_for(sly_data, "tv_licensing")
         tv["channel"] = "direct"
-        ApproveDrafts(self.NO_FILE).run({"approve": ["all"], "customer_words": "approve all"}, sly_data)
+        HouseMoveTestState.approve_everything(sly_data)
         broadband: dict = HouseMoveTestState.task_for(sly_data, "broadband")
         del sly_data.get("drafts")[broadband.get("draft_id")]
 
@@ -162,7 +142,7 @@ class TestTracker(HouseMoveTestCase):
         self.assertIn("Home insurance", orgs.get("unchanged"))
         self.assertEqual("needs_action", HouseMoveTestState.task_for(sly_data, "tv_licensing").get("status"))
 
-        ApproveDrafts(self.NO_FILE).run({"approve": ["all"], "customer_words": "ok"}, sly_data)
+        HouseMoveTestState.approve_everything(sly_data)
         resent = SendNotification(audit_log=self.NO_FILE).run({"task_ids": [rebuilt_energy.get("task_id")]}, sly_data)
         self.assertEqual(1, len(resent.get("sent_to_organisation")))
         self.assertIn("11 December 2026", sly_data.get("outbox")[-1].get("body"))

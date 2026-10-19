@@ -10,6 +10,7 @@ from coded_tools.hackathon.house_move.audit_log import AuditLog
 from coded_tools.hackathon.house_move.build_timeline import BuildTimeline
 from coded_tools.hackathon.house_move.case_session import CaseSession
 from coded_tools.hackathon.house_move.case_store import CaseStore
+from coded_tools.hackathon.house_move.confirm_with_code import ConfirmWithCode
 from coded_tools.hackathon.house_move.council_lookup import CouncilLookup
 from coded_tools.hackathon.house_move.create_case import CreateCase
 from coded_tools.hackathon.house_move.customer_profile_lookup import CustomerProfileLookup
@@ -135,23 +136,25 @@ class TestStandalone(HouseMoveTestCase):
 
     def test_import_statement(self):
         """
-        Import needs a standalone case and consent, stays inside the uploads folder, stores rows and deletes the file.
+        Import needs a standalone case, stays inside the owner's uploads folder and reads nothing until the customer
+        types the code; then it stores rows, records the customer's own message as consent and deletes the file.
         """
         tool = ImportStatement()
-        self.assertTrue(tool.run({"customer_consent_words": "yes"}, {"customer_id": "C-10042"}).startswith("Error"))
+        self.assertTrue(tool.run({}, {"customer_id": "C-10042"}).startswith("Error"))
 
         sly_data: dict = self.new_case()
         name: str = self.upload("jordan_lee_bristol.csv")
-        self.assertTrue(tool.run({"file_name": name}, sly_data).startswith("Error: quote"))
-        self.assertTrue(
-            tool.run({"file_name": "../cases.sqlite", "customer_consent_words": "yes"}, sly_data).startswith("Error")
-        )
+        self.assertTrue(tool.run({"file_name": "../cases.sqlite"}, sly_data).startswith("Error"))
 
-        result = tool.run({"file_name": name, "customer_consent_words": "Yes, go ahead and read it"}, sly_data)
+        request = tool.run({"file_name": name}, sly_data)
+        self.assertEqual(34, request.get("transactions_found"))
+        self.assertEqual([], CaseStore().get_transactions(sly_data.get("customer_id")))
+        typed: str = f"Yes, you can read it: {request.get('confirmation_code')}"
+        CaseStore().record_customer_message(self.OWNER, typed)
+        result = ConfirmWithCode(audit_log=AuditLog(None)).run({}, sly_data).get("result")
         self.assertEqual(34, result.get("transactions_imported"))
         self.assertFalse((self.uploads / ImportStatement.owner_folder(self.OWNER) / name).exists())
-        store = CaseStore()
-        self.assertEqual("Yes, go ahead and read it", store.get_consents(sly_data.get("customer_id"))[0].get("words"))
+        self.assertEqual(typed, CaseStore().get_consents(sly_data.get("customer_id"))[0].get("words"))
 
         payees: dict = {p.get("payee"): p for p in GetTransactions().run({}, sly_data).get("payees")}
         self.assertEqual(3, payees.get("AVONSIDE ENERGY").get("count"))
@@ -220,15 +223,15 @@ class TestStandalone(HouseMoveTestCase):
 
     def test_delete_and_retention(self):
         """
-        Deleting needs the customer's words and removes everything; the retention purge removes old cases.
+        Deleting needs the customer to type the code, then removes everything; the retention purge removes old cases.
         """
         sly_data: dict = self.new_case()
         case_id: str = sly_data.get("customer_id")
-        tool = DeleteCase(audit_log=AuditLog(None))
-        self.assertTrue(tool.run({}, sly_data).startswith("Error:"))
-        self.assertEqual(
-            {"case_id": case_id, "deleted": True}, tool.run({"customer_words": "Please delete my data"}, sly_data)
-        )
+        request = DeleteCase(audit_log=AuditLog(None)).run({}, sly_data)
+        self.assertIsNotNone(CaseStore().get_customer(case_id))
+        CaseStore().record_customer_message(self.OWNER, f"Delete it all {request.get('confirmation_code')}")
+        result = ConfirmWithCode(audit_log=AuditLog(None)).run({}, sly_data)
+        self.assertEqual({"case_id": case_id, "deleted": True}, result.get("result"))
         self.assertNotIn("customer_id", sly_data)
         self.assertNotIn("customer_profile", sly_data)
         self.assertIsNone(CaseStore().get_customer(case_id))

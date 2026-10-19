@@ -5,12 +5,14 @@ from typing import Any
 
 from coded_tools.hackathon.house_move.audit_log import AuditLog
 from coded_tools.hackathon.house_move.case_tool import CaseTool
+from coded_tools.hackathon.house_move.draft_fingerprint import DraftFingerprint
 
 
 class BankAddressApi(CaseTool):
     """
     Schedules the customer's address change on the bank's own systems for the completion date.
-    Approval gate: it refuses unless the bank_address task in sly_data["tasks"] has status "approved".
+    Approval gate: it refuses unless the bank_address task is approved and the customer confirmed that approval with
+    a code for the draft's current wording (see DraftFingerprint.is_approved).
     Nothing leaves the process; the result is logged on the task's history.
     """
 
@@ -33,7 +35,7 @@ class BankAddressApi(CaseTool):
         )
         if task is None:
             return "Error: there is no bank address task in the plan."
-        if task.get("status") != "approved":
+        if task.get("status") != "approved" or not DraftFingerprint.is_approved(task, sly_data):
             return f"Error: the customer has not approved {task.get('task_id')}. Nothing was changed."
 
         customer_id: str = sly_data.get("customer_id") or ""

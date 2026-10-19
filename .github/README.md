@@ -42,7 +42,8 @@ out late, and then contact their bank and providers to fix the gaps.
 2. **Plans** a dated task list against the completion date, from rules with official sources, using UK working
    days and the bank holidays of the country they are moving to.
 3. **Drafts** every notification with placeholders, so personal data is filled in by code, not by the LLM.
-4. **Gets approval** for each draft. The send tools refuse anything without an approval recorded on the server.
+4. **Gets approval** for each draft: the customer confirms with a one-time code they type themselves, so the LLM
+   cannot approve on their behalf. Legal-requirement drafts must be approved one by one.
 5. **Tracks** progress: mock sends, the bank's own address update, replanning when completion moves, and provider
    replies (for example a request for a meter serial number).
 6. **Finds local contacts** at the new address: nearest GP practices (NHS, live), schools for the children's ages
@@ -130,8 +131,13 @@ flowchart TD
 - **Statements never go through the chat.** nsflow's paperclip pastes file text into the message, so the agents
   refuse pasted statements and send users to the portal. Uploads go to the signed-in person's own folder and are
   deleted after reading.
-- **Approval gate in code:** `send_notification` and `bank_address_api` refuse anything not approved in the
-  server's state; any approved task that cannot go out is reported, never dropped silently.
+- **Consent the LLM cannot fake:** approvals, statement imports and deletions issue a one-time 6-digit code (valid
+  30 minutes, usable once). `CustomerMessageMiddleware` records what the customer actually types, server-side, and
+  `confirm_with_code` acts only if that message arrived after the code and contains it. The customer's own message
+  is what gets stored as consent.
+- **Approval gate in code:** each approval is tied to the draft's exact wording. `send_notification` and
+  `bank_address_api` refuse anything without a confirmed approval for the current wording; any approved task that
+  cannot go out is reported, never dropped silently. "Approve all" leaves out legal-requirement drafts.
 - **Audit trail:** approvals, sends, direct updates, replans, replies and deletions are appended to
   `logs/house_move_audit.jsonl` with IDs and events only.
 
@@ -143,8 +149,8 @@ A review found four issues. Status:
 |---|---|
 | Client could send back forged state (for example tasks marked approved) | **Fixed:** server-side state, signed sessions; regression tests replay the attack |
 | Anyone could open any case by typing its ID; decrypted personal data went back to the client | **Fixed:** ownership checks, unguessable IDs, only the token goes upstream; regression tests |
-| "Consent" is text the LLM writes (`customer_words`), so it is not proof of what the customer said | **Open:** next step is a confirmation code checked against the customer's own message |
-| The agent that reads provider replies can also approve and send (prompt-injection risk) | **Open:** split reply handling into an agent with no send tools |
+| "Consent" is text the LLM writes (`customer_words`), so it is not proof of what the customer said | **Fixed:** one-time codes checked against the customer's own message, captured by middleware; regression tests |
+| The agent that reads provider replies can also approve and send (prompt-injection risk) | **Partly fixed:** injected text can no longer approve (codes come only from the customer's message); next, split reply handling into an agent with no send tools |
 
 ## Getting started
 
@@ -204,8 +210,10 @@ own login: a session opens only that customer's record, or only the cases its ow
 2. Answer the questions and say "build the plan". Councils come from postcodes.io live; the plan is dated by
    week with legal items marked, followed by local GPs and water companies.
 3. "Yes please, prepare the drafts." Four AAOSA specialists and Comms produce a draft per task.
-4. "Approve all of them." Emails with known references go to providers; the rest become pre-filled packs; the
-   bank's own address update is made directly.
+4. "Approve all of them." The agent lists what will be approved, names the legal-requirement drafts that must be
+   approved one by one, and shows a 6-digit code. Reply with the code (and name any legal drafts first). Emails
+   with known references then go to providers; the rest become pre-filled packs; the bank's own address update
+   is made directly.
 5. "Completion has moved to 11 December." The Tracker sorts every task: needs correction, needs rebooking,
    updated automatically, unchanged.
 6. "Has anyone replied yet?" Brightwatt asks for a meter serial number; the agent drafts the follow-up.
@@ -225,7 +233,8 @@ own login: a session opens only that customer's record, or only the cases its ow
 2. "Hi, I'm moving house and I don't bank with you. I'm Jordan, moving from BS6 6RB to NG7 2NF on
    11 December 2026."
 3. Upload `coded_tools/hackathon/house_move/data/sample_statements/jordan_lee_bristol.csv` on the portal
-   (same sign-in), then say "I've uploaded jordan_lee_bristol.csv. Yes, you can read it."
+   (same sign-in), then say "I've uploaded jordan_lee_bristol.csv." The agent shows a code; reply with it to let
+   the statement be read.
 4. Continue as above. Later, with the same session, "My case reference is S-…" resumes the case.
 
 The same journeys run from the command line, passing the session from the portal:
@@ -270,11 +279,13 @@ House_Move_Agent.pptx                         pitch deck
 venv/bin/python -m pytest tests/coded_tools/hackathon tests/apps/house_move_upload -q
 ```
 
-70 tests cover the rules engine (including Scotland, Wales and Northern Ireland), working-day dates, the approval
+77 tests cover the rules engine (including Scotland, Wales and Northern Ireland), working-day dates, the approval
 gate, mock sending, replanning, replies, the case store and encryption, statement parsing, the portal, and the GP,
 school and water finders. `test_session_security.py` replays the review's attacks through the real session path:
 forged approved state, opening another customer's record, missing or tampered tokens, guessing case IDs, reading
-another person's upload, and parallel tool calls. Network calls are mocked in tests.
+another person's upload, and parallel tool calls. `test_confirmation_codes.py` shows the LLM cannot confirm for the
+customer: no message, wrong, expired or reused codes, codes seen only in tool or AI text, and drafts changed after
+approval are all refused. Network calls are mocked in tests.
 
 ## Data sources
 
@@ -297,7 +308,7 @@ another person's upload, and parallel tool calls. Network calls are mocked in te
 - Schools cover England only; Wales, Scotland and Northern Ireland get pointers to their own admissions routes.
 - The portal address is fixed (`127.0.0.1:8090`) and only works on the machine running the demo.
 - The demo sign-in lets anyone pick a demo customer; production would use the bank's own login.
-- Two review findings are still open (see [Security review status](#security-review-status)).
+- One review finding is partly open (see [Security review status](#security-review-status)).
 - The full draft turn takes several minutes: four specialists are each called twice (Determine, then Fulfill).
 - The vault key is a local file; production would use a managed key service.
 

@@ -211,3 +211,6 @@ registries/manifest.hocon.test
 # House Move standalone app: local case database, vault key and uploaded statements
 case_data/
 uploads/
+
+# Office lock files (a deck or document open in PowerPoint or Word)
+~$*

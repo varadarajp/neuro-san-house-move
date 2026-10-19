@@ -1,13 +1,16 @@
 """SQLite case store for the standalone House Move app."""
 
+import hashlib
 import json
 import logging
 import os
+import re
 import secrets
 import sqlite3
 from contextlib import closing
 from datetime import UTC
 from datetime import datetime
+from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +29,8 @@ class CaseStore:
     - active_cases: which case each signed-in owner is working on.
     - transactions and manual providers: what a standalone customer gave for discovery. Raw files are never kept.
     - consents: the customer's own words agreeing to each use of their data.
+    - customer_messages: each owner's latest chat message, captured by CustomerMessageMiddleware (not by the LLM).
+    - pending_actions: approvals, imports and deletions waiting for the customer to type their confirmation code.
     """
 
     PREFIX: str = "S-"
@@ -48,9 +53,15 @@ class CaseStore:
             owner_id TEXT, case_id TEXT, token BLOB, updated_at TEXT, PRIMARY KEY (owner_id, case_id));
         CREATE TABLE IF NOT EXISTS active_cases (
             owner_id TEXT PRIMARY KEY, case_id TEXT, updated_at TEXT);
+        CREATE TABLE IF NOT EXISTS customer_messages (
+            owner_id TEXT PRIMARY KEY, text TEXT, at TEXT);
+        CREATE TABLE IF NOT EXISTS pending_actions (
+            action_id TEXT PRIMARY KEY, owner_id TEXT, case_id TEXT, kind TEXT, code_hash TEXT, payload_json TEXT,
+            created_at TEXT, expires_at TEXT);
     """
     # 16 random bytes, URL-safe: a case reference cannot be guessed, and ownership is checked anyway.
     ID_BYTES: int = 16
+    PENDING_LIFETIME: timedelta = timedelta(minutes=30)
 
     def __init__(self, db_path: Path | None = None, vault: PersonalDataVault | None = None):
         """
@@ -285,6 +296,81 @@ class CaseStore:
         plain: str | None = self._vault.decrypt(row[0]) if row else None
         return json.loads(plain) if plain else {}
 
+    def record_customer_message(self, owner_id: str, text: str) -> None:
+        """
+        Stores the owner's latest chat message, as typed by the customer. Called only by CustomerMessageMiddleware.
+        """
+        with closing(self._connect()) as connection, connection:
+            connection.execute(
+                "INSERT OR REPLACE INTO customer_messages VALUES (?, ?, ?)", (owner_id, text, self._precise_now())
+            )
+
+    def latest_customer_message(self, owner_id: str) -> tuple[str, str] | None:
+        """
+        :return: (text, captured_at) of the owner's latest chat message, or None.
+        """
+        with closing(self._connect()) as connection:
+            row: tuple | None = connection.execute(
+                "SELECT text, at FROM customer_messages WHERE owner_id = ?", (owner_id,)
+            ).fetchone()
+        return (row[0], row[1]) if row else None
+
+    def create_pending(self, owner_id: str, case_id: str, kind: str, payload: dict[str, Any]) -> tuple[str, str]:
+        """
+        Records an action that waits for the customer to type a one-time code. Earlier pending actions of the same
+        kind for the case are replaced, so only the latest request can be confirmed.
+        :return: (code, expires_at). Only a hash of the code is stored.
+        """
+        code: str = f"{secrets.randbelow(1_000_000):06d}"
+        now: datetime = datetime.now(UTC)
+        expires: str = (now + CaseStore.PENDING_LIFETIME).isoformat()
+        with closing(self._connect()) as connection, connection:
+            connection.execute(
+                "DELETE FROM pending_actions WHERE owner_id = ? AND case_id = ? AND kind = ?",
+                (owner_id, case_id, kind),
+            )
+            connection.execute(
+                "INSERT INTO pending_actions VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    secrets.token_hex(8),
+                    owner_id,
+                    case_id,
+                    kind,
+                    self._hash(code),
+                    json.dumps(payload),
+                    now.isoformat(),
+                    expires,
+                ),
+            )
+        return code, expires
+
+    def match_pending(self, owner_id: str, case_id: str, message: str, message_at: str) -> dict[str, Any] | None:
+        """
+        Finds the pending action whose code appears in the customer's message, if that message was typed after the
+        code was issued and before it expired. Codes are matched as whole 6-digit numbers.
+        :return: {"action_id", "kind", "payload", "created_at"} or None.
+        """
+        typed: set[str] = {self._hash(code) for code in re.findall(r"(?<!\d)\d{6}(?!\d)", message or "")}
+        if not typed:
+            return None
+        with closing(self._connect()) as connection:
+            rows: list[tuple] = connection.execute(
+                "SELECT action_id, kind, code_hash, payload_json, created_at, expires_at FROM pending_actions "
+                "WHERE owner_id = ? AND case_id = ?",
+                (owner_id, case_id),
+            ).fetchall()
+        for action_id, kind, code_hash, payload, created_at, expires_at in rows:
+            if code_hash in typed and created_at < message_at <= expires_at:
+                return {"action_id": action_id, "kind": kind, "payload": json.loads(payload), "created_at": created_at}
+        return None
+
+    def consume_pending(self, action_id: str) -> None:
+        """
+        Deletes a pending action once it has been carried out, so a code works only once.
+        """
+        with closing(self._connect()) as connection, connection:
+            connection.execute("DELETE FROM pending_actions WHERE action_id = ?", (action_id,))
+
     def delete_case(self, case_id: str) -> bool:
         """
         Erases everything held for a case (right to erasure). The audit file keeps only IDs and events.
@@ -292,7 +378,15 @@ class CaseStore:
         """
         with closing(self._connect()) as connection, connection:
             existed: int = connection.execute("DELETE FROM cases WHERE case_id = ?", (case_id,)).rowcount
-            for table in ("vault", "transactions", "manual_providers", "consents", "case_state", "active_cases"):
+            for table in (
+                "vault",
+                "transactions",
+                "manual_providers",
+                "consents",
+                "case_state",
+                "active_cases",
+                "pending_actions",
+            ):
                 connection.execute(f"DELETE FROM {table} WHERE case_id = ?", (case_id,))  # noqa: S608 - fixed names
         logger.info("Deleted standalone case %s", case_id)
         return existed == 1
@@ -331,6 +425,20 @@ class CaseStore:
         between threads.
         """
         return sqlite3.connect(self._db_path)
+
+    @staticmethod
+    def _precise_now() -> str:
+        """
+        :return: the current UTC time with microseconds, for ordering a message against a code issued moments before.
+        """
+        return datetime.now(UTC).isoformat()
+
+    @staticmethod
+    def _hash(code: str) -> str:
+        """
+        :return: the SHA-256 of a confirmation code.
+        """
+        return hashlib.sha256(code.encode("ascii")).hexdigest()
 
     @staticmethod
     def _now() -> str:

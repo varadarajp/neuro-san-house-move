@@ -2,22 +2,16 @@ import asyncio
 import copy
 import re
 import shutil
-from datetime import date
 from pathlib import Path
-
-import httpx
 
 from coded_tools.hackathon.house_move.audit_log import AuditLog
 from coded_tools.hackathon.house_move.bank_address_api import BankAddressApi
-from coded_tools.hackathon.house_move.build_timeline import BuildTimeline
 from coded_tools.hackathon.house_move.council_lookup import CouncilLookup
 from coded_tools.hackathon.house_move.create_case import CreateCase
 from coded_tools.hackathon.house_move.customer_profile_lookup import CustomerProfileLookup
 from coded_tools.hackathon.house_move.get_transactions import GetTransactions
 from coded_tools.hackathon.house_move.import_statement import ImportStatement
 from coded_tools.hackathon.house_move.list_tasks import ListTasks
-from coded_tools.hackathon.house_move.obligations_rules import ObligationsRules
-from coded_tools.hackathon.house_move.save_drafts import SaveDrafts
 from coded_tools.hackathon.house_move.send_notification import SendNotification
 from coded_tools.hackathon.house_move.session_tokens import SessionTokens
 from coded_tools.hackathon.house_move.update_tasks import UpdateTasks
@@ -40,41 +34,14 @@ class TestSessionSecurity(HouseMoveTestCase):
         """
         :return: a council lookup that answers from the cache.
         """
+        return HouseMoveTestState.offline_lookup()
 
-        def handler(request: httpx.Request) -> httpx.Response:
-            # Nested to simulate an outage; MockTransport needs a plain callable.
-            raise httpx.ConnectError("offline", request=request)
-
-        return CouncilLookup(transport=httpx.MockTransport(handler))
-
-    def drafted_bank_session(self) -> str:
+    @staticmethod
+    def drafted_bank_session() -> str:
         """
-        Signs in as C-10042 and, through the session, builds a plan with every task drafted and awaiting approval.
-        :return: the session token.
+        :return: a session token for C-10042 whose plan is fully drafted, built through the session.
         """
-        token: str = SessionTokens().issue("bank:C-10042", ["C-10042"])
-        sly: dict = {"session_token": token}
-        CustomerProfileLookup().invoke({"customer_id": "C-10042"}, sly)
-        for postcode in ("LS1 3ED", "HG1 1SY"):
-            self.offline().invoke({"postcode": postcode}, sly)
-        providers: list = [{"category": "energy", "provider_name": "Brightwatt Energy"}]
-        ObligationsRules().invoke({"facts": HouseMoveTestState.FACTS, "providers": providers}, sly)
-        BuildTimeline(today=date(2026, 10, 18)).invoke({}, sly)
-        tasks: list = ListTasks().invoke({}, sly).get("tasks")
-        updates: list = [
-            {
-                "task_id": t.get("task_id"),
-                "action": "tell them",
-                "channel": "direct" if t.get("obligation_id") == "bank_address" else "email",
-            }
-            for t in tasks
-        ]
-        UpdateTasks().invoke({"updates": updates}, sly)
-        drafts: list = [
-            {"task_id": t.get("task_id"), "subject": "Moving", "body": "We move to {{new_address}}."} for t in tasks
-        ]
-        SaveDrafts().invoke({"drafts": drafts}, sly)
-        return token
+        return HouseMoveTestState.drafted_session()
 
     def test_forged_approval_in_client_state_is_ignored(self):
         """
@@ -185,9 +152,7 @@ class TestSessionSecurity(HouseMoveTestCase):
             "move_date": "2026-12-11",
         }
         CreateCase(council_lookup=self.offline()).invoke(args, bob)
-        stolen = ImportStatement().invoke(
-            {"file_name": "jordan_lee_bristol.csv", "customer_consent_words": "yes"}, bob
-        )
+        stolen = ImportStatement().invoke({"file_name": "jordan_lee_bristol.csv"}, bob)
         self.assertEqual("Error: jordan_lee_bristol.csv has not been uploaded.", stolen)
         self.assertTrue((folder / "jordan_lee_bristol.csv").exists())
         self.assertIsNotNone(alice)

@@ -9,6 +9,7 @@ from typing import Any
 
 from coded_tools.hackathon.house_move.audit_log import AuditLog
 from coded_tools.hackathon.house_move.case_tool import CaseTool
+from coded_tools.hackathon.house_move.draft_fingerprint import DraftFingerprint
 from coded_tools.hackathon.house_move.draft_renderer import DraftRenderer
 from coded_tools.hackathon.house_move.house_move_data_store import HouseMoveDataStore
 
@@ -95,6 +96,8 @@ class SendNotification(CaseTool):
             return f"status is {task.get('status')}, not approved"
         if task.get("draft_id") not in (sly_data.get("drafts") or {}):
             return "no saved draft"
+        if not DraftFingerprint.is_approved(task, sly_data):
+            return "no customer-confirmed approval for this version of the draft"
         return None
 
     @staticmethod
