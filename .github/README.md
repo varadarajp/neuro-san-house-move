@@ -77,7 +77,7 @@ a situation, the agents say so and point to gov.uk.
 ## Agent network
 
 Network file: [`registries/hackathon/house_move.hocon`](../registries/hackathon/house_move.hocon), runtime name
-`hackathon/house_move`. 13 LLM agents and 26 coded tools.
+`hackathon/house_move`. 14 LLM agents and 27 coded tools.
 
 ```mermaid
 flowchart TD
@@ -93,6 +93,7 @@ flowchart TD
     C --> HF[health_family_agent]
     C --> CM[comms_agent]
     C --> TR[tracker_agent]
+    C --> RA[reply_agent]
     subgraph AAOSA specialists
       G
       H
@@ -112,7 +113,8 @@ flowchart TD
 | `local_services_agent` | GPs, schools and water companies at the new address | `gp_finder`, `school_finder`, `water_supplier_lookup` |
 | `government_agent` and 3 other specialists | AAOSA: each says whether a task is theirs (Determine), then records how to do it (Fulfill) | `list_tasks`, `update_tasks`, directories |
 | `comms_agent` | One draft per task, with `{{placeholders}}` | `letter_templates`, `save_drafts` |
-| `tracker_agent` | **AI moment 2:** approve, send, replan corrections, replies, audit | `approve_drafts`, `send_notification`, `bank_address_api`, `plan_corrections`, `check_inbox`, `record_reply`, `get_audit_log` |
+| `tracker_agent` | **AI moment 2:** approval codes, send, replan corrections, audit | `request_approval`, `confirm_with_code`, `send_notification`, `bank_address_api`, `plan_corrections`, `get_audit_log` |
+| `reply_agent` | Reads provider replies and records what they say; has no approve or send tools | `check_inbox`, `record_reply` |
 
 ## Data, privacy and safety
 
@@ -150,7 +152,7 @@ A review found four issues. Status:
 | Client could send back forged state (for example tasks marked approved) | **Fixed:** server-side state, signed sessions; regression tests replay the attack |
 | Anyone could open any case by typing its ID; decrypted personal data went back to the client | **Fixed:** ownership checks, unguessable IDs, only the token goes upstream; regression tests |
 | "Consent" is text the LLM writes (`customer_words`), so it is not proof of what the customer said | **Fixed:** one-time codes checked against the customer's own message, captured by middleware; regression tests |
-| The agent that reads provider replies can also approve and send (prompt-injection risk) | **Partly fixed:** injected text can no longer approve (codes come only from the customer's message); next, split reply handling into an agent with no send tools |
+| The agent that reads provider replies can also approve and send (prompt-injection risk) | **Fixed:** `reply_agent` reads replies and can only record them; reply text is labelled untrusted; `record_reply` acts only on a real reply's own, already-sent task; approvals need the customer's own code; regression tests |
 
 ## Getting started
 
@@ -279,13 +281,13 @@ House_Move_Agent.pptx                         pitch deck
 venv/bin/python -m pytest tests/coded_tools/hackathon tests/apps/house_move_upload -q
 ```
 
-77 tests cover the rules engine (including Scotland, Wales and Northern Ireland), working-day dates, the approval
+82 tests cover the rules engine (including Scotland, Wales and Northern Ireland), working-day dates, the approval
 gate, mock sending, replanning, replies, the case store and encryption, statement parsing, the portal, and the GP,
 school and water finders. `test_session_security.py` replays the review's attacks through the real session path:
 forged approved state, opening another customer's record, missing or tampered tokens, guessing case IDs, reading
 another person's upload, and parallel tool calls. `test_confirmation_codes.py` shows the LLM cannot confirm for the
 customer: no message, wrong, expired or reused codes, codes seen only in tool or AI text, and drafts changed after
-approval are all refused. Network calls are mocked in tests.
+approval are all refused. `test_reply_isolation.py` checks that no agent that reads provider replies can approve or send, and that an injected reply changes nothing. Network calls are mocked in tests.
 
 ## Data sources
 
@@ -308,7 +310,7 @@ approval are all refused. Network calls are mocked in tests.
 - Schools cover England only; Wales, Scotland and Northern Ireland get pointers to their own admissions routes.
 - The portal address is fixed (`127.0.0.1:8090`) and only works on the machine running the demo.
 - The demo sign-in lets anyone pick a demo customer; production would use the bank's own login.
-- One review finding is partly open (see [Security review status](#security-review-status)).
+- All four review findings are fixed for the demo; production would still need the bank's own sign-in and a managed key service.
 - The full draft turn takes several minutes: four specialists are each called twice (Determine, then Fulfill).
 - The vault key is a local file; production would use a managed key service.
 
