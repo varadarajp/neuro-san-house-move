@@ -9,6 +9,7 @@ from typing import Any
 from coded_tools.hackathon.house_move.case_tool import CaseTool
 from coded_tools.hackathon.house_move.date_calc import DateCalc
 from coded_tools.hackathon.house_move.house_move_data_store import HouseMoveDataStore
+from coded_tools.hackathon.house_move.move_dates import MoveDates
 
 logger = logging.getLogger(__name__)
 
@@ -16,14 +17,21 @@ logger = logging.getLogger(__name__)
 class BuildTimeline(CaseTool):
     """
     Dates every obligation in sly_data["obligations"] against the completion or exchange date.
-    Task IDs follow the rules-file order, so they stay the same when the plan is rebuilt for a new date.
+    A task's ID comes from its rule's position in the rules file, never from its position in the list of obligations,
+    so it does not change when other rules start or stop applying (new rules are added at the end of the file).
+    On a rebuild, progress is carried over by obligation, not by ID, and an existing task keeps its ID.
     Saves the plan in sly_data["tasks"] and keeps the previous plan in sly_data["previous_tasks"] for replanning.
     """
 
     # gov.uk bank-holiday divisions by country; England and Wales share one.
     DIVISIONS: dict[str, str] = {"Scotland": "scotland", "Northern Ireland": "northern-ireland"}
-    # Fields a rebuild recomputes. Every other field on an existing task is progress and is kept.
+    # Fields a rebuild recomputes: what the task is and when it is due. Every other field on an existing task is
+    # progress (status, draft, sends, replies, history) and is kept.
     SCHEDULE_FIELDS: tuple[str, ...] = (
+        "obligation_id",
+        "agent",
+        "timing_basis",
+        "date_basis",
         "due_date",
         "window",
         "org",
@@ -60,19 +68,26 @@ class BuildTimeline(CaseTool):
             exchange: date | None = date.fromisoformat(exchange_text) if exchange_text else None
         except (TypeError, ValueError) as error:
             return f"Error: the completion or exchange date is missing or not YYYY-MM-DD ({error})."
+        today: date = self._today or date.today()
+        date_error: str | None = MoveDates.check(completion, exchange, today)
+        if date_error is not None:
+            return date_error
 
         try:
             date_calc: DateCalc = DateCalc(self._data_store.get_bank_holidays(self._division(sly_data)))
+            rule_numbers: dict[str, int] = {
+                rule.get("id"): number for number, rule in enumerate(self._data_store.get_obligation_rules(), start=1)
+            }
         except (OSError, json.JSONDecodeError) as error:
-            logger.error("Could not read bank holidays: %s", error)
-            return f"Error: the bank holidays file could not be read ({error})."
+            logger.error("Could not read bank holidays or rules: %s", error)
+            return f"Error: the bank holidays or rules file could not be read ({error})."
 
-        today: date = self._today or date.today()
-        previous_by_id: dict[str, dict[str, Any]] = {task.get("task_id"): task for task in sly_data.get("tasks") or []}
+        previous_tasks: list[dict[str, Any]] = sly_data.get("tasks") or []
+        previous_by_obligation: dict[str, dict[str, Any]] = {t.get("obligation_id"): t for t in previous_tasks}
         warnings: list[str] = []
         tasks: list[dict[str, Any]] = []
         needs_review: list[dict[str, Any]] = []
-        for number, obligation in enumerate(obligations, start=1):
+        for obligation in obligations:
             if obligation.get("status") != "applies":
                 needs_review.append(
                     {
@@ -82,8 +97,11 @@ class BuildTimeline(CaseTool):
                     }
                 )
                 continue
-            task: dict[str, Any] = self._to_task(number, obligation, completion, exchange, date_calc, warnings)
-            task = self._keep_progress(task, previous_by_id.get(task.get("task_id")))
+            previous: dict[str, Any] | None = previous_by_obligation.get(obligation.get("id"))
+            task_id: str = self._task_id(obligation.get("id"), rule_numbers, previous, previous_tasks)
+            when: tuple[date, date | None, date] = (completion, exchange, today)
+            task: dict[str, Any] = self._to_task(task_id, obligation, when, date_calc, warnings)
+            task = self._keep_progress(task, previous)
             if date.fromisoformat(task.get("due_date")) < today:
                 warnings.append(f"{task.get('org')} was due on {task.get('due_date')}: do it as soon as possible.")
             tasks.append(task)
@@ -93,7 +111,6 @@ class BuildTimeline(CaseTool):
             "completion_date": completion.isoformat(),
             "exchange_date": exchange.isoformat() if exchange else None,
         }
-        previous_tasks: list[dict[str, Any]] = sly_data.get("tasks") or []
         if previous_tasks:
             sly_data["previous_tasks"] = previous_tasks
         sly_data["tasks"] = tasks
@@ -120,29 +137,59 @@ class BuildTimeline(CaseTool):
         return BuildTimeline.DIVISIONS.get(new_council.get("country"), "england-and-wales")
 
     @staticmethod
+    def _task_id(
+        obligation_id: str,
+        rule_numbers: dict[str, int],
+        previous: dict[str, Any] | None,
+        previous_tasks: list[dict[str, Any]],
+    ) -> str:
+        """
+        The obligation's existing task ID if it already has a task; otherwise one from its rule's position in the
+        rules file. Plans saved before IDs were stable may already use that number for another obligation, so a
+        clash takes the next number above every rule.
+        """
+        if previous is not None:
+            return previous.get("task_id")
+        task_id: str = f"T-{rule_numbers.get(obligation_id, 0):02d}"
+        taken: set[str] = {t.get("task_id") for t in previous_tasks}
+        number: int = len(rule_numbers) + 1
+        while task_id in taken or task_id == "T-00":
+            task_id = f"T-{number:02d}"
+            number += 1
+        return task_id
+
+    @staticmethod
     def _to_task(
-        number: int,
+        task_id: str,
         obligation: dict[str, Any],
-        completion: date,
-        exchange: date | None,
+        when: tuple[date, date | None, date],
         date_calc: DateCalc,
         warnings: list[str],
     ) -> dict[str, Any]:
         """
-        Dates one obligation. An exchange-anchored rule falls back to completion when exchange is unknown.
+        Dates one obligation.
+        :param when: (completion, exchange or None, today).
+        An exchange-anchored rule with no exchange date is dated today, not from completion: exchange always comes
+        first, and something needed from exchange (buildings insurance) must never be planned for after it.
         """
+        completion, exchange, today = when
         timing: dict[str, Any] = obligation.get("timing") or {}
-        anchor: date = completion
-        if timing.get("anchor") == "exchange":
-            if exchange is None:
-                warnings.append(f"{obligation.get('org')}: exchange date unknown, dated from completion instead.")
-            else:
-                anchor = exchange
-        due: date = date_calc.offset(anchor, int(timing.get("offset_days", 0)), bool(timing.get("working_days")))
-        # Organisations are closed on weekends and bank holidays: "before" deadlines move earlier, others later.
-        due = date_calc.nearest_working_day(due, forward=timing.get("window") != "before")
+        date_basis: str = timing.get("anchor") or "completion"
+        if date_basis == "exchange" and exchange is None:
+            due: date = min(today, completion)
+            date_basis = "exchange unknown: dated today so it is in place before exchange"
+            warnings.append(
+                f"{obligation.get('org')}: the exchange date is unknown and this is needed from exchange, so it is "
+                "dated today. Give the exchange date to date it exactly."
+            )
+        else:
+            anchor: date = exchange if date_basis == "exchange" else completion
+            offset: int = int(timing.get("offset_days", 0))
+            due = date_calc.offset(anchor, offset, bool(timing.get("working_days")))
+            # Organisations are closed on weekends and bank holidays: "before" deadlines move earlier, others later.
+            due = date_calc.nearest_working_day(due, forward=timing.get("window") != "before")
         return {
-            "task_id": f"T-{number:02d}",
+            "task_id": task_id,
             "obligation_id": obligation.get("id"),
             "org": obligation.get("org"),
             "contact_name": obligation.get("contact_name") or obligation.get("org"),
@@ -153,6 +200,7 @@ class BuildTimeline(CaseTool):
             "legal_requirement": obligation.get("legal_requirement"),
             "verified": obligation.get("verified"),
             "timing_basis": obligation.get("timing_basis"),
+            "date_basis": date_basis,
             "status": "planned",
             "history": [],
         }
@@ -162,6 +210,7 @@ class BuildTimeline(CaseTool):
         """
         On a rebuild, keeps everything the earlier steps recorded on a task (status, draft, sends, replies, history)
         and takes only the newly computed schedule fields from the rebuild.
+        :param previous: the same obligation's task in the previous plan (matched by obligation, never by ID).
         """
         if previous is None:
             return task
@@ -192,8 +241,10 @@ class BuildTimeline(CaseTool):
                         "status": task.get("status"),
                     }
                 )
+        # A task that no longer applies is reported with its status, so a send already made is not lost from view.
         changes["removed"] = [
             f"{task.get('task_id')} {task.get('org')}"
+            + (f" (was {task.get('status')})" if task.get("status") != "planned" else "")
             for task in previous_tasks
             if task.get("task_id") not in current_ids
         ]

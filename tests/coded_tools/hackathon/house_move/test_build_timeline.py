@@ -84,7 +84,8 @@ class TestBuildTimeline(HouseMoveTestCase):
         moved: dict = {m.get("org"): (m.get("from"), m.get("to")) for m in result.get("changes").get("moved")}
 
         self.assertEqual(("2026-11-06", "2026-11-20"), moved.get("broadband"))
-        self.assertEqual(["T-03 home_insurance"], result.get("changes").get("unchanged"))
+        # Home insurance is rule 14 in the rules file, so its task is T-14 wherever it sits in the obligations.
+        self.assertEqual(["T-14 home_insurance"], result.get("changes").get("unchanged"))
 
     def test_due_dates_avoid_weekends_and_bank_holidays(self):
         """

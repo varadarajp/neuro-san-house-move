@@ -49,6 +49,19 @@
       "verified": true,
       "note": "Demo customer's new council (North Yorkshire). For other customers use their council's move-in page."
     },
+    "council_tax_same_council": {
+      "service": "Tell your council you are moving within its area",
+      "channel": "online_form",
+      "url": "https://www.gov.uk/find-local-council",
+      "what_customer_needs": [
+        "old and new address",
+        "move date",
+        "names of all adults at the new address"
+      ],
+      "who": "any liable adult",
+      "verified": false,
+      "note": "One change of address, not a move out and a move in. Find the council's own change-of-address page from gov.uk's council finder."
+    },
     "electoral_register": {
       "service": "Register to vote at your new address",
       "channel": "online_form",

@@ -377,7 +377,11 @@ Return:
 
 If the tool returns "changes" (the plan was rebuilt), report them exactly as given: each moved task from
 its old date to its new date, then the unchanged tasks, then any added or removed. Do not work out moves yourself.
+A removed task marked "(was sent)" or "(was approved)" no longer applies: say so plainly, because that organisation
+may already have been told.
 Never change a date the tool returned.
+If the tool refuses the dates (for example exchange after completion, or a completion long past), return its
+message as it is so the customer can check the dates. Never guess or adjust a date yourself.
 """
         tools = ["build_timeline"]
     }
@@ -385,7 +389,8 @@ Never change a date the tool returned.
         name = "government_agent"
         function = ${aaosa_call} {
             description = """Handles government and council tasks for a house move: DVLA driving licence and log
-book, council tax at the old and new council, and the electoral register."""
+book, council tax at the old and new council (or one council for a move within its area), and the electoral
+register."""
         }
         instructions = ${specialist_instructions} """
 Your agent name is government_agent. Use gov_service_directory with the tasks' obligation IDs.

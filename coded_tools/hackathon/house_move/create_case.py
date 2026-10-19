@@ -8,6 +8,7 @@ from coded_tools.hackathon.house_move.case_session import CaseSession
 from coded_tools.hackathon.house_move.case_store import CaseStore
 from coded_tools.hackathon.house_move.case_tool import CaseTool
 from coded_tools.hackathon.house_move.council_lookup import CouncilLookup
+from coded_tools.hackathon.house_move.move_dates import MoveDates
 
 
 class CreateCase(CaseTool):
@@ -33,13 +34,20 @@ class CreateCase(CaseTool):
 
     NEEDS_CASE: bool = False  # This is the tool that creates a case.
 
-    def __init__(self, case_store: CaseStore | None = None, council_lookup: CouncilLookup | None = None):
+    def __init__(
+        self,
+        case_store: CaseStore | None = None,
+        council_lookup: CouncilLookup | None = None,
+        today: date | None = None,
+    ):
         """
         :param case_store: where the case is saved. Defaults to the SQLite case store.
         :param council_lookup: validates postcodes and finds councils. Defaults to the live lookup.
+        :param today: the date the move date is checked against. Defaults to the real date.
         """
         self._case_store: CaseStore | None = case_store
         self._council_lookup: CouncilLookup = council_lookup or CouncilLookup()
+        self._today: date | None = today
 
     async def arun(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
         """
@@ -54,10 +62,14 @@ class CreateCase(CaseTool):
             return "Error: ask for the first name of each adult who is moving."
         try:
             move_date: date = date.fromisoformat(args.get("move_date") or "")
-            exchange_text: str | None = args.get("exchange_date")
-            exchange_date: date | None = date.fromisoformat(exchange_text) if exchange_text else None
+            exchange_date: date | None = (
+                date.fromisoformat(args.get("exchange_date")) if args.get("exchange_date") else None
+            )
         except ValueError:
             return "Error: give the move date (or best estimate) as YYYY-MM-DD."
+        date_error: str | None = MoveDates.check(move_date, exchange_date, self._today or date.today())
+        if date_error is not None:
+            return date_error
 
         councils: dict[str, dict[str, Any]] = {}
         for key in ("old_postcode", "new_postcode"):
