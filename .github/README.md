@@ -5,6 +5,8 @@ A multi-agent assistant, built on [Neuro SAN Studio](https://github.com/cognizan
 every organisation that needs to know, in the right order and on time, without sending anything they have not
 approved.
 
+> EMEA Hackathon 2026 entry by associate 110737 (Varadaraj.pandurangan@cognizant.com, BFS UK).
+>
 > Hackathon build. Synthetic customer data only. Every send is mocked and logged; nothing leaves the machine.
 >
 > This repository is a complete [Neuro SAN Studio](https://github.com/cognizant-ai-lab/neuro-san-studio) project
@@ -42,8 +44,9 @@ out late, and then contact their bank and providers to fix the gaps.
 2. **Plans** a dated task list against the completion date, from rules with official sources, using UK working
    days and the bank holidays of the country they are moving to.
 3. **Drafts** every notification with placeholders, so personal data is filled in by code, not by the LLM.
-4. **Gets approval** for each draft: the customer confirms with a one-time code they type themselves, so the LLM
-   cannot approve on their behalf. Legal-requirement drafts must be approved one by one.
+4. **Gets approval** for each draft: the customer reads and approves it on their signed-in portal page, or confirms
+   in the chat with a one-time code they type themselves, so the LLM cannot approve on their behalf.
+   Legal-requirement drafts must be approved one by one.
 5. **Tracks** progress: mock sends, the bank's own address update, replanning when completion moves, and provider
    replies (for example a request for a meter serial number).
 6. **Finds local contacts** at the new address: nearest GP practices (NHS, live), schools for the children's ages
@@ -137,6 +140,10 @@ flowchart TD
   30 minutes, usable once). `CustomerMessageMiddleware` records what the customer actually types, server-side, and
   `confirm_with_code` acts only if that message arrived after the code and contains it. The customer's own message
   is what gets stored as consent.
+- **Approving on the portal:** the "My move" page opens each draft and approves the exact wording shown
+  (`ApproveOnPortal`). The click comes from the customer's own signed-in browser, so no LLM is involved; the request
+  must be same-origin JSON with the strict-SameSite session cookie. It takes the same per-owner lock as the agents,
+  which is also a file lock, so the portal and the agent server never overwrite each other's changes.
 - **Approval gate in code:** each approval is tied to the draft's exact wording. `send_notification` and
   `bank_address_api` refuse anything without a confirmed approval for the current wording; any approved task that
   cannot go out is reported, never dropped silently. "Approve all" leaves out legal-requirement drafts.
@@ -183,7 +190,8 @@ venv/bin/python -m neuro_san_studio run
 ```
 
 Start the House Move portal (<http://127.0.0.1:8090>): sign-in, statement upload and the "My move" status page
-(`/status`: stage, what is waiting for approval, tasks and recent activity; read-only, own case only). Every journey needs it:
+(`/status`: stage, what is waiting for approval, tasks and recent activity, and Read and approve for each draft;
+own case only). Every journey needs it:
 
 ```bash
 venv/bin/python -m apps.house_move_upload.upload_server
@@ -214,7 +222,8 @@ own login: a session opens only that customer's record, or only the cases its ow
    week with legal items marked, followed by local GPs and water companies.
 3. "Yes please, prepare the drafts." Four AAOSA specialists and Comms produce a draft per task.
 4. "Approve all of them." The agent lists what will be approved, names the legal-requirement drafts that must be
-   approved one by one, and shows a 6-digit code. Reply with the code (and name any legal drafts first). Emails
+   approved one by one, and shows a 6-digit code. Reply with the code (and name any legal drafts first). Or open
+   "See your move's status" on the portal and use Read and approve, one draft or all routine ones at once. Emails
    with known references then go to providers; the rest become pre-filled packs; the bank's own address update
    is made directly.
 5. "Completion has moved to 11 December." The Tracker sorts every task: needs correction, needs rebooking,
@@ -269,7 +278,7 @@ registries/hackathon/house_move.hocon         the agent network
 registries/manifest.hocon                     includes registries/hackathon/manifest.hocon (one added line)
 coded_tools/hackathon/house_move/             coded tools (one class per file)
 coded_tools/hackathon/house_move/data/        rules, synthetic data, directories, schools extract, samples
-apps/house_move_upload/upload_server.py       portal: demo sign-in, statement upload, My move status
+apps/house_move_upload/upload_server.py       portal: demo sign-in, statement upload, My move status and approval
 build_scripts/build_house_move_schools.py     builds the schools extract from GIAS
 tests/coded_tools/hackathon/house_move/       unit tests
 tests/apps/house_move_upload/                 portal tests
@@ -282,13 +291,15 @@ House_Move_Agent.pptx                         pitch deck
 venv/bin/python -m pytest tests/coded_tools/hackathon tests/apps/house_move_upload -q
 ```
 
-89 tests cover the rules engine (including Scotland, Wales and Northern Ireland), working-day dates, the approval
+95 tests cover the rules engine (including Scotland, Wales and Northern Ireland), working-day dates, the approval
 gate, mock sending, replanning, replies, the case store and encryption, statement parsing, the portal, and the GP,
 school and water finders. `test_session_security.py` replays the review's attacks through the real session path:
 forged approved state, opening another customer's record, missing or tampered tokens, guessing case IDs, reading
 another person's upload, and parallel tool calls. `test_confirmation_codes.py` shows the LLM cannot confirm for the
 customer: no message, wrong, expired or reused codes, codes seen only in tool or AI text, and drafts changed after
-approval are all refused. `test_reply_isolation.py` checks that no agent that reads provider replies can approve or send, and that an injected reply changes nothing. Network calls are mocked in tests.
+approval are all refused. `test_reply_isolation.py` checks that no agent that reads provider replies can approve or send, and that an injected reply changes nothing. `test_approve_on_portal.py` checks that a portal approval covers only the
+wording the customer opened, only their own case, legal drafts one at a time, and that the owner's lock holds across
+processes. Network calls are mocked in tests.
 
 ## Data sources
 

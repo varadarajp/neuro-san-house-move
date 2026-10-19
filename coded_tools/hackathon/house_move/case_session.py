@@ -1,9 +1,11 @@
 """Server-side sessions: who is calling, which case they may open, and the case's real state."""
 
+import fcntl
 import json
 import logging
 import threading
 from typing import Any
+from typing import TextIO
 
 from coded_tools.hackathon.house_move.case_store import CaseStore
 from coded_tools.hackathon.house_move.house_move_data_store import HouseMoveDataStore
@@ -45,7 +47,8 @@ class CaseSession:
     SERVER_KEYS: tuple[str, ...] = STATE_KEYS + ("customer_id", "customer_profile", OWNER_KEY)
 
     # One lock per owner: neuro-san can run tools in parallel on the same session, and each tool reloads, changes
-    # and saves the state, so tools for one owner must not interleave.
+    # and saves the state, so tools for one owner must not interleave. The thread lock covers this process; a file
+    # lock (see CaseStore.lock_path) covers the portal, which runs in its own process and approves from a click.
     _locks: dict[str, threading.Lock] = {}
     _locks_guard: threading.Lock = threading.Lock()
 
@@ -66,6 +69,7 @@ class CaseSession:
         self._owner: str | None = None
         self._claims: dict[str, Any] = {}
         self._lock: threading.Lock | None = None
+        self._lock_file: TextIO | None = None
 
     def verify(self, sly_data: dict[str, Any]) -> str | None:
         """
@@ -89,10 +93,19 @@ class CaseSession:
         :return: true if the lock is now held.
         """
         lock: threading.Lock = CaseSession._lock_for(self._owner)
-        if lock.acquire(blocking=False):
-            self._lock = lock
-            return True
-        return False
+        if not lock.acquire(blocking=False):
+            return False
+        lock_file: TextIO = self._store.lock_path(self._owner).open("a", encoding="utf-8")
+        try:
+            fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            # Another process (the agent server or the portal) holds this owner's case.
+            lock_file.close()
+            lock.release()
+            return False
+        self._lock = lock
+        self._lock_file = lock_file
+        return True
 
     def load_active(self, sly_data: dict[str, Any], needs_case: bool) -> str | None:
         """
@@ -144,6 +157,10 @@ class CaseSession:
         Removes the owner marker from sly_data and releases the owner's lock.
         """
         sly_data.pop(CaseSession.OWNER_KEY, None)
+        if self._lock_file is not None:
+            # Closing the file releases the file lock.
+            self._lock_file.close()
+            self._lock_file = None
         if self._lock is not None:
             self._lock.release()
             self._lock = None

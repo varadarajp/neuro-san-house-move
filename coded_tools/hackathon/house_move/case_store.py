@@ -381,6 +381,14 @@ class CaseStore:
             for kind, created, expires, payload in rows
         ]
 
+    def lock_path(self, owner_id: str) -> Path:
+        """
+        :return: the per-owner lock file next to the database, shared by every process that uses this store.
+        """
+        folder: Path = self._db_path.parent / "locks"
+        folder.mkdir(mode=0o700, exist_ok=True)
+        return folder / f"{hashlib.sha256(owner_id.encode('utf-8')).hexdigest()[:24]}.lock"
+
     def consume_pending(self, action_id: str) -> None:
         """
         Deletes a pending action once it has been carried out, so a code works only once.

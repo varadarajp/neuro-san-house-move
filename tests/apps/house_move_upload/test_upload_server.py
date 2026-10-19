@@ -115,3 +115,31 @@ class TestStatementUploadServer(HouseMoveTestCase):
         feed = self.client.get("/status.json")
         self.assertEqual("no-store", feed.headers.get("cache-control"))
         self.assertEqual("Drafts ready", feed.json().get("stage"))
+
+    def test_approve_from_the_status_page(self):
+        """
+        Drafts open only for their signed-in owner; approving needs a same-origin JSON request and then shows up in
+        the status.
+        """
+        self.assertEqual(404, self.client.get("/draft/T-01.json").status_code)
+        self.sign_in("C-10042")
+        HouseMoveTestState.drafted_session()
+        waiting: list = self.client.get("/status.json").json().get("awaiting_approval")
+        task_id: str = next(t.get("task_id") for t in waiting if not t.get("legal_requirement"))
+        draft: dict = self.client.get(f"/draft/{task_id}.json").json()
+        self.assertEqual("Moving", draft.get("subject"))
+        body: dict = {"approve": [{"task_id": task_id, "draft_hash": draft.get("draft_hash")}]}
+
+        self.assertEqual(403, self.client.post("/approve", data={"approve": task_id}).status_code)
+        self.assertEqual(
+            403, self.client.post("/approve", json=body, headers={"Origin": "https://evil.test"}).status_code
+        )
+        approved = self.client.post("/approve", json=body)
+        self.assertEqual({"approved": [task_id], "not_applied": []}, approved.json())
+        self.assertEqual(404, self.client.get(f"/draft/{task_id}.json").status_code)
+        groups: dict = {g.get("status"): g for g in self.client.get("/status.json").json().get("groups")}
+        self.assertEqual([task_id], [t.get("task_id") for t in groups.get("approved").get("tasks")])
+
+        self.client.post("/signout")
+        self.client.cookies.clear()
+        self.assertEqual(401, self.client.post("/approve", json=body).status_code)
