@@ -23,12 +23,24 @@
            background: var(--warm); color: #fff; margin-left: .35rem; }
   .pending { border-color: var(--warm); }
   a { color: var(--accent); }
-  @media (max-width: 600px) { th:nth-child(3), td:nth-child(3) { display: none; } }
+  button { background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: .35rem .8rem;
+           font-size: .9rem; cursor: pointer; }
+  button.quiet { background: transparent; color: inherit; border: 1px solid var(--line); }
+  button:disabled { opacity: .5; cursor: wait; }
+  .group-head { display: flex; justify-content: space-between; align-items: baseline; gap: .6rem; flex-wrap: wrap; }
+  .draft { background: var(--tint); border-radius: 8px; padding: .7rem .9rem; margin: .2rem 0 .5rem; }
+  .draft pre { white-space: pre-wrap; font: inherit; margin: .4rem 0 .7rem; }
+  .actions { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
+  .notice { border-left: 4px solid var(--accent); padding: .4rem .9rem; margin: 1rem 0; }
+  .notice.bad { border-color: var(--warm); }
+  td.act { text-align: right; white-space: nowrap; }
+  @media (max-width: 600px) { th:nth-child(3), td:nth-child(3) { display: none; } td.act { white-space: normal; } }
 </style></head>
 <body>
 <header><h1>My move</h1><span class="small muted" id="updated"></span></header>
+<div id="notice"></div>
 <div id="app" class="muted">Loading…</div>
-<p class="small"><a href="/">Back to the portal</a> · Updates every 5 seconds. Approvals happen in the chat.</p>
+<p class="small"><a href="/">Back to the portal</a> · Updates every 5 seconds. Approve here after reading each draft, or in the chat with a code.</p>
 <script>
 // Everything is rendered with textContent, so nothing from the case is ever interpreted as HTML.
 const el = (tag, text, cls) => {
@@ -37,7 +49,8 @@ const el = (tag, text, cls) => {
   if (cls) e.className = cls;
   return e;
 };
-function table(rows, cols) {
+// after(r) may return an element shown in a full-width row under that row (an opened draft).
+function table(rows, cols, after) {
   const t = el("table"), head = el("tr");
   cols.forEach(c => head.appendChild(el("th", c[0])));
   t.appendChild(head);
@@ -45,8 +58,92 @@ function table(rows, cols) {
     const tr = el("tr");
     cols.forEach(c => { const td = el("td"); c[1](td, r); tr.appendChild(td); });
     t.appendChild(tr);
+    const extra = after && after(r);
+    if (extra) {
+      const row = el("tr"), td = el("td");
+      td.colSpan = cols.length;
+      td.appendChild(extra);
+      row.appendChild(td);
+      t.appendChild(row);
+    }
   });
   return t;
+}
+// Page state kept across refreshes: opened drafts (task_id -> draft) and the "approve all" list being confirmed.
+const opened = {}, expanded = new Set();
+let bulk = null, busy = false, last = null;
+const button = (text, onClick, cls) => { const b = el("button", text, cls); b.type = "button";
+  b.disabled = busy; b.onclick = onClick; return b; };
+function notify(text, bad) {
+  const n = document.getElementById("notice");
+  n.textContent = "";
+  if (text) n.appendChild(el("p", text, "notice" + (bad ? " bad" : "")));
+}
+async function getDraft(taskId) {
+  const r = await fetch("/draft/" + encodeURIComponent(taskId) + ".json", {cache: "no-store"});
+  if (!r.ok) throw new Error("That draft is no longer waiting for approval.");
+  return r.json();
+}
+async function toggle(taskId) {
+  if (opened[taskId]) { delete opened[taskId]; render(last); return; }
+  try { opened[taskId] = await getDraft(taskId); notify(""); } catch (e) { notify(e.message, true); }
+  render(last);
+}
+async function approve(drafts) {
+  busy = true; render(last);
+  try {
+    const r = await fetch("/approve", {method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({approve: drafts.map(d => ({task_id: d.task_id, draft_hash: d.draft_hash}))})});
+    const result = await r.json();
+    if (!r.ok) { notify("Not approved: " + (result.error || r.status), true); }
+    else {
+      const names = drafts.filter(d => result.approved.includes(d.task_id)).map(d => d.org);
+      notify((names.length ? "Approved: " + names.join(", ") + ". Ask the assistant to send them." : "Nothing approved.")
+        + (result.not_applied.length ? " Not approved: " + result.not_applied.join("; ") + "." : ""),
+        !names.length);
+    }
+    drafts.forEach(d => delete opened[d.task_id]);
+    bulk = null;
+  } catch (e) { notify("Could not approve: " + e.message, true); }
+  busy = false;
+  await refresh();
+}
+async function startBulk(tasks) {
+  try { bulk = await Promise.all(tasks.map(t => getDraft(t.task_id))); notify(""); }
+  catch (e) { notify(e.message, true); }
+  render(last);
+}
+function draftPanel(d, withButton) {
+  const box = el("div", undefined, "draft");
+  box.appendChild(el("strong", d.subject || "(no subject)"));
+  box.appendChild(el("pre", d.body || ""));
+  if (withButton) {
+    const actions = el("div", undefined, "actions");
+    actions.appendChild(button("Approve this draft", () => approve([d])));
+    actions.appendChild(el("span", "Details in {{ }} are filled in from your record when it is sent.",
+      "small muted"));
+    box.appendChild(actions);
+  }
+  return box;
+}
+function bulkPanel() {
+  const box = el("div", undefined, "card pending");
+  box.appendChild(el("h2", "Approve these " + bulk.length + " drafts?"));
+  bulk.forEach(d => {
+    const det = el("details");
+    det.open = expanded.has(d.task_id);
+    det.ontoggle = () => det.open ? expanded.add(d.task_id) : expanded.delete(d.task_id);
+    det.appendChild(el("summary", d.org + ", due " + (d.due_date || "not set")));
+    det.appendChild(draftPanel(d, false));
+    box.appendChild(det);
+  });
+  box.appendChild(el("p", "Legal requirements are not included: open and approve each of those on its own.",
+    "small muted"));
+  const actions = el("div", undefined, "actions");
+  actions.appendChild(button("Approve " + bulk.length + " drafts", () => approve(bulk)));
+  actions.appendChild(button("Cancel", () => { bulk = null; render(last); }, "quiet"));
+  box.appendChild(actions);
+  return box;
 }
 const orgCell = (td, r) => {
   td.textContent = r.org || "";
@@ -59,6 +156,8 @@ const taskCols = [
   ["How", (td, r) => td.textContent = (r.channel || "").replace("_", " ")],
 ];
 function render(s) {
+  if (!s) return;
+  last = s;
   const app = document.getElementById("app");
   app.textContent = "";
   app.className = "";
@@ -84,10 +183,26 @@ function render(s) {
     });
     app.appendChild(p);
   }
+  if (bulk) app.appendChild(bulkPanel());
   s.groups.forEach(g => {
-    const card = el("div", undefined, "card");
-    card.appendChild(el("h2", g.label + " (" + g.tasks.length + ")"));
-    card.appendChild(table(g.tasks, taskCols));
+    const card = el("div", undefined, "card"), head = el("div", undefined, "group-head");
+    head.appendChild(el("h2", g.label + " (" + g.tasks.length + ")"));
+    if (g.status !== "awaiting_approval") {
+      card.appendChild(head);
+      card.appendChild(table(g.tasks, taskCols));
+      app.appendChild(card);
+      return;
+    }
+    const routine = g.tasks.filter(t => !t.legal_requirement);
+    if (routine.length > 1 && !bulk) {
+      head.appendChild(button("Approve all " + routine.length + " except legal…", () => startBulk(routine), "quiet"));
+    }
+    card.appendChild(head);
+    const cols = taskCols.concat([["", (td, r) => {
+      td.className = "act";
+      td.appendChild(button(opened[r.task_id] ? "Hide" : "Read and approve", () => toggle(r.task_id), "quiet"));
+    }]]);
+    card.appendChild(table(g.tasks, cols, r => opened[r.task_id] && draftPanel(opened[r.task_id], true)));
     app.appendChild(card);
   });
   if (s.activity.length) {
@@ -105,7 +220,12 @@ async function refresh() {
   try {
     const r = await fetch("/status.json", {cache: "no-store"});
     if (r.status === 401) { location.href = "/"; return; }
-    render(await r.json());
+    const s = await r.json();
+    // Forget opened drafts that are no longer waiting (approved here or in the chat).
+    const waiting = new Set((s.awaiting_approval || []).map(t => t.task_id));
+    Object.keys(opened).forEach(id => { if (!waiting.has(id)) delete opened[id]; });
+    if (bulk && bulk.some(d => !waiting.has(d.task_id))) bulk = null;
+    render(s);
     document.getElementById("updated").textContent = "Updated " + new Date().toLocaleTimeString();
   } catch (e) {
     document.getElementById("updated").textContent = "Could not refresh";

@@ -29,6 +29,8 @@ from fastapi import UploadFile
 from fastapi.responses import HTMLResponse
 from fastapi.responses import JSONResponse
 
+from coded_tools.hackathon.house_move.approve_on_portal import ApproveOnPortal
+from coded_tools.hackathon.house_move.audit_log import AuditLog
 from coded_tools.hackathon.house_move.case_status import CaseStatus
 from coded_tools.hackathon.house_move.house_move_data_store import HouseMoveDataStore
 from coded_tools.hackathon.house_move.import_statement import ImportStatement
@@ -42,8 +44,9 @@ class StatementUploadServer:
     """
     A small FastAPI app on 127.0.0.1: sign in (as a demo bank customer, or as a new guest), copy the session token
     into the chat client, upload CSV, OFX or QFX statements to your own folder, and follow your move on the
-    "My move" page (stage, what waits for your approval, tasks by status, recent activity). It never lists or returns
-    uploaded files, and stores each file readable by its owner only. Use synthetic statements only.
+    "My move" page (stage, what waits for your approval, tasks by status, recent activity), where drafts can be
+    opened and approved. It never lists or returns uploaded files, and stores each file readable by its owner only.
+    Use synthetic statements only.
     """
 
     HOST: str = "127.0.0.1"
@@ -85,17 +88,20 @@ class StatementUploadServer:
         upload_dir: Path | None = None,
         tokens: SessionTokens | None = None,
         data_store: HouseMoveDataStore | None = None,
+        audit_log: AuditLog | None = None,
     ):
         """
         :param upload_dir: root of the per-owner upload folders. Defaults to the folder import_statement reads.
         :param tokens: issues and verifies session tokens. Defaults to the shared secret.
         :param data_store: lists the demo bank customers for sign-in.
+        :param audit_log: records approvals made on the portal. Defaults to the audit file under logs/.
         """
         self._upload_dir: Path = upload_dir or ImportStatement.DEFAULT_UPLOAD_DIR
         self._tokens: SessionTokens = tokens or SessionTokens()
         self._data_store: HouseMoveDataStore = data_store or HouseMoveDataStore()
         self._parser: StatementParser = StatementParser()
         self._status: CaseStatus = CaseStatus(tokens=self._tokens)
+        self._audit_log: AuditLog = audit_log or AuditLog()
 
     def create_app(self) -> FastAPI:
         """
@@ -141,6 +147,33 @@ class StatementUploadServer:
             if status is None:
                 return JSONResponse({"error": "not signed in"}, status_code=401)
             return JSONResponse(status, headers={"Cache-Control": "no-store"})
+
+        @app.get("/draft/{task_id}.json")
+        async def draft_json(request: Request, task_id: str) -> JSONResponse:
+            draft: dict[str, Any] | None = self._status.draft(
+                request.cookies.get(StatementUploadServer.COOKIE), task_id
+            )
+            if draft is None:
+                return JSONResponse({"error": "no draft waiting for your approval"}, status_code=404)
+            return JSONResponse(draft, headers={"Cache-Control": "no-store"})
+
+        @app.post("/approve")
+        async def approve(request: Request) -> JSONResponse:
+            if not self._same_origin(request):
+                return JSONResponse({"error": "refused"}, status_code=403)
+            try:
+                body: Any = await request.json()
+            except json.JSONDecodeError:
+                return JSONResponse({"error": "expected JSON"}, status_code=400)
+            sly_data: dict[str, Any] = {"session_token": request.cookies.get(StatementUploadServer.COOKIE)}
+            args: dict[str, Any] = {"approve": body.get("approve") if isinstance(body, dict) else None}
+            result: dict[str, Any] | str = await ApproveOnPortal(audit_log=self._audit_log).async_invoke(
+                args, sly_data
+            )
+            if isinstance(result, str):
+                status: int = 401 if "not signed in" in result else 400
+                return JSONResponse({"error": result.removeprefix("Error: ")}, status_code=status)
+            return JSONResponse(result)
 
         @app.post("/upload", response_class=HTMLResponse)
         async def upload(request: Request, file: UploadFile = File(...)) -> HTMLResponse:
@@ -255,6 +288,18 @@ class StatementUploadServer:
             f"Yes, you can read it.</code></p>",
             200,
         )
+
+    @staticmethod
+    def _same_origin(request: Request) -> bool:
+        """
+        Cross-site request forgery guard for approving, on top of the SameSite=strict cookie: the body must be JSON
+        (a cross-site form cannot send that without the browser asking first), and the Origin, when the browser
+        sends one, must be this portal.
+        """
+        if not request.headers.get("content-type", "").startswith("application/json"):
+            return False
+        origin: str | None = request.headers.get("origin")
+        return origin is None or origin == f"{request.url.scheme}://{request.url.netloc}"
 
     @staticmethod
     def _safe_name(original_name: str) -> str:

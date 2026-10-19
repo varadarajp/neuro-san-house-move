@@ -4,6 +4,7 @@ from typing import Any
 
 from coded_tools.hackathon.house_move.case_session import CaseSession
 from coded_tools.hackathon.house_move.case_store import CaseStore
+from coded_tools.hackathon.house_move.draft_fingerprint import DraftFingerprint
 from coded_tools.hackathon.house_move.session_tokens import SessionTokens
 
 
@@ -11,15 +12,16 @@ class CaseStatus:
     """
     Summarises the signed-in owner's active case: which stage it has reached, what is waiting for their approval,
     any confirmation waiting for a code, every task by status, and recent activity.
-    Read-only, and only for the owner's own case (the same rules as the agents). Confirmation codes are never shown:
-    they are given in the chat. Only first names, towns and postcodes are shown, no street addresses.
+    Read-only (approving is ApproveOnPortal's job), and only for the owner's own case (the same rules as the agents).
+    Confirmation codes are never shown: they are given in the chat. Only first names, towns and postcodes are shown,
+    no street addresses; a draft's wording is shown only when the owner opens it to approve it.
     """
 
     STAGES: tuple[str, ...] = ("Started", "Plan ready", "Drafts ready", "Approved", "Sent", "Follow-up", "Done")
     STAGE_HINTS: dict[str, str] = {
         "Started": "Tell the assistant about your move so it can find who you pay and build a plan.",
         "Plan ready": "Your dated plan is ready. Ask the assistant to prepare the drafts.",
-        "Drafts ready": "Drafts are waiting for your approval. Approve them in the chat with the code you are given.",
+        "Drafts ready": "Drafts are waiting for your approval. Read and approve each one here, or in the chat.",
         "Approved": "Approved drafts are ready to send. Ask the assistant to send them.",
         "Sent": "Notifications have gone out. Complete any packs that need your details, then wait for replies.",
         "Follow-up": "A provider has asked for something. See 'Needs your action'.",
@@ -84,6 +86,26 @@ class CaseStatus:
             "pending_confirmations": self._pending(view.get("owner"), view.get("case_id"), tasks),
             "groups": self._groups(tasks),
             "activity": self._activity(view.get("audit_log") or [], tasks),
+        }
+
+    def draft(self, token: str | None, task_id: str) -> dict[str, Any] | None:
+        """
+        One draft waiting for the owner's approval, as they will approve it: placeholders such as {{new_address}}
+        are filled in only when it is sent. draft_hash is what the Approve button sends back.
+        :return: the draft, or None if the token is not valid or the task has no draft awaiting approval.
+        """
+        view: dict[str, Any] | None = CaseSession(store=self._store, tokens=self._tokens).read_only_view(token)
+        if view is None or not view.get("case_id"):
+            return None
+        task: dict[str, Any] | None = next((t for t in view.get("tasks") or [] if t.get("task_id") == task_id), None)
+        draft: dict[str, Any] | None = (view.get("drafts") or {}).get((task or {}).get("draft_id"))
+        if task is None or task.get("status") != "awaiting_approval" or not draft:
+            return None
+        return {
+            **self._line(task),
+            "subject": draft.get("subject"),
+            "body": draft.get("body"),
+            "draft_hash": DraftFingerprint.of(draft),
         }
 
     @staticmethod
