@@ -1,0 +1,181 @@
+<!-- The Chat tab, placed inside portal_shell.html. Styles are in portal.css. -->
+<div class="chat-head">
+  <div><b>Assistant</b><span class="small muted"> · your sign-in is attached, nothing to paste</span></div>
+  <button class="btn small ghost" type="button" id="new-chat">New chat</button>
+</div>
+<div id="thread" class="thread" aria-live="polite" data-suggestions="__SUGGESTIONS__"></div>
+<form class="composer" id="composer" autocomplete="off">
+  <div class="chips" id="chips"></div>
+  <div class="composer-row">
+    <label class="visually-hidden" for="text">Message</label>
+    <textarea id="text" rows="1" maxlength="2000" placeholder="Message the assistant" required></textarea>
+    <button class="btn send" type="submit" id="send" aria-label="Send">
+      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg></button>
+  </div>
+  <p class="small muted hint-line">Never type your surname, street address, email or account numbers here: use
+  <a href="/details">Details</a>. Approve letters on <a href="/status">My move</a> or here with a code.</p>
+</form>
+<script>
+// Everything is built with DOM nodes and textContent: nothing in a message is ever interpreted as HTML.
+const thread = document.getElementById("thread"), box = document.getElementById("text");
+const send = document.getElementById("send"), chips = document.getElementById("chips");
+const SUGGESTIONS = JSON.parse(thread.dataset.suggestions || "[]");
+const PORTAL = /^https?:\/\/(127\.0\.0\.1|localhost):8090(\/[^\s]*)?$/;
+let busy = false;
+
+const el = (tag, text, cls) => {
+  const e = document.createElement(tag);
+  if (text !== undefined && text !== null) e.textContent = text;
+  if (cls) e.className = cls;
+  return e;
+};
+function link(label, url) {
+  const portal = url.match(PORTAL);
+  const a = el("a", label);
+  a.href = portal ? (portal[2] || "/") : url;
+  if (!portal) { a.target = "_blank"; a.rel = "noopener noreferrer"; }
+  return a;
+}
+// Inline Markdown: **bold**, *italic*, `code`, [text](https://...) and bare https:// links.
+function inline(parent, text) {
+  const pattern = /(\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\(https?:\/\/[^\s)]+\)|https?:\/\/[^\s)<]+|\*[^*\s][^*]*\*)/g;
+  let last = 0, m;
+  while ((m = pattern.exec(text)) !== null) {
+    if (m.index > last) parent.appendChild(document.createTextNode(text.slice(last, m.index)));
+    const t = m[0];
+    if (t.startsWith("**")) parent.appendChild(el("strong", t.slice(2, -2)));
+    else if (t.startsWith("`")) parent.appendChild(el("code", t.slice(1, -1)));
+    else if (t.startsWith("[")) { const i = t.indexOf("]("); parent.appendChild(link(t.slice(1, i), t.slice(i + 2, -1))); }
+    else if (t.startsWith("http")) { const url = t.replace(/[.,;:!?]+$/, ""); parent.appendChild(link(url, url));
+      if (url.length < t.length) parent.appendChild(document.createTextNode(t.slice(url.length))); }
+    else parent.appendChild(el("em", t.slice(1, -1)));
+    last = m.index + t.length;
+  }
+  if (last < text.length) parent.appendChild(document.createTextNode(text.slice(last)));
+}
+// Block Markdown: headings, bullet and numbered lists, tables, paragraphs.
+function markdown(text) {
+  const root = el("div", undefined, "md");
+  let list = null, table = null, para = null;
+  const close = () => { list = null; table = null; para = null; };
+  (text || "").replace(/\r/g, "").split("\n").forEach(raw => {
+    const line = raw.trimEnd();
+    let m;
+    if (!line.trim()) { close(); return; }
+    if ((m = line.match(/^\s*#{1,6}\s+(.*)$/))) { close(); const h = el("div", undefined, "md-h"); inline(h, m[1]); root.appendChild(h); return; }
+    if (/^\s*\|.*\|\s*$/.test(line)) {
+      if (/^\s*\|[\s:|-]+\|\s*$/.test(line)) return;
+      if (!table) { close(); const wrap = el("div", undefined, "md-table"); table = el("table"); wrap.appendChild(table); root.appendChild(wrap); table._head = true; }
+      const tr = el("tr");
+      line.trim().slice(1, -1).split("|").forEach(cell => { const c = el(table._head ? "th" : "td"); inline(c, cell.trim()); tr.appendChild(c); });
+      table._head = false;
+      table.appendChild(tr);
+      return;
+    }
+    const bullet = line.match(/^\s*[-*•]\s+(.*)$/), numbered = line.match(/^\s*(\d+)[.)]\s+(.*)$/);
+    if (bullet || numbered) {
+      const kind = bullet ? "ul" : "ol";
+      if (!list || list.tagName.toLowerCase() !== kind) { close(); list = el(kind); if (numbered) list.start = Number(numbered[1]); root.appendChild(list); }
+      const li = el("li"); inline(li, bullet ? bullet[1] : numbered[2]); list.appendChild(li);
+      return;
+    }
+    if (!para) { list = null; table = null; para = el("p"); root.appendChild(para); }
+    else para.appendChild(el("br"));
+    inline(para, line.trim());
+  });
+  return root;
+}
+function bubble(role, text) {
+  const row = el("div", undefined, "msg " + role);
+  const b = el("div", undefined, "bubble");
+  if (role === "assistant") b.appendChild(markdown(text)); else b.textContent = text;
+  row.appendChild(b);
+  thread.appendChild(row);
+  row.scrollIntoView({block: "end", behavior: "smooth"});
+  return b;
+}
+function working(label) {
+  let w = document.getElementById("working");
+  if (!w) {
+    w = el("div", undefined, "msg assistant"); w.id = "working";
+    const b = el("div", undefined, "bubble working");
+    b.appendChild(el("span", "", "dots")); b.appendChild(el("span", "", "label"));
+    w.appendChild(b); thread.appendChild(w);
+  }
+  w.querySelector(".label").textContent = label || "Thinking";
+  w.scrollIntoView({block: "end", behavior: "smooth"});
+}
+function doneWorking() { const w = document.getElementById("working"); if (w) w.remove(); }
+function setBusy(value) {
+  busy = value; send.disabled = value; box.disabled = value;
+  chips.querySelectorAll("button").forEach(b => b.disabled = value);
+}
+function showChips(show) {
+  chips.textContent = "";
+  if (!show) return;
+  SUGGESTIONS.forEach(text => {
+    const c = el("button", text, "chip-btn"); c.type = "button";
+    c.onclick = () => { box.value = text; submit(); };
+    chips.appendChild(c);
+  });
+}
+function welcome() {
+  const w = el("div", undefined, "card chat-welcome");
+  w.appendChild(el("b", "Tell the assistant about your move"));
+  w.appendChild(el("p", "It finds who you need to tell, builds a dated plan and drafts every letter. Nothing is sent "
+    + "until you approve it. Start with one of the suggestions below, or type your own.", "small muted"));
+  thread.appendChild(w);
+}
+async function submit() {
+  const text = box.value.trim();
+  if (!text || busy) return;
+  box.value = ""; autosize();
+  showChips(false);
+  const intro = thread.querySelector(".chat-welcome"); if (intro) intro.remove();
+  bubble("you", text);
+  setBusy(true); working("Thinking");
+  try {
+    const r = await fetch("/chat/send", {method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({text})});
+    if (r.status === 401) { location.href = "/"; return; }
+    if (!r.ok) { const e = await r.json().catch(() => ({})); doneWorking(); bubble("error", e.error || "Could not send."); return; }
+    const reader = r.body.getReader(), decoder = new TextDecoder();
+    let buffer = "";
+    for (;;) {
+      const {value, done} = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, {stream: true});
+      let i;
+      while ((i = buffer.indexOf("\n")) >= 0) {
+        const event = JSON.parse(buffer.slice(0, i)); buffer = buffer.slice(i + 1);
+        if (event.type === "progress") working(event.text + "…");
+        else { doneWorking(); bubble(event.type === "reply" ? "assistant" : "error", event.text); }
+      }
+    }
+  } catch (e) {
+    doneWorking(); bubble("error", "The connection dropped. Your message may still be answered: reopen Chat in a moment.");
+  } finally { doneWorking(); setBusy(false); box.focus(); }
+}
+async function load() {
+  const r = await fetch("/chat/history.json", {cache: "no-store"});
+  if (r.status === 401) { location.href = "/"; return; }
+  const h = await r.json();
+  thread.textContent = "";
+  h.messages.forEach(m => bubble(m.role, m.text));
+  if (!h.messages.length) welcome();
+  showChips(!h.messages.length);
+  if (h.busy) { setBusy(true); working("Still working on your last message"); setTimeout(load, 3000); }
+  else setBusy(false);
+}
+function autosize() { box.style.height = "auto"; box.style.height = Math.min(box.scrollHeight, 160) + "px"; }
+box.addEventListener("input", autosize);
+box.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); submit(); } });
+document.getElementById("composer").onsubmit = e => { e.preventDefault(); submit(); };
+document.getElementById("new-chat").onclick = async () => {
+  if (busy || !confirm("Start a new chat? Your case and plan are kept; only this conversation is cleared.")) return;
+  await fetch("/chat/new", {method: "POST", headers: {"Content-Type": "application/json"}, body: "{}"});
+  load();
+};
+load();
+</script>

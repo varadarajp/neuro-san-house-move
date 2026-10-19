@@ -18,6 +18,7 @@ import html
 import json
 import logging
 import re
+from collections.abc import AsyncIterator
 from pathlib import Path
 from string import Template
 from typing import Any
@@ -31,7 +32,10 @@ from fastapi import UploadFile
 from fastapi.responses import HTMLResponse
 from fastapi.responses import JSONResponse
 from fastapi.responses import Response
+from fastapi.responses import StreamingResponse
 
+from apps.house_move_upload.chat_relay import ChatRelay
+from apps.house_move_upload.journey_checklist import JourneyChecklist
 from apps.house_move_upload.portal_icons import PortalIcons
 from coded_tools.hackathon.house_move.approve_on_portal import ApproveOnPortal
 from coded_tools.hackathon.house_move.audit_log import AuditLog
@@ -46,7 +50,7 @@ from coded_tools.hackathon.house_move.statement_parser import StatementParser
 logger = logging.getLogger(__name__)
 
 
-class StatementUploadServer:
+class StatementUploadServer:  # pylint: disable=too-many-instance-attributes  # injected collaborators
     """
     A small FastAPI app on 127.0.0.1: sign in (as a demo bank customer, or as a new guest), copy the session token
     into the chat client, upload CSV, OFX or QFX statements to your own folder, and follow your move on the
@@ -67,9 +71,12 @@ class StatementUploadServer:
     STYLES: str = (HERE / "portal.css").read_text(encoding="utf-8")
     # The "My move" screen renders the status JSON in the browser; see status_page.html.
     STATUS_PAGE: str = (HERE / "status_page.html").read_text(encoding="utf-8")
+    # The Chat tab streams replies from /chat/send; see chat_page.html.
+    CHAT_PAGE: str = (HERE / "chat_page.html").read_text(encoding="utf-8")
     TABS: tuple[tuple[str, str, str], ...] = (
         ("/", "Home", PortalIcons.HOME),
         ("/status", "My move", PortalIcons.ROUTE),
+        ("/chat", "Chat", PortalIcons.CHAT),
         ("/upload", "Upload", PortalIcons.UPLOAD),
         ("/details", "Details", PortalIcons.USER),
     )
@@ -79,18 +86,20 @@ class StatementUploadServer:
         "of the banking app.</p>"
     )
 
-    def __init__(
+    def __init__(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # test seams
         self,
         upload_dir: Path | None = None,
         tokens: SessionTokens | None = None,
         data_store: HouseMoveDataStore | None = None,
         audit_log: AuditLog | None = None,
+        chat: ChatRelay | None = None,
     ):
         """
         :param upload_dir: root of the per-owner upload folders. Defaults to the folder import_statement reads.
         :param tokens: issues and verifies session tokens. Defaults to the shared secret.
         :param data_store: lists the demo bank customers for sign-in.
         :param audit_log: records approvals made on the portal. Defaults to the audit file under logs/.
+        :param chat: relays the Chat tab to the agent network. Defaults to the Neuro SAN server on localhost:8080.
         """
         self._upload_dir: Path = upload_dir or ImportStatement.DEFAULT_UPLOAD_DIR
         self._tokens: SessionTokens = tokens or SessionTokens()
@@ -98,6 +107,7 @@ class StatementUploadServer:
         self._parser: StatementParser = StatementParser()
         self._status: CaseStatus = CaseStatus(tokens=self._tokens)
         self._audit_log: AuditLog = audit_log or AuditLog()
+        self._chat: ChatRelay = chat or ChatRelay()
         # Holds the personal details given on the "Your details" form; opened on first use (see _case_store).
         self._store: CaseStore | None = None
 
@@ -107,6 +117,17 @@ class StatementUploadServer:
         """
         app: FastAPI = FastAPI(title="House Move portal", docs_url=None, redoc_url=None)
         ImportStatement.purge_stale(self._upload_dir)
+
+        self._add_account_routes(app)
+        self._add_move_routes(app)
+        self._add_upload_routes(app)
+        self._add_chat_routes(app)
+        return app
+
+    def _add_account_routes(self, app: FastAPI) -> None:
+        """
+        Sign-in, sign-out, the Home tab and the stylesheet.
+        """
 
         # Route handlers are nested so FastAPI can register them against this instance's settings.
         @app.get("/", response_class=HTMLResponse)
@@ -138,10 +159,19 @@ class StatementUploadServer:
         async def sign_out(request: Request) -> HTMLResponse:
             if not self._from_this_site(request):
                 return HTMLResponse(self._home(None, self._error("Please sign out from this page.")), status_code=403)
+            claims: dict[str, Any] | None = self._tokens.verify(request.cookies.get(StatementUploadServer.COOKIE))
+            if claims is not None:
+                self._chat.forget(claims.get("sub"))
             response: HTMLResponse = HTMLResponse(self._home(None, self._ok("Signed out.")))
             response.delete_cookie(StatementUploadServer.COOKIE)
             return response
 
+    def _add_move_routes(self, app: FastAPI) -> None:
+        """
+        The My move tab: status, drafts to read, and approving.
+        """
+
+        # Route handlers are nested so FastAPI can register them against this instance's settings.
         @app.get("/status", response_class=HTMLResponse)
         async def status_page(request: Request) -> HTMLResponse:
             if self._tokens.verify(request.cookies.get(StatementUploadServer.COOKIE)) is None:
@@ -186,6 +216,12 @@ class StatementUploadServer:
                 return JSONResponse({"error": result.removeprefix("Error: ")}, status_code=status)
             return JSONResponse(result)
 
+    def _add_upload_routes(self, app: FastAPI) -> None:
+        """
+        The Upload and Details tabs.
+        """
+
+        # Route handlers are nested so FastAPI can register them against this instance's settings.
         @app.get("/upload", response_class=HTMLResponse)
         async def upload_page(request: Request) -> HTMLResponse:
             token: str | None = request.cookies.get(StatementUploadServer.COOKIE)
@@ -229,7 +265,67 @@ class StatementUploadServer:
             screen: str = await asyncio.to_thread(self._details_screen, token, message, errors, typed)
             return HTMLResponse(screen, status_code=status)
 
-        return app
+    def _add_chat_routes(self, app: FastAPI) -> None:
+        """
+        The Chat tab and its relay to the agent network.
+        """
+
+        # Route handlers are nested so FastAPI can register them against this instance's settings.
+        @app.get("/chat", response_class=HTMLResponse)
+        async def chat_page(request: Request) -> HTMLResponse:
+            token: str | None = request.cookies.get(StatementUploadServer.COOKIE)
+            claims: dict[str, Any] | None = self._tokens.verify(token)
+            if claims is None:
+                return HTMLResponse(self._home(None, self._error("Sign in to chat.")), status_code=401)
+            return HTMLResponse(self._chat_screen(token, claims))
+
+        @app.get("/chat/history.json")
+        async def chat_history(request: Request) -> JSONResponse:
+            claims: dict[str, Any] | None = self._tokens.verify(request.cookies.get(StatementUploadServer.COOKIE))
+            if claims is None:
+                return JSONResponse({"error": "not signed in"}, status_code=401)
+            owner: str = claims.get("sub")
+            return JSONResponse(
+                {"messages": self._chat.history(owner), "busy": self._chat.is_busy(owner)},
+                headers={"Cache-Control": "no-store"},
+            )
+
+        @app.post("/chat/send")
+        async def chat_send(request: Request) -> Response:
+            token: str | None = request.cookies.get(StatementUploadServer.COOKIE)
+            claims: dict[str, Any] | None = self._tokens.verify(token)
+            if claims is None:
+                return JSONResponse({"error": "not signed in"}, status_code=401)
+            if not self._same_origin(request):
+                return JSONResponse({"error": "refused"}, status_code=403)
+            try:
+                body: Any = await request.json()
+            except json.JSONDecodeError:
+                return JSONResponse({"error": "expected JSON"}, status_code=400)
+            text: str = str((body or {}).get("text") or "").strip() if isinstance(body, dict) else ""
+            if not text:
+                return JSONResponse({"error": "type a message"}, status_code=400)
+            if self._chat.is_busy(claims.get("sub")):
+                return JSONResponse({"error": "still answering your last message"}, status_code=409)
+
+            async def events() -> AsyncIterator[bytes]:
+                # Nested: streams this request's events as JSON lines.
+                async for event in self._chat.send(claims.get("sub"), token, text):
+                    yield (json.dumps(event) + "\n").encode("utf-8")
+
+            return StreamingResponse(
+                events(), media_type="application/x-ndjson", headers={"Cache-Control": "no-store"}
+            )
+
+        @app.post("/chat/new")
+        async def chat_new(request: Request) -> JSONResponse:
+            claims: dict[str, Any] | None = self._tokens.verify(request.cookies.get(StatementUploadServer.COOKIE))
+            if claims is None:
+                return JSONResponse({"error": "not signed in"}, status_code=401)
+            if not self._same_origin(request):
+                return JSONResponse({"error": "refused"}, status_code=403)
+            self._chat.forget(claims.get("sub"))
+            return JSONResponse({"messages": []})
 
     @staticmethod
     def main() -> None:
@@ -265,7 +361,8 @@ class StatementUploadServer:
     def _home(self, token: str | None, message: str) -> str:
         """
         The welcome screen with sign-in when signed out; the home screen when signed in: a summary of the move
-        (filled in from /status.json), quick actions, and the session to give the chat.
+        (filled in from /status.json), "Your steps" (what is done and where to do the next thing), and, folded away,
+        the session for anyone chatting in nsflow instead of the Chat tab.
         """
         claims: dict[str, Any] | None = self._tokens.verify(token)
         if claims is None:
@@ -276,24 +373,17 @@ class StatementUploadServer:
 <p>Here is where your move stands.</p></section>
 <a class="card" id="summary" href="/status" style="display:block;text-decoration:none;color:inherit">
   <div class="skeleton" style="height:64px;margin:0"></div></a>
-<div class="quick">
-  <a href="/status"><span class="avatar">{PortalIcons.CHECK}</span>Review and approve
-    <span class="muted">Read each letter first</span></a>
-  <a href="/upload"><span class="avatar">{PortalIcons.UPLOAD}</span>Upload a statement
-    <span class="muted">Find who you pay</span></a>
-</div>
-<div class="section-head"><h2>Connect your chat</h2></div>
-<div class="card">
-  <div style="display:flex;gap:12px;align-items:flex-start">
-    <span class="avatar">{PortalIcons.CHAT}</span>
-    <div><h2 class="title">Give the assistant your session</h2>
-    <p class="small muted">Once, at the start. In nsflow, paste it into the SlyData tab and tick
-    <em>Use Edited Sly Data</em>; on the command line, pass it with <code>--sly_data</code>.</p></div>
-  </div>
+<div class="section-head"><h2>Your steps</h2></div>
+{self._checklist(token, claims)}
+<details class="card dev">
+  <summary><span class="avatar">{PortalIcons.CHAT}</span><span><b>Chatting in nsflow instead?</b>
+    <span class="small muted">For developers and judges</span></span></summary>
+  <p class="small muted">The Chat tab needs nothing extra. To use nsflow instead, paste this session into its SlyData
+  tab (replacing anything there) and tick <em>Use Edited Sly Data</em>; on the command line, pass it with
+  <code>--sly_data</code>. Copy it again after each sign-in. Never share it: it opens your case.</p>
   <pre class="token" id="token">{sly}</pre>
   <button class="btn secondary block" type="button" id="copy">{PortalIcons.COPY} Copy session</button>
-  <p class="small muted" style="margin-top:10px">Never share it: it opens your case.</p>
-</div>
+</details>
 {StatementUploadServer.DEMO_NOTE}"""
         script: str = """<script>
 document.getElementById("copy").onclick = async () => {
@@ -337,6 +427,48 @@ document.getElementById("copy").onclick = async () => {
 })();
 </script>"""
         return self._page(token, "/", message + body, script)
+
+    def _checklist(self, token: str | None, claims: dict[str, Any]) -> str:
+        """
+        "Your steps": each step of the journey, ticked when done, with the next one highlighted and linked to the
+        tab where it is done.
+        """
+        rows: list[str] = []
+        for number, step in enumerate(JourneyChecklist(self._case_store(), self._status).steps(token, claims), 1):
+            state: str = "done" if step.get("done") else "next" if step.get("next") else "todo"
+            marker: str = PortalIcons.CHECK if step.get("done") else str(number)
+            action: str = (
+                f'<a class="btn small{"" if step.get("next") else " ghost"}" href="{step.get("href")}">'
+                f"{html.escape(step.get('action'))}</a>"
+                if step.get("action") and not step.get("done")
+                else ""
+            )
+            rows.append(
+                f'<li class="step-row {state}"><span class="step-mark">{marker}</span>'
+                f'<div class="main"><div class="name">{html.escape(step.get("title"))}</div>'
+                f'<div class="small muted">{html.escape(step.get("hint"))}</div></div>{action}</li>'
+            )
+        return f'<ol class="list steps-list">{"".join(rows)}</ol>'
+
+    def _chat_screen(self, token: str | None, claims: dict[str, Any]) -> str:
+        """
+        The Chat tab: talks to the assistant with this sign-in attached on the server. Suggested first messages
+        depend on who is signed in.
+        """
+        customers: list[str] = claims.get("customers") or []
+        suggestions: list[str] = (
+            [f"I'm customer {customers[0]} and I'm moving house", "Has anyone replied yet?"]
+            if customers
+            else [
+                "I'm moving house and I don't bank with you",
+                "I've uploaded my statement",
+                "Has anyone replied yet?",
+            ]
+        )
+        body: str = StatementUploadServer.CHAT_PAGE.replace(
+            "__SUGGESTIONS__", html.escape(json.dumps(suggestions), quote=True)
+        )
+        return self._page(token, "/chat", body)
 
     def _welcome(self, message: str) -> str:
         """
