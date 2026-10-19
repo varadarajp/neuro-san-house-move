@@ -364,6 +364,23 @@ class CaseStore:
                 return {"action_id": action_id, "kind": kind, "payload": json.loads(payload), "created_at": created_at}
         return None
 
+    def list_pending(self, owner_id: str, case_id: str) -> list[dict[str, Any]]:
+        """
+        :return: unexpired pending actions for the case, without their codes: {"kind", "created_at", "expires_at",
+                 "payload"}.
+        """
+        now: str = self._precise_now()
+        with closing(self._connect()) as connection:
+            rows: list[tuple] = connection.execute(
+                "SELECT kind, created_at, expires_at, payload_json FROM pending_actions "
+                "WHERE owner_id = ? AND case_id = ? AND expires_at > ? ORDER BY created_at",
+                (owner_id, case_id, now),
+            ).fetchall()
+        return [
+            {"kind": kind, "created_at": created, "expires_at": expires, "payload": json.loads(payload)}
+            for kind, created, expires, payload in rows
+        ]
+
     def consume_pending(self, action_id: str) -> None:
         """
         Deletes a pending action once it has been carried out, so a code works only once.

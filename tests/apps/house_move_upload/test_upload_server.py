@@ -8,6 +8,7 @@ from apps.house_move_upload.upload_server import StatementUploadServer
 from coded_tools.hackathon.house_move.import_statement import ImportStatement
 from coded_tools.hackathon.house_move.session_tokens import SessionTokens
 from tests.coded_tools.hackathon.house_move.house_move_test_case import HouseMoveTestCase
+from tests.coded_tools.hackathon.house_move.house_move_test_state import HouseMoveTestState
 
 
 class TestStatementUploadServer(HouseMoveTestCase):
@@ -97,3 +98,20 @@ class TestStatementUploadServer(HouseMoveTestCase):
         folder: Path = self.uploads / ImportStatement.owner_folder(owner)
         self.assertEqual(["pass_wd.csv"], [path.name for path in folder.iterdir()])
         self.assertIsNotNone(re.fullmatch(r"[0-9a-f]{24}", folder.name))
+
+    def test_status_page_needs_sign_in_and_shows_own_case(self):
+        """
+        "My move" and its JSON feed refuse signed-out visitors; signed in, the feed shows the owner's own case.
+        """
+        self.assertEqual(401, self.client.get("/status").status_code)
+        self.assertEqual(401, self.client.get("/status.json").status_code)
+
+        self.sign_in("C-10042")
+        self.assertIsNone(self.client.get("/status.json").json().get("case"))
+        HouseMoveTestState.drafted_session()
+        page = self.client.get("/status")
+        self.assertEqual(200, page.status_code)
+        self.assertIn("My move", page.text)
+        feed = self.client.get("/status.json")
+        self.assertEqual("no-store", feed.headers.get("cache-control"))
+        self.assertEqual("Drafts ready", feed.json().get("stage"))

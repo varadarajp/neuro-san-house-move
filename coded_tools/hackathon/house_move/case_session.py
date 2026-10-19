@@ -148,6 +148,22 @@ class CaseSession:
             self._lock.release()
             self._lock = None
 
+    def read_only_view(self, token: str | None) -> dict[str, Any] | None:
+        """
+        For the portal's status page: the signed-in owner's active case, read without a lock and never saved.
+        The same ownership rules apply as for the agents.
+        :return: None if the token is not valid; otherwise {"owner", "case_id"} plus the case's profile and saved
+                 state when a case is open (case_id is None when none is).
+        """
+        if self.verify({CaseSession.TOKEN_KEY: token}) is not None:
+            return None
+        view: dict[str, Any] = {"owner": self._owner, "case_id": None}
+        active: str | None = self._store.get_active(self._owner)
+        if active and self._may_open(active):
+            self._load(view, active)
+            view["case_id"] = active
+        return view
+
     def _may_open(self, case_id: str) -> bool:
         """
         :return: true if the verified caller may open the case.

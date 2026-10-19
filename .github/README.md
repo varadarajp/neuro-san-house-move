@@ -182,7 +182,8 @@ UI on <http://localhost:4173>):
 venv/bin/python -m neuro_san_studio run
 ```
 
-Start the House Move portal (<http://127.0.0.1:8090>): sign-in and statement upload. Every journey needs it:
+Start the House Move portal (<http://127.0.0.1:8090>): sign-in, statement upload and the "My move" status page
+(`/status`: stage, what is waiting for approval, tasks and recent activity; read-only, own case only). Every journey needs it:
 
 ```bash
 venv/bin/python -m apps.house_move_upload.upload_server
@@ -268,7 +269,7 @@ registries/hackathon/house_move.hocon         the agent network
 registries/manifest.hocon                     includes registries/hackathon/manifest.hocon (one added line)
 coded_tools/hackathon/house_move/             coded tools (one class per file)
 coded_tools/hackathon/house_move/data/        rules, synthetic data, directories, schools extract, samples
-apps/house_move_upload/upload_server.py       portal: demo sign-in and statement upload
+apps/house_move_upload/upload_server.py       portal: demo sign-in, statement upload, My move status
 build_scripts/build_house_move_schools.py     builds the schools extract from GIAS
 tests/coded_tools/hackathon/house_move/       unit tests
 tests/apps/house_move_upload/                 portal tests
@@ -281,7 +282,7 @@ House_Move_Agent.pptx                         pitch deck
 venv/bin/python -m pytest tests/coded_tools/hackathon tests/apps/house_move_upload -q
 ```
 
-82 tests cover the rules engine (including Scotland, Wales and Northern Ireland), working-day dates, the approval
+89 tests cover the rules engine (including Scotland, Wales and Northern Ireland), working-day dates, the approval
 gate, mock sending, replanning, replies, the case store and encryption, statement parsing, the portal, and the GP,
 school and water finders. `test_session_security.py` replays the review's attacks through the real session path:
 forged approved state, opening another customer's record, missing or tampered tokens, guessing case IDs, reading

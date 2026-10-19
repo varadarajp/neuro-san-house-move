@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>My move</title>
+<style>
+  :root { color-scheme: light dark; --accent: #2f7d6d; --warm: #e07a5f; --muted: #6b7f7b; --tint: #2f7d6d14;
+          --line: #8884; }
+  body { font-family: system-ui, sans-serif; max-width: 56rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.45; }
+  header { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; flex-wrap: wrap; }
+  h1 { margin: 0; } h2 { font-size: 1.1rem; margin: 0 0 .6rem; }
+  .muted { color: var(--muted); } .small { font-size: .85rem; }
+  .card { border: 1px solid var(--line); border-radius: 12px; padding: 1rem 1.25rem; margin: 1rem 0; }
+  .steps { display: flex; gap: .4rem; margin: 1rem 0 .4rem; flex-wrap: wrap; }
+  .step { flex: 1 1 6rem; text-align: center; padding: .45rem .3rem; border-radius: 8px; background: var(--tint);
+          font-size: .85rem; color: var(--muted); }
+  .step.done { background: #2f7d6d33; color: inherit; }
+  .step.now { background: var(--accent); color: #fff; font-weight: 600; }
+  .hint { border-left: 4px solid var(--accent); padding: .4rem .9rem; background: var(--tint);
+          border-radius: 0 8px 8px 0; }
+  table { width: 100%; border-collapse: collapse; font-size: .95rem; }
+  th, td { text-align: left; padding: .35rem .5rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: .8rem; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); }
+  .badge { display: inline-block; font-size: .72rem; padding: .05rem .45rem; border-radius: 999px;
+           background: var(--warm); color: #fff; margin-left: .35rem; }
+  .pending { border-color: var(--warm); }
+  a { color: var(--accent); }
+  @media (max-width: 600px) { th:nth-child(3), td:nth-child(3) { display: none; } }
+</style></head>
+<body>
+<header><h1>My move</h1><span class="small muted" id="updated"></span></header>
+<div id="app" class="muted">Loading…</div>
+<p class="small"><a href="/">Back to the portal</a> · Updates every 5 seconds. Approvals happen in the chat.</p>
+<script>
+// Everything is rendered with textContent, so nothing from the case is ever interpreted as HTML.
+const el = (tag, text, cls) => {
+  const e = document.createElement(tag);
+  if (text !== undefined) e.textContent = text;
+  if (cls) e.className = cls;
+  return e;
+};
+function table(rows, cols) {
+  const t = el("table"), head = el("tr");
+  cols.forEach(c => head.appendChild(el("th", c[0])));
+  t.appendChild(head);
+  rows.forEach(r => {
+    const tr = el("tr");
+    cols.forEach(c => { const td = el("td"); c[1](td, r); tr.appendChild(td); });
+    t.appendChild(tr);
+  });
+  return t;
+}
+const orgCell = (td, r) => {
+  td.textContent = r.org || "";
+  if (r.legal_requirement) td.appendChild(el("span", "legal", "badge"));
+  if (r.follow_up && r.follow_up.length) td.appendChild(el("div", "Asked for: " + r.follow_up.join(", "), "small muted"));
+};
+const taskCols = [
+  ["Organisation", orgCell],
+  ["Due", (td, r) => td.textContent = r.due_date || ""],
+  ["How", (td, r) => td.textContent = (r.channel || "").replace("_", " ")],
+];
+function render(s) {
+  const app = document.getElementById("app");
+  app.textContent = "";
+  app.className = "";
+  if (!s.case) { app.appendChild(el("p", s.hint, "hint")); return; }
+  const c = s.case, head = el("div", undefined, "card");
+  head.appendChild(el("h2", (c.first_names.join(" and ") || "Your move") + ": " + c.from + " → " + c.to));
+  head.appendChild(el("div", "Completion " + (c.completion_date || "not set") + (c.date_is_estimate ? " (estimate)" : "")
+    + (c.exchange_date ? " · Exchange " + c.exchange_date : "") + " · Case " + c.reference, "small muted"));
+  const steps = el("div", undefined, "steps");
+  s.stages.forEach((name, i) => steps.appendChild(
+    el("div", name, "step" + (i < s.stage_index ? " done" : i === s.stage_index ? " now" : ""))));
+  head.appendChild(steps);
+  head.appendChild(el("p", s.hint, "hint"));
+  app.appendChild(head);
+  if (s.pending_confirmations.length) {
+    const p = el("div", undefined, "card pending");
+    p.appendChild(el("h2", "Waiting for your confirmation code"));
+    s.pending_confirmations.forEach(a => {
+      p.appendChild(el("div", a.what + (a.items.length ? ": " + a.items.join(", ") : "")
+        + (a.skips.length ? " · skipping " + a.skips.join(", ") : "")));
+      p.appendChild(el("div", "Type the code from the chat before " + new Date(a.expires_at).toLocaleTimeString(),
+        "small muted"));
+    });
+    app.appendChild(p);
+  }
+  s.groups.forEach(g => {
+    const card = el("div", undefined, "card");
+    card.appendChild(el("h2", g.label + " (" + g.tasks.length + ")"));
+    card.appendChild(table(g.tasks, taskCols));
+    app.appendChild(card);
+  });
+  if (s.activity.length) {
+    const a = el("div", undefined, "card");
+    a.appendChild(el("h2", "Recent activity"));
+    a.appendChild(table(s.activity, [
+      ["When", (td, r) => td.textContent = new Date(r.at).toLocaleString()],
+      ["What", (td, r) => td.textContent = r.event],
+      ["", (td, r) => td.textContent = r.org || ""],
+    ]));
+    app.appendChild(a);
+  }
+}
+async function refresh() {
+  try {
+    const r = await fetch("/status.json", {cache: "no-store"});
+    if (r.status === 401) { location.href = "/"; return; }
+    render(await r.json());
+    document.getElementById("updated").textContent = "Updated " + new Date().toLocaleTimeString();
+  } catch (e) {
+    document.getElementById("updated").textContent = "Could not refresh";
+  }
+}
+refresh();
+setInterval(refresh, 5000);
+</script>
+</body></html>

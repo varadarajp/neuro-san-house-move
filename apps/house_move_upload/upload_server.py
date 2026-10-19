@@ -27,7 +27,9 @@ from fastapi import Form
 from fastapi import Request
 from fastapi import UploadFile
 from fastapi.responses import HTMLResponse
+from fastapi.responses import JSONResponse
 
+from coded_tools.hackathon.house_move.case_status import CaseStatus
 from coded_tools.hackathon.house_move.house_move_data_store import HouseMoveDataStore
 from coded_tools.hackathon.house_move.import_statement import ImportStatement
 from coded_tools.hackathon.house_move.session_tokens import SessionTokens
@@ -39,7 +41,8 @@ logger = logging.getLogger(__name__)
 class StatementUploadServer:
     """
     A small FastAPI app on 127.0.0.1: sign in (as a demo bank customer, or as a new guest), copy the session token
-    into the chat client, and upload CSV, OFX or QFX statements to your own folder. It never lists or returns
+    into the chat client, upload CSV, OFX or QFX statements to your own folder, and follow your move on the
+    "My move" page (stage, what waits for your approval, tasks by status, recent activity). It never lists or returns
     uploaded files, and stores each file readable by its owner only. Use synthetic statements only.
     """
 
@@ -74,6 +77,9 @@ class StatementUploadServer:
 <small>Demo only: synthetic data. In production, sign-in is the bank's own and uploads are part of the app.</small>
 </body></html>"""
 
+    # The "My move" page renders the status JSON in the browser; see status_page.html.
+    STATUS_PAGE: str = (Path(__file__).parent / "status_page.html").read_text(encoding="utf-8")
+
     def __init__(
         self,
         upload_dir: Path | None = None,
@@ -89,6 +95,7 @@ class StatementUploadServer:
         self._tokens: SessionTokens = tokens or SessionTokens()
         self._data_store: HouseMoveDataStore = data_store or HouseMoveDataStore()
         self._parser: StatementParser = StatementParser()
+        self._status: CaseStatus = CaseStatus(tokens=self._tokens)
 
     def create_app(self) -> FastAPI:
         """
@@ -121,6 +128,19 @@ class StatementUploadServer:
             response: HTMLResponse = HTMLResponse(self._home(None, '<p class="ok">Signed out.</p>'))
             response.delete_cookie(StatementUploadServer.COOKIE)
             return response
+
+        @app.get("/status", response_class=HTMLResponse)
+        async def status_page(request: Request) -> HTMLResponse:
+            if self._tokens.verify(request.cookies.get(StatementUploadServer.COOKIE)) is None:
+                return HTMLResponse(self._home(None, self._error("Sign in to see your move.")), status_code=401)
+            return HTMLResponse(StatementUploadServer.STATUS_PAGE)
+
+        @app.get("/status.json")
+        async def status_json(request: Request) -> JSONResponse:
+            status: dict[str, Any] | None = self._status.build(request.cookies.get(StatementUploadServer.COOKIE))
+            if status is None:
+                return JSONResponse({"error": "not signed in"}, status_code=401)
+            return JSONResponse(status, headers={"Cache-Control": "no-store"})
 
         @app.post("/upload", response_class=HTMLResponse)
         async def upload(request: Request, file: UploadFile = File(...)) -> HTMLResponse:
@@ -193,6 +213,7 @@ class StatementUploadServer:
 <ul><li><strong>nsflow:</strong> paste it into the SlyData tab and tick <em>Use Edited Sly Data</em>.</li>
 <li><strong>Command line:</strong> pass it with <code>--sly_data</code>.</li></ul>
 <pre>{sly}</pre>
+<p><a href="/status"><button type="button">See your move's status</button></a></p>
 <form action="/signout" method="post"><button class="quiet" type="submit">Sign out</button></form>
 </div>
 <div class="card"><h2>Upload a bank statement</h2>
