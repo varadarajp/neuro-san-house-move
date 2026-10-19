@@ -1,7 +1,8 @@
 {
   "_note": "Rules checked against the cited sources on 2026-10-18. 'verified' means the obligation, legal flag, penalty note and source_url were checked. 'timing_basis' says whether the due date comes from the source ('source') or is this service's recommendation within what the source allows ('recommendation'). Re-check before any real use: rules and fines change.",
-  "_condition_format": "applies_if is a list of conditions that must all hold. An empty list means always. {\"fact\": name, \"equals\": value}, {\"fact\": name, \"in\": [values]} or {\"fact\": name, \"not_in\": [values]}. A missing fact makes the rule needs_review rather than applies. old_country and new_country come from council_lookup.",
+  "_condition_format": "applies_if is a list of conditions that must all hold. An empty list means always. {\"fact\": name, \"equals\": value}, {\"fact\": name, \"in\": [values]} or {\"fact\": name, \"not_in\": [values]}. A missing fact makes the rule needs_review rather than applies. old_country, new_country and same_council (both postcodes in one council) come from council_lookup.",
   "_timing_format": "anchor is completion or exchange. offset_days is signed (negative = before). working_days true counts Mon-Fri excluding bank holidays. window is before, on, on_or_after or after.",
+  "_ids_note": "Task IDs follow the order of this list (rule 1 is T-01), so add new rules at the end and never reorder or delete one: delete by making its applies_if impossible instead.",
   "rules": [
     {
       "id": "dvla_licence",
@@ -71,6 +72,10 @@
             "Wales",
             "Scotland"
           ]
+        },
+        {
+          "fact": "same_council",
+          "equals": false
         }
       ],
       "provider_category": null,
@@ -100,6 +105,10 @@
             "Wales",
             "Scotland"
           ]
+        },
+        {
+          "fact": "same_council",
+          "equals": false
         }
       ],
       "provider_category": null,
@@ -589,6 +598,39 @@
       "source_url": "https://www.citizensadvice.org.uk/consumer/energy/energy-supply/moving-home-your-energy-supply/moving-home-dealing-with-your-energy-supply/",
       "verify_hint": "Most banks let you change your address in their app or online banking. Placeholder source: no official rule.",
       "verified": false
+    },
+    {
+      "id": "council_tax_same_council",
+      "org": "Council tax: {new_council} (moving within the council area)",
+      "category": "government",
+      "applies_if": [
+        {
+          "fact": "new_country",
+          "in": [
+            "England",
+            "Wales",
+            "Scotland"
+          ]
+        },
+        {
+          "fact": "same_council",
+          "equals": true
+        }
+      ],
+      "provider_category": null,
+      "legal_requirement": true,
+      "penalty_note": "Councils can charge a £70 penalty if you fail, without reasonable excuse, to notify them of a change such as moving (Local Government Finance Act 1992, Schedule 3). Moving within one council area is one change of address: the bill moves to the new home from the day you become liable there.",
+      "timing": {
+        "anchor": "completion",
+        "offset_days": -7,
+        "working_days": false,
+        "window": "before"
+      },
+      "timing_basis": "recommendation",
+      "agent": "government_agent",
+      "source_url": "https://www.legislation.gov.uk/ukpga/1992/14/schedule/3",
+      "verify_hint": "Tell the council once, using its change-of-address or moving-within-the-area form, giving both addresses and the date. In Scotland this bill also collects water and sewerage charges.",
+      "verified": true
     }
   ]
 }

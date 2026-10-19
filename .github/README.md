@@ -66,7 +66,7 @@ rates through Land & Property Services instead of council tax, and an NI driving
 
 | Deterministic (code and rules) | AI (LLM agents) |
 |---|---|
-| Which obligations apply, from known facts (23 rules with source URLs) | Turning messy descriptors (`BRIGHTWATT EN DD 0034X`) into providers and life facts |
+| Which obligations apply, from known facts (24 rules with source URLs) | Turning messy descriptors (`BRIGHTWATT EN DD 0034X`) into providers and life facts |
 | Deadlines in working days, bank holidays per nation | Conversational intake: free text into structured facts |
 | Legal flags and penalties, copied from the rules file | Edge cases the rules do not cover (letting the old home, joint owners) |
 | The approval gate: nothing is sent unless its status is `approved` | Personalising each draft to the organisation |
@@ -150,9 +150,9 @@ flowchart TD
 - **Audit trail:** approvals, sends, direct updates, replans, replies and deletions are appended to
   `logs/house_move_audit.jsonl` with IDs and events only.
 
-### Security review status
+### Review status
 
-A review found four issues. Status:
+Two reviews found eight issues: four security issues, then four ways the plan could silently go wrong. Status:
 
 | Finding | Status |
 |---|---|
@@ -160,6 +160,10 @@ A review found four issues. Status:
 | Anyone could open any case by typing its ID; decrypted personal data went back to the client | **Fixed:** ownership checks, unguessable IDs, only the token goes upstream; regression tests |
 | "Consent" is text the LLM writes (`customer_words`), so it is not proof of what the customer said | **Fixed:** one-time codes checked against the customer's own message, captured by middleware; regression tests |
 | The agent that reads provider replies can also approve and send (prompt-injection risk) | **Fixed:** `reply_agent` reads replies and can only record them; reply text is labelled untrusted; `record_reply` acts only on a real reply's own, already-sent task; approvals need the customer's own code; regression tests |
+| Changing a fact grafted one task's progress onto another (task IDs were list positions) | **Fixed:** a task's ID comes from its rule's place in the rules file; progress is carried over by obligation, never by ID; existing plans keep their IDs; a dropped task that was already sent is reported; regression tests |
+| Home insurance was dated from completion when exchange was unknown, after the customer is liable | **Fixed:** with no exchange date it is dated today, with a warning, and dated on exchange once known; regression tests |
+| Dates were not checked (exchange after completion, a move date years in the past) | **Fixed:** one shared check for case creation and the timeline: exchange on or before completion and within a year of it; completion no more than 30 days past (someone who has just moved still has tasks) or two years ahead; regression tests |
+| Moving within one council created two council tax tasks | **Fixed:** a move within one council is one council tax task; regression tests |
 
 ## Getting started
 
@@ -291,13 +295,13 @@ House_Move_Agent.pptx                         pitch deck
 venv/bin/python -m pytest tests/coded_tools/hackathon tests/apps/house_move_upload -q
 ```
 
-95 tests cover the rules engine (including Scotland, Wales and Northern Ireland), working-day dates, the approval
+103 tests cover the rules engine (including Scotland, Wales and Northern Ireland), working-day dates, the approval
 gate, mock sending, replanning, replies, the case store and encryption, statement parsing, the portal, and the GP,
 school and water finders. `test_session_security.py` replays the review's attacks through the real session path:
 forged approved state, opening another customer's record, missing or tampered tokens, guessing case IDs, reading
 another person's upload, and parallel tool calls. `test_confirmation_codes.py` shows the LLM cannot confirm for the
 customer: no message, wrong, expired or reused codes, codes seen only in tool or AI text, and drafts changed after
-approval are all refused. `test_reply_isolation.py` checks that no agent that reads provider replies can approve or send, and that an injected reply changes nothing. `test_approve_on_portal.py` checks that a portal approval covers only the
+approval are all refused. `test_reply_isolation.py` checks that no agent that reads provider replies can approve or send, and that an injected reply changes nothing. `test_plan_integrity.py` replays the second review's findings. `test_approve_on_portal.py` checks that a portal approval covers only the
 wording the customer opened, only their own case, legal drafts one at a time, and that the owner's lock holds across
 processes. Network calls are mocked in tests.
 
@@ -306,7 +310,7 @@ processes. Network calls are mocked in tests.
 | Data | Source | Notes |
 |---|---|---|
 | Councils and coordinates | [postcodes.io](https://postcodes.io) | Live, with a cached fallback for the demo postcodes |
-| Obligations, penalties, timings | gov.uk, legislation.gov.uk, nidirect, Citizens Advice, Ofcom, Royal Mail, TV Licensing, NHS | 20 of 23 rules verified on 2026-10-18; each rule says whether its date comes from the source or is a recommendation |
+| Obligations, penalties, timings | gov.uk, legislation.gov.uk, nidirect, Citizens Advice, Ofcom, Royal Mail, TV Licensing, NHS | 21 of 24 rules verified on 2026-10-18; each rule says whether its date comes from the source or is a recommendation |
 | Bank holidays | [gov.uk/bank-holidays.json](https://www.gov.uk/bank-holidays.json) | England and Wales, Scotland, Northern Ireland |
 | GP practices | NHS Organisation Data Service | Live, no key |
 | Schools | Department for Education, Get Information About Schools | 26,483 open schools in England; Open Government Licence v3.0 |

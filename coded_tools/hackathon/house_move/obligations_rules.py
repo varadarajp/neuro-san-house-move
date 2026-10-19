@@ -95,7 +95,24 @@ class ObligationsRules(CaseTool):
             "new_council": new_council.get("council_name"),
             "old_country": old_council.get("country"),
             "new_country": new_council.get("country"),
+            # Moving within one council area is a single change of address there, not a move out and a move in.
+            "same_council": ObligationsRules._same_council(old_council, new_council),
         }
+
+    @staticmethod
+    def _same_council(old_council: dict[str, Any], new_council: dict[str, Any]) -> bool:
+        """
+        :return: true if both postcodes are in one council: by the council's code when both lookups give one,
+                 otherwise by name and country.
+        """
+        old_code: str | None = old_council.get("council_code")
+        new_code: str | None = new_council.get("council_code")
+        if old_code and new_code:
+            return old_code == new_code
+        return (old_council.get("council_name"), old_council.get("country")) == (
+            new_council.get("council_name"),
+            new_council.get("country"),
+        )
 
     @staticmethod
     def _evaluate(conditions: list[dict[str, Any]], facts: dict[str, Any]) -> tuple[str, list[str]]:
