@@ -47,6 +47,21 @@ const initials = (org) => (org || "?").replace(/\(.*?\)/g, "").split(/[\s:]+/).f
 let last = null, busy = false, sheetFor = null, lastFocus = null;
 const openGroups = new Set(["approved", "with_customer"]);
 
+// The case reference, with a copy button: quote it to the assistant or the bank about this move.
+function caseRef(reference) {
+  const row = el("div", undefined, "case-ref");
+  row.appendChild(el("span", "Case", "label"));
+  row.appendChild(el("code", reference));
+  const copy = el("button", "Copy", "copy");
+  copy.type = "button";
+  copy.setAttribute("aria-label", "Copy case reference " + reference);
+  copy.onclick = async () => {
+    try { await navigator.clipboard.writeText(reference); toast("Case reference copied."); }
+    catch (e) { toast("Case reference: " + reference); }
+  };
+  row.appendChild(copy);
+  return row;
+}
 function chip(text, cls) { return el("span", text, "chip" + (cls ? " " + cls : "")); }
 function taskRow(t, opts) {
   const li = el("li");
@@ -106,6 +121,7 @@ function render(s) {
   route.appendChild(el("span", "→", "arrow"));
   route.appendChild(document.createTextNode(c.to));
   hero.appendChild(route);
+  hero.appendChild(caseRef(c.reference));
   const dates = el("div", undefined, "dates");
   const left = daysUntil(c.completion_date);
   [[day(c.completion_date), "Completion" + (c.date_is_estimate ? " (estimate)" : "")

@@ -323,6 +323,10 @@ document.getElementById("copy").onclick = async () => {
     s.stages.forEach((_, i) =>
       seg.appendChild(el("i", "", i < s.stage_index ? "done" : i === s.stage_index ? "now" : "")));
     label.appendChild(seg);
+    const ref = el("div", undefined, "small muted");
+    ref.appendChild(document.createTextNode("Case "));
+    ref.appendChild(el("code", s.case.reference, "ref"));
+    box.appendChild(ref);
     box.appendChild(el("div", s.case.from + "  →  " + s.case.to, "small muted"));
     box.appendChild(label);
     const waiting = s.awaiting_approval.length;

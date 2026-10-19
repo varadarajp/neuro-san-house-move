@@ -172,6 +172,15 @@ pre.token { margin: 10px 0; padding: 12px; border-radius: 12px; background: var(
 .hero .eyebrow { font-size: .78rem; opacity: .85; font-weight: 600; letter-spacing: .02em; }
 .hero .route { font-size: 1.25rem; font-weight: 700; margin: 4px 0 2px; letter-spacing: -.01em; line-height: 1.25; }
 .hero .route .arrow { opacity: .7; margin: 0 4px; }
+.case-ref { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding: 6px 6px 6px 12px;
+            border-radius: 12px; background: rgb(255 255 255 / 14%); font-size: .82rem; }
+.case-ref .label { opacity: .85; font-weight: 600; }
+.case-ref code { flex: 1; min-width: 0; background: none; padding: 0; color: inherit; font-weight: 600;
+                 word-break: break-all; }
+.case-ref .copy { flex: none; border: 0; border-radius: 9px; padding: 6px 12px; min-height: 32px; cursor: pointer;
+                  background: rgb(255 255 255 / 22%); color: inherit; font-weight: 650; font-size: .8rem; }
+code.ref { word-break: break-all; color: var(--text); font-weight: 600; }
+@media (prefers-color-scheme: dark) { .case-ref, .case-ref .copy { background: rgb(0 0 0 / 16%); } }
 .hero .dates { display: flex; gap: 10px; margin-top: 14px; }
 .hero .date { flex: 1; background: rgb(255 255 255 / 14%); border-radius: 12px; padding: 9px 11px; }
 .hero .date b { display: block; font-size: 1.05rem; }
