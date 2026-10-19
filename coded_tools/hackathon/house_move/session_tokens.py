@@ -11,6 +11,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+from coded_tools.hackathon.house_move.key_folder import KeyFolder
+
 logger = logging.getLogger(__name__)
 
 
@@ -19,13 +21,15 @@ class SessionTokens:
     Issues and verifies HMAC-SHA256 signed tokens that say who the caller is (owner_id) and which bank customer
     records they may open. The sign-in page issues them; every stateful tool verifies them through CaseSession.
     A client can read a token but cannot forge or change one without the secret.
-    The secret comes from HOUSE_MOVE_SESSION_SECRET, or a key file created next to the case database. In production
-    the bank's own sign-in would issue the identity instead.
+    The secret comes from HOUSE_MOVE_SESSION_SECRET, or a key file in the owner-only key folder (KeyFolder), away
+    from the case data. In production the bank's own sign-in would issue the identity instead.
     """
 
     SECRET_ENV: str = "HOUSE_MOVE_SESSION_SECRET"
     # Repository root is three folders up: coded_tools/hackathon/house_move/session_tokens.py
-    DEFAULT_KEY_FILE: Path = Path(__file__).resolve().parents[3] / "case_data" / "session.key"
+    # Where earlier versions kept the secret; moved into the key folder on first use.
+    LEGACY_KEY_FILE: Path = Path(__file__).resolve().parents[3] / "case_data" / "session.key"
+    KEY_NAME: str = "session.key"
     LIFETIME_SECONDS: int = 7 * 24 * 3600
     VERSION: str = "v1"
 
@@ -34,7 +38,7 @@ class SessionTokens:
         :param secret: an explicit secret, used by unit tests.
         :param key_file: where to keep a generated secret when HOUSE_MOVE_SESSION_SECRET is not set.
         """
-        self._secret: bytes = secret or self._load_or_create_secret(key_file or SessionTokens.DEFAULT_KEY_FILE)
+        self._secret: bytes = secret or self._load_or_create_secret(key_file)
 
     def issue(self, owner_id: str, customers: list[str], lifetime_seconds: int | None = None) -> str:
         """
@@ -95,13 +99,15 @@ class SessionTokens:
         return base64.urlsafe_b64decode(text + "=" * (-len(text) % 4))
 
     @staticmethod
-    def _load_or_create_secret(key_file: Path) -> bytes:
+    def _load_or_create_secret(key_file: Path | None) -> bytes:
         """
         Reads the secret from the environment, then the key file, and creates the file if neither exists.
+        :param key_file: an explicit file; by default, the key folder's session key.
         """
         from_env: str | None = os.environ.get(SessionTokens.SECRET_ENV)
         if from_env:
             return from_env.encode("utf-8")
+        key_file = key_file or KeyFolder.path(SessionTokens.KEY_NAME, legacy=SessionTokens.LEGACY_KEY_FILE)
         if key_file.exists():
             return key_file.read_bytes().strip()
         logger.warning("No %s set: creating a local session secret at %s", SessionTokens.SECRET_ENV, key_file)

@@ -1,3 +1,4 @@
+from coded_tools.hackathon.house_move.draft_renderer import DraftRenderer
 from coded_tools.hackathon.house_move.letter_templates import LetterTemplates
 from coded_tools.hackathon.house_move.save_drafts import SaveDrafts
 from tests.coded_tools.hackathon.house_move.house_move_test_case import HouseMoveTestCase
@@ -20,7 +21,8 @@ class TestDrafts(HouseMoveTestCase):
 
     def test_save_renders_personal_data_and_awaits_approval(self):
         """
-        Profile placeholders are filled only in the stored rendered copy; the LLM gets IDs and gaps back.
+        The stored draft keeps its placeholders and no filled-in copy; rendering fills them from the profile; the LLM
+        gets IDs and gaps back.
         """
         sly_data: dict = HouseMoveTestState.planned()
         task: dict = HouseMoveTestState.task_for(sly_data, "energy_supplier")
@@ -34,9 +36,14 @@ class TestDrafts(HouseMoveTestCase):
         self.assertEqual(["account number"], saved.get("gaps_for_customer"))
         self.assertNotIn("Mayfield", str(result))
         draft: dict = sly_data.get("drafts").get(saved.get("draft_id"))
-        self.assertEqual("Moving: Sam Morgan and Alex Morgan", draft.get("rendered_subject"))
-        self.assertIn("27 November 2026 to 7 Mayfield Grove, Harrogate, HG1 1SY", draft.get("rendered_body"))
-        self.assertIn("[add your account number]", draft.get("rendered_body"))
+        self.assertNotIn("Mayfield", str(draft))
+        renderer: DraftRenderer = DraftRenderer(["account_number"])
+        subject, _, _ = renderer.render(draft.get("subject"), task, sly_data)
+        rendered, gaps, _ = renderer.render(draft.get("body"), task, sly_data)
+        self.assertEqual("Moving: Sam Morgan and Alex Morgan", subject)
+        self.assertIn("27 November 2026 to 7 Mayfield Grove, Harrogate, HG1 1SY", rendered)
+        self.assertIn("[add your account number]", rendered)
+        self.assertEqual(["account number"], gaps)
         self.assertEqual(body, draft.get("body"))
         self.assertEqual("awaiting_approval", task.get("status"))
 
@@ -49,9 +56,8 @@ class TestDrafts(HouseMoveTestCase):
         SaveDrafts().run(
             {"drafts": [{"task_id": task.get("task_id"), "subject": "x", "body": "Dear {{org_name}}"}]}, sly_data
         )
-        self.assertEqual(
-            "Dear Brightwatt Energy", sly_data.get("drafts").get(task.get("draft_id")).get("rendered_body")
-        )
+        draft: dict = sly_data.get("drafts").get(task.get("draft_id"))
+        self.assertEqual("Dear Brightwatt Energy", DraftRenderer([]).render(draft.get("body"), task, sly_data)[0])
 
     def test_unknown_placeholder_is_rejected(self):
         """

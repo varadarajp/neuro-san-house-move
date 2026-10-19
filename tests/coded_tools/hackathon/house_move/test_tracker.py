@@ -13,6 +13,7 @@ from coded_tools.hackathon.house_move.send_notification import SendNotification
 from coded_tools.hackathon.house_move.update_tasks import UpdateTasks
 from tests.coded_tools.hackathon.house_move.house_move_test_case import HouseMoveTestCase
 from tests.coded_tools.hackathon.house_move.house_move_test_state import HouseMoveTestState
+from tests.coded_tools.hackathon.house_move.recording_mail_gateway import RecordingMailGateway
 
 
 class TestTracker(HouseMoveTestCase):
@@ -22,6 +23,13 @@ class TestTracker(HouseMoveTestCase):
 
     NO_FILE: AuditLog = AuditLog(None)
     TODAY: date = date(2026, 10, 17)
+
+    def setUp(self):
+        """
+        A gateway that keeps what was delivered: the case stores only fingerprints of sent text.
+        """
+        super().setUp()
+        self.gateway: RecordingMailGateway = RecordingMailGateway()
 
     def approved_and_sent(self) -> dict:
         """
@@ -40,7 +48,7 @@ class TestTracker(HouseMoveTestCase):
         sly_data: dict = HouseMoveTestState.drafted()
         energy: dict = HouseMoveTestState.task_for(sly_data, "energy_supplier")
         broadband: dict = HouseMoveTestState.task_for(sly_data, "broadband")
-        sender = SendNotification(audit_log=self.NO_FILE)
+        sender = SendNotification(audit_log=self.NO_FILE, gateway=self.gateway)
 
         refused = sender.run({"task_ids": [energy.get("task_id")]}, sly_data)
         self.assertEqual([], refused.get("sent_to_organisation") + refused.get("packs_for_customer"))
@@ -55,7 +63,9 @@ class TestTracker(HouseMoveTestCase):
         self.assertIn(energy.get("task_id"), to_org)
         self.assertIn(broadband.get("task_id"), to_customer)
         self.assertEqual("sent", energy.get("status"))
-        self.assertIn("27 November 2026", sly_data.get("outbox")[0].get("body"))
+        self.assertIn("27 November 2026", self.gateway.messages[0].get("body"))
+        self.assertNotIn("body", sly_data.get("outbox")[0])
+        self.assertEqual(64, len(sly_data.get("outbox")[0].get("content_sha256")))
 
     def test_direct_debit_reference_lets_email_go_to_organisation(self):
         """
@@ -80,9 +90,10 @@ class TestTracker(HouseMoveTestCase):
         self.assertEqual([], saved.get("saved")[0].get("gaps_for_customer"))
 
         HouseMoveTestState.approve(sly_data, [broadband.get("task_id")])
-        result = SendNotification(audit_log=self.NO_FILE).run({"task_ids": [broadband.get("task_id")]}, sly_data)
+        sender = SendNotification(audit_log=self.NO_FILE, gateway=self.gateway)
+        result = sender.run({"task_ids": [broadband.get("task_id")]}, sly_data)
         self.assertEqual(broadband.get("task_id"), result.get("sent_to_organisation")[0].get("task_id"))
-        self.assertIn("Ref FB-55120934", sly_data.get("outbox")[-1].get("body"))
+        self.assertIn("Ref FB-55120934", self.gateway.messages[-1].get("body"))
 
     def test_only_the_bank_address_task_can_be_direct(self):
         """
@@ -143,9 +154,10 @@ class TestTracker(HouseMoveTestCase):
         self.assertEqual("needs_action", HouseMoveTestState.task_for(sly_data, "tv_licensing").get("status"))
 
         HouseMoveTestState.approve_everything(sly_data)
-        resent = SendNotification(audit_log=self.NO_FILE).run({"task_ids": [rebuilt_energy.get("task_id")]}, sly_data)
+        sender = SendNotification(audit_log=self.NO_FILE, gateway=self.gateway)
+        resent = sender.run({"task_ids": [rebuilt_energy.get("task_id")]}, sly_data)
         self.assertEqual(1, len(resent.get("sent_to_organisation")))
-        self.assertIn("11 December 2026", sly_data.get("outbox")[-1].get("body"))
+        self.assertIn("11 December 2026", self.gateway.messages[-1].get("body"))
 
     def test_inbox_and_reply_handling(self):
         """
@@ -155,7 +167,10 @@ class TestTracker(HouseMoveTestCase):
 
         sly_data: dict = self.approved_and_sent()
         replies: list = CheckInbox().run({}, sly_data).get("replies")
-        self.assertEqual(["R-1", "R-2", "R-3"], [reply.get("reply_id") for reply in replies])
+        # Broadband's letter still needs the account number, so it went to the customer as a pack: no reply (R-3).
+        broadband: dict = HouseMoveTestState.task_for(sly_data, "broadband")
+        self.assertEqual(SendNotification.TO_CUSTOMER, broadband.get("delivery"))
+        self.assertEqual(["R-1", "R-2"], [reply.get("reply_id") for reply in replies])
 
         energy_reply: dict = replies[0]
         tool = RecordReply(self.NO_FILE)
@@ -175,7 +190,7 @@ class TestTracker(HouseMoveTestCase):
             sly_data,
         )
         self.assertEqual("needs_action", result.get("status"))
-        self.assertEqual(["R-2", "R-3"], [r.get("reply_id") for r in CheckInbox().run({}, sly_data).get("replies")])
+        self.assertEqual(["R-2"], [r.get("reply_id") for r in CheckInbox().run({}, sly_data).get("replies")])
 
     def test_replies_still_arrive_after_redraft(self):
         """

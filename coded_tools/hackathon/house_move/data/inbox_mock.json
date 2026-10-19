@@ -1,20 +1,29 @@
 {
-  "_note": "Scripted provider replies. A reply only arrives once its task has been sent. Providers are fictional.",
+  "_note": "Scripted provider replies for the demo bank customer only (customer_ids). A reply arrives only once its task has actually gone to the organisation, and only from that task's own provider. Providers are fictional.",
   "replies": [
     {
       "reply_id": "R-1",
+      "customer_ids": [
+        "C-10042"
+      ],
       "obligation_id": "energy_supplier",
       "from": "Brightwatt Energy",
       "body": "Thanks for letting us know about your move. Your closing account number is 88412. Please confirm your electricity meter serial number so we can take your final reading on your move day."
     },
     {
       "reply_id": "R-2",
+      "customer_ids": [
+        "C-10042"
+      ],
       "obligation_id": "home_insurance",
       "from": "Hearthguard Home Insurance",
       "body": "We have noted your new address. Your policy will move to the new property from your exchange date. No further action is needed."
     },
     {
       "reply_id": "R-3",
+      "customer_ids": [
+        "C-10042"
+      ],
       "obligation_id": "broadband",
       "from": "Fibrely Broadband",
       "body": "Good news: we can provide service at your new address. An engineer is booked for your move day between 8am and 1pm. Reply to this message if you need to change the date."

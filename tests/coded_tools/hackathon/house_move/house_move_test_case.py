@@ -8,14 +8,15 @@ from cryptography.fernet import Fernet
 
 from coded_tools.hackathon.house_move.case_store import CaseStore
 from coded_tools.hackathon.house_move.import_statement import ImportStatement
+from coded_tools.hackathon.house_move.key_folder import KeyFolder
 from coded_tools.hackathon.house_move.personal_data_vault import PersonalDataVault
 from coded_tools.hackathon.house_move.session_tokens import SessionTokens
 
 
 class HouseMoveTestCase(TestCase):
     """
-    Base class for House Move tests: every test gets its own temporary case database, vault key, session secret and
-    uploads folder, so nothing touches real data and tests cannot see each other's cases.
+    Base class for House Move tests: every test gets its own temporary case database, vault key, session secret, key
+    folder and uploads folder, so nothing touches real data and tests cannot see each other's cases.
     """
 
     ENV_KEYS: tuple[str, ...] = (
@@ -23,6 +24,7 @@ class HouseMoveTestCase(TestCase):
         PersonalDataVault.KEY_ENV,
         SessionTokens.SECRET_ENV,
         ImportStatement.UPLOAD_ENV,
+        KeyFolder.DIR_ENV,
     )
 
     def setUp(self):
@@ -37,6 +39,7 @@ class HouseMoveTestCase(TestCase):
         self.uploads: Path = self.folder / "uploads"
         self.uploads.mkdir()
         os.environ[ImportStatement.UPLOAD_ENV] = str(self.uploads)
+        os.environ[KeyFolder.DIR_ENV] = str(self.folder / "keys")
 
     def tearDown(self):
         """

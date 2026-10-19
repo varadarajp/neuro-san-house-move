@@ -12,6 +12,7 @@ from coded_tools.hackathon.house_move.case_tool import CaseTool
 from coded_tools.hackathon.house_move.draft_fingerprint import DraftFingerprint
 from coded_tools.hackathon.house_move.draft_renderer import DraftRenderer
 from coded_tools.hackathon.house_move.house_move_data_store import HouseMoveDataStore
+from coded_tools.hackathon.house_move.mock_mail_gateway import MockMailGateway
 
 logger = logging.getLogger(__name__)
 
@@ -30,13 +31,20 @@ class SendNotification(CaseTool):
     TO_ORGANISATION: str = "mock email or letter sent to the organisation"
     TO_CUSTOMER: str = "pre-filled pack sent to the customer to complete and submit"
 
-    def __init__(self, data_store: HouseMoveDataStore | None = None, audit_log: AuditLog | None = None):
+    def __init__(
+        self,
+        data_store: HouseMoveDataStore | None = None,
+        audit_log: AuditLog | None = None,
+        gateway: MockMailGateway | None = None,
+    ):
         """
         :param data_store: source of the customer-supplied placeholder list.
         :param audit_log: where sends are recorded. Defaults to the audit file under logs/.
+        :param gateway: delivers the rendered message. Defaults to the mock, which keeps nothing.
         """
         self._data_store: HouseMoveDataStore = data_store or HouseMoveDataStore()
         self._audit_log: AuditLog = audit_log or AuditLog()
+        self._gateway: MockMailGateway = gateway or MockMailGateway()
 
     def run(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
         """
@@ -110,7 +118,9 @@ class SendNotification(CaseTool):
 
     def _send(self, task: dict[str, Any], sly_data: dict[str, Any], renderer: DraftRenderer) -> dict[str, Any]:
         """
-        Renders the draft with today's details, files it in the outbox, marks the task sent and audits it.
+        Renders the draft with today's details and hands it to the gateway, then records the send in the outbox,
+        marks the task sent and audits it. The outbox keeps a fingerprint of the rendered text, not the text: personal
+        details stay in the vault (or the bank's record), not in the saved plan.
         """
         draft: dict[str, Any] = sly_data.get("drafts").get(task.get("draft_id"))
         subject, _, _ = renderer.render(draft.get("subject", ""), task, sly_data)
@@ -120,18 +130,24 @@ class SendNotification(CaseTool):
         sent_at: str = datetime.now(UTC).isoformat(timespec="seconds")
         ref: str = "MSG-" + hashlib.sha256(f"{task.get('task_id')}{body}".encode()).hexdigest()[:8]
 
+        self._gateway.deliver(
+            {"ref": ref, "task_id": task.get("task_id"), "delivery": delivery, "subject": subject, "body": body}
+        )
         sly_data.setdefault("outbox", []).append(
             {
                 "ref": ref,
                 "task_id": task.get("task_id"),
                 "delivery": delivery,
                 "sent_at": sent_at,
-                "subject": subject,
-                "body": body,
+                "draft_hash": DraftFingerprint.of(draft),
+                "content_sha256": hashlib.sha256(f"{subject}\n{body}".encode()).hexdigest(),
             }
         )
         task["status"] = "sent"
         task["sent_ref"] = ref
+        # Whether it reached the organisation or is a pack the customer still has to send: only the first can get
+        # a reply (check_inbox), and the portal shows packs as waiting for the customer.
+        task["delivery"] = delivery
         task["sent_due_date"] = task.get("due_date")
         task.setdefault("history", []).append(f"sent {ref}: {delivery}")
         self._audit_log.record(sly_data, "sent", task.get("task_id"), f"{ref}, {delivery}")

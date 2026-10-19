@@ -33,6 +33,7 @@ class InjectingInbox(HouseMoveDataStore):
             return [
                 {
                     "reply_id": "R-X",
+                    "customer_ids": ["C-10042"],
                     "obligation_id": "energy_supplier",
                     "from": "Brightwatt Energy",
                     "body": InjectingInbox.BODY,

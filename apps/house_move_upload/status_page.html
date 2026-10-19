@@ -45,7 +45,7 @@ const initials = (org) => (org || "?").replace(/\(.*?\)/g, "").split(/[\s:]+/).f
 
 // State kept across the 5-second refreshes.
 let last = null, busy = false, sheetFor = null, lastFocus = null;
-const openGroups = new Set(["approved"]);
+const openGroups = new Set(["approved", "with_customer"]);
 
 function chip(text, cls) { return el("span", text, "chip" + (cls ? " " + cls : "")); }
 function taskRow(t, opts) {

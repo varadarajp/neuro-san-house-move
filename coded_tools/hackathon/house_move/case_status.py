@@ -5,6 +5,7 @@ from typing import Any
 from coded_tools.hackathon.house_move.case_session import CaseSession
 from coded_tools.hackathon.house_move.case_store import CaseStore
 from coded_tools.hackathon.house_move.draft_fingerprint import DraftFingerprint
+from coded_tools.hackathon.house_move.send_notification import SendNotification
 from coded_tools.hackathon.house_move.session_tokens import SessionTokens
 
 
@@ -29,6 +30,7 @@ class CaseStatus:
     }
     GROUPS: tuple[tuple[str, str], ...] = (
         ("needs_action", "Needs your action"),
+        ("with_customer", "Ready for you to send"),
         ("awaiting_approval", "Waiting for your approval"),
         ("approved", "Approved, not sent yet"),
         ("planned", "Planned"),
@@ -84,7 +86,7 @@ class CaseStatus:
             "hint": CaseStatus.STAGE_HINTS.get(stage),
             "awaiting_approval": [self._line(t) for t in tasks if t.get("status") == "awaiting_approval"],
             "pending_confirmations": self._pending(view.get("owner"), view.get("case_id"), tasks),
-            "groups": self._groups(tasks),
+            "groups": self._groups(self._with_delivery(tasks, view.get("outbox") or [])),
             "activity": self._activity(view.get("audit_log") or [], tasks),
         }
 
@@ -163,6 +165,21 @@ class CaseStatus:
             "legal_requirement": bool(task.get("legal_requirement")),
             "follow_up": task.get("follow_up") or [],
         }
+
+    @staticmethod
+    def _with_delivery(tasks: list[dict[str, Any]], outbox: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """
+        Shows a sent pack the customer still has to submit as "with_customer", not "sent": it has not reached the
+        organisation. Plans saved before tasks recorded their delivery are matched to the outbox by reference.
+        """
+        delivered: dict[str, str] = {entry.get("ref"): entry.get("delivery") for entry in outbox}
+        shown: list[dict[str, Any]] = []
+        for task in tasks:
+            delivery: str | None = task.get("delivery") or delivered.get(task.get("sent_ref"))
+            if task.get("status") == "sent" and delivery == SendNotification.TO_CUSTOMER:
+                task = {**task, "status": "with_customer"}
+            shown.append(task)
+        return shown
 
     def _groups(self, tasks: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """

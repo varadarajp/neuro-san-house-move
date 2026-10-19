@@ -27,10 +27,15 @@ class CaseStore:
     - vault: a standalone customer's personal data (full names, street lines, email), encrypted per field.
     - case_state: the plan state of every case, bank or standalone, per owner, encrypted as one blob.
     - active_cases: which case each signed-in owner is working on.
-    - transactions and manual providers: what a standalone customer gave for discovery. Raw files are never kept.
+    - sealed_transactions and manual providers: what a standalone customer gave for discovery. Statement rows are
+      encrypted, one token per imported statement; raw files are never kept. (The plain "transactions" table is
+      only read to encrypt rows saved by earlier versions.)
+    The database file and its folder are owner-only (0600 and 0700), and the keys live elsewhere (KeyFolder).
     - consents: the customer's own words agreeing to each use of their data.
     - customer_messages: each owner's latest chat message, captured by CustomerMessageMiddleware (not by the LLM).
     - pending_actions: approvals, imports and deletions waiting for the customer to type their confirmation code.
+    - pending_intake: personal details a signed-in guest entered on the portal before their case existed, encrypted,
+      until create_case moves them into the vault.
     """
 
     PREFIX: str = "S-"
@@ -45,6 +50,8 @@ class CaseStore:
             case_id TEXT, field TEXT, token BLOB, PRIMARY KEY (case_id, field));
         CREATE TABLE IF NOT EXISTS transactions (
             case_id TEXT, transaction_id TEXT, date TEXT, descriptor TEXT, amount REAL, type TEXT, source TEXT);
+        CREATE TABLE IF NOT EXISTS sealed_transactions (
+            case_id TEXT, source TEXT, token BLOB, PRIMARY KEY (case_id, source));
         CREATE TABLE IF NOT EXISTS manual_providers (
             case_id TEXT, category TEXT, provider_name TEXT);
         CREATE TABLE IF NOT EXISTS consents (
@@ -55,6 +62,8 @@ class CaseStore:
             owner_id TEXT PRIMARY KEY, case_id TEXT, updated_at TEXT);
         CREATE TABLE IF NOT EXISTS customer_messages (
             owner_id TEXT PRIMARY KEY, text TEXT, at TEXT);
+        CREATE TABLE IF NOT EXISTS pending_intake (
+            owner_id TEXT PRIMARY KEY, token BLOB, at TEXT);
         CREATE TABLE IF NOT EXISTS pending_actions (
             action_id TEXT PRIMARY KEY, owner_id TEXT, case_id TEXT, kind TEXT, code_hash TEXT, payload_json TEXT,
             created_at TEXT, expires_at TEXT);
@@ -70,6 +79,7 @@ class CaseStore:
         """
         self._db_path: Path = db_path or Path(os.environ.get(CaseStore.DB_ENV) or CaseStore.DEFAULT_DB)
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._db_path.parent.chmod(0o700)
         self._vault: PersonalDataVault = vault or PersonalDataVault(self._db_path.with_suffix(".key"))
         with closing(self._connect()) as connection, connection:
             connection.executescript(CaseStore.SCHEMA)
@@ -77,6 +87,8 @@ class CaseStore:
             if "owner_id" not in columns:
                 # Cases created before ownership existed get no owner, so nobody can open them.
                 connection.execute("ALTER TABLE cases ADD COLUMN owner_id TEXT")
+        self._db_path.chmod(0o600)
+        self._seal_plain_transactions()
 
     @staticmethod
     def is_case(customer_id: str | None) -> bool:
@@ -121,6 +133,47 @@ class CaseStore:
                     stored.append(field)
         return stored
 
+    def personal_on_file(self, case_id: str) -> list[str]:
+        """
+        :return: which personal fields the vault holds for a case, without decrypting them.
+        """
+        with closing(self._connect()) as connection:
+            rows: list[tuple] = connection.execute("SELECT field FROM vault WHERE case_id = ?", (case_id,)).fetchall()
+        return sorted(row[0] for row in rows)
+
+    def save_pending_intake(self, owner_id: str, personal: dict[str, Any]) -> None:
+        """
+        Holds a guest's personal details, encrypted, until their case is created. A later save replaces it.
+        """
+        token: bytes = self._vault.encrypt(json.dumps(personal))
+        with closing(self._connect()) as connection, connection:
+            connection.execute(
+                "INSERT OR REPLACE INTO pending_intake VALUES (?, ?, ?)", (owner_id, token, self._now())
+            )
+
+    def take_pending_intake(self, owner_id: str) -> dict[str, Any]:
+        """
+        :return: the owner's pending personal details (empty if none), removing them from the holding table.
+        """
+        with closing(self._connect()) as connection, connection:
+            row: tuple | None = connection.execute(
+                "SELECT token FROM pending_intake WHERE owner_id = ?", (owner_id,)
+            ).fetchone()
+            connection.execute("DELETE FROM pending_intake WHERE owner_id = ?", (owner_id,))
+        plain: str | None = self._vault.decrypt(row[0]) if row else None
+        return json.loads(plain) if plain else {}
+
+    def pending_intake_fields(self, owner_id: str) -> list[str]:
+        """
+        :return: which personal fields a guest has given before their case exists.
+        """
+        with closing(self._connect()) as connection:
+            row: tuple | None = connection.execute(
+                "SELECT token FROM pending_intake WHERE owner_id = ?", (owner_id,)
+            ).fetchone()
+        plain: str | None = self._vault.decrypt(row[0]) if row else None
+        return sorted(key for key, value in (json.loads(plain) if plain else {}).items() if value)
+
     def get_customer(self, case_id: str) -> dict[str, Any] | None:
         """
         :return: the full record, personal data decrypted, in the same shape as a CRM customer record,
@@ -143,6 +196,9 @@ class CaseStore:
                 personal[field] = json.loads(plain)
         record["customer_id"] = case_id
         record["names"] = personal.get("full_names") or record.get("first_names") or []
+        # Kept apart from "names" (which falls back to first names for display), so a letter that needs full names
+        # shows a gap until the customer has given them.
+        record["full_names"] = personal.get("full_names") or []
         record["email"] = personal.get("email", "")
         record.setdefault("old_address", {})["line1"] = personal.get("old_address_line1")
         record.setdefault("new_address", {})["line1"] = personal.get("new_address_line1")
@@ -162,42 +218,64 @@ class CaseStore:
 
     def add_transactions(self, case_id: str, rows: list[dict[str, Any]], source: str) -> int:
         """
-        Stores parsed statement rows. Rows from the same source replace any earlier import of it.
+        Stores parsed statement rows, encrypted as one token per statement. Rows from the same source replace any
+        earlier import of it.
         :return: the number of rows stored.
         """
+        numbered: list[dict[str, Any]] = [
+            {
+                "transaction_id": f"{source[:12]}-{index:04d}",
+                "date": row.get("date"),
+                "descriptor": row.get("descriptor"),
+                "amount": row.get("amount"),
+                "type": row.get("type"),
+            }
+            for index, row in enumerate(rows, start=1)
+        ]
+        token: bytes = self._vault.encrypt(json.dumps(numbered))
         with closing(self._connect()) as connection, connection:
             connection.execute("DELETE FROM transactions WHERE case_id = ? AND source = ?", (case_id, source))
-            connection.executemany(
-                "INSERT INTO transactions VALUES (?, ?, ?, ?, ?, ?, ?)",
-                [
-                    (
-                        case_id,
-                        f"{source[:12]}-{index:04d}",
-                        row.get("date"),
-                        row.get("descriptor"),
-                        row.get("amount"),
-                        row.get("type"),
-                        source,
-                    )
-                    for index, row in enumerate(rows, start=1)
-                ],
-            )
+            connection.execute("INSERT OR REPLACE INTO sealed_transactions VALUES (?, ?, ?)", (case_id, source, token))
         return len(rows)
 
     def get_transactions(self, case_id: str) -> list[dict[str, Any]]:
         """
-        :return: the case's imported transactions, oldest first.
+        :return: the case's imported transactions, decrypted, oldest first.
         """
         with closing(self._connect()) as connection:
-            rows: list[tuple] = connection.execute(
-                "SELECT transaction_id, date, descriptor, amount, type FROM transactions "
-                "WHERE case_id = ? ORDER BY date",
-                (case_id,),
+            tokens: list[tuple] = connection.execute(
+                "SELECT token FROM sealed_transactions WHERE case_id = ?", (case_id,)
             ).fetchall()
-        return [
-            {"transaction_id": tid, "date": day, "descriptor": descriptor, "amount": amount, "type": kind}
-            for tid, day, descriptor, amount, kind in rows
-        ]
+        rows: list[dict[str, Any]] = []
+        for (token,) in tokens:
+            plain: str | None = self._vault.decrypt(token)
+            if plain is not None:
+                rows.extend(json.loads(plain))
+        return sorted(rows, key=lambda row: row.get("date") or "")
+
+    def _seal_plain_transactions(self) -> None:
+        """
+        Encrypts statement rows that earlier versions stored in plain text, then deletes the plain rows.
+        """
+        with closing(self._connect()) as connection:
+            plain: list[tuple] = connection.execute(
+                "SELECT case_id, source, date, descriptor, amount, type FROM transactions ORDER BY rowid"
+            ).fetchall()
+        if not plain:
+            return
+        statements: dict[tuple[str, str], list[dict[str, Any]]] = {}
+        for case_id, source, day, descriptor, amount, kind in plain:
+            statements.setdefault((case_id, source), []).append(
+                {"date": day, "descriptor": descriptor, "amount": amount, "type": kind}
+            )
+        for (case_id, source), rows in statements.items():
+            self.add_transactions(case_id, rows, source)
+        with closing(self._connect()) as connection, connection:
+            connection.execute("DELETE FROM transactions")
+        with closing(self._connect()) as connection:
+            # Rebuilds the file so no copy of the plain rows is left in free pages.
+            connection.execute("VACUUM")
+        logger.info("Encrypted %d statement rows stored in plain text by an earlier version", len(plain))
 
     def add_manual_providers(self, case_id: str, providers: list[dict[str, Any]]) -> int:
         """
@@ -406,6 +484,7 @@ class CaseStore:
             for table in (
                 "vault",
                 "transactions",
+                "sealed_transactions",
                 "manual_providers",
                 "consents",
                 "case_state",
@@ -447,9 +526,12 @@ class CaseStore:
     def _connect(self) -> sqlite3.Connection:
         """
         Opens a new connection per operation: tools run on worker threads, and SQLite connections are not shared
-        between threads.
+        between threads. secure_delete makes SQLite overwrite deleted content (erased cases, consumed intake), so it
+        does not linger.
         """
-        return sqlite3.connect(self._db_path)
+        connection: sqlite3.Connection = sqlite3.connect(self._db_path)
+        connection.execute("PRAGMA secure_delete = ON")
+        return connection
 
     @staticmethod
     def _precise_now() -> str:

@@ -13,6 +13,7 @@ Run from the repository root:
 then open http://127.0.0.1:8090
 """
 
+import asyncio
 import html
 import json
 import logging
@@ -35,8 +36,10 @@ from apps.house_move_upload.portal_icons import PortalIcons
 from coded_tools.hackathon.house_move.approve_on_portal import ApproveOnPortal
 from coded_tools.hackathon.house_move.audit_log import AuditLog
 from coded_tools.hackathon.house_move.case_status import CaseStatus
+from coded_tools.hackathon.house_move.case_store import CaseStore
 from coded_tools.hackathon.house_move.house_move_data_store import HouseMoveDataStore
 from coded_tools.hackathon.house_move.import_statement import ImportStatement
+from coded_tools.hackathon.house_move.personal_details import PersonalDetails
 from coded_tools.hackathon.house_move.session_tokens import SessionTokens
 from coded_tools.hackathon.house_move.statement_parser import StatementParser
 
@@ -68,6 +71,7 @@ class StatementUploadServer:
         ("/", "Home", PortalIcons.HOME),
         ("/status", "My move", PortalIcons.ROUTE),
         ("/upload", "Upload", PortalIcons.UPLOAD),
+        ("/details", "Details", PortalIcons.USER),
     )
     CURRENT: str = ' aria-current="page"'
     DEMO_NOTE: str = (
@@ -94,12 +98,15 @@ class StatementUploadServer:
         self._parser: StatementParser = StatementParser()
         self._status: CaseStatus = CaseStatus(tokens=self._tokens)
         self._audit_log: AuditLog = audit_log or AuditLog()
+        # Holds the personal details given on the "Your details" form; opened on first use (see _case_store).
+        self._store: CaseStore | None = None
 
     def create_app(self) -> FastAPI:
         """
         :return: the FastAPI app.
         """
         app: FastAPI = FastAPI(title="House Move portal", docs_url=None, redoc_url=None)
+        ImportStatement.purge_stale(self._upload_dir)
 
         # Route handlers are nested so FastAPI can register them against this instance's settings.
         @app.get("/", response_class=HTMLResponse)
@@ -111,7 +118,9 @@ class StatementUploadServer:
             return Response(StatementUploadServer.STYLES, media_type="text/css")
 
         @app.post("/signin", response_class=HTMLResponse)
-        async def sign_in(who: str = Form(...)) -> HTMLResponse:
+        async def sign_in(request: Request, who: str = Form(...)) -> HTMLResponse:
+            if not self._from_this_site(request):
+                return HTMLResponse(self._home(None, self._error("Please sign in from this page.")), status_code=403)
             token: str | None = self._issue(who)
             if token is None:
                 return HTMLResponse(self._home(None, self._error("Choose a customer or guest.")), status_code=400)
@@ -126,7 +135,9 @@ class StatementUploadServer:
             return response
 
         @app.post("/signout", response_class=HTMLResponse)
-        async def sign_out() -> HTMLResponse:
+        async def sign_out(request: Request) -> HTMLResponse:
+            if not self._from_this_site(request):
+                return HTMLResponse(self._home(None, self._error("Please sign out from this page.")), status_code=403)
             response: HTMLResponse = HTMLResponse(self._home(None, self._ok("Signed out.")))
             response.delete_cookie(StatementUploadServer.COOKIE)
             return response
@@ -188,9 +199,35 @@ class StatementUploadServer:
             claims: dict[str, Any] | None = self._tokens.verify(token)
             if claims is None:
                 return HTMLResponse(self._home(None, self._error("Sign in before uploading.")), status_code=401)
+            if not self._from_this_site(request):
+                return HTMLResponse(self._upload_screen(token, self._error("Upload from this page.")), status_code=403)
             content: bytes = await file.read(ImportStatement.MAX_BYTES + 1)
             message, status = self._save(claims.get("sub"), file.filename or "", content)
             return HTMLResponse(self._upload_screen(token, message), status_code=status)
+
+        @app.get("/details", response_class=HTMLResponse)
+        async def details_page(request: Request) -> HTMLResponse:
+            token: str | None = request.cookies.get(StatementUploadServer.COOKIE)
+            if self._tokens.verify(token) is None:
+                return HTMLResponse(self._home(None, self._error("Sign in to add your details.")), status_code=401)
+            return HTMLResponse(await asyncio.to_thread(self._details_screen, token, "", {}, {}))
+
+        @app.post("/details", response_class=HTMLResponse)
+        async def save_details(request: Request) -> HTMLResponse:
+            token: str | None = request.cookies.get(StatementUploadServer.COOKIE)
+            claims: dict[str, Any] | None = self._tokens.verify(token)
+            if claims is None:
+                return HTMLResponse(self._home(None, self._error("Sign in to add your details.")), status_code=401)
+            if not self._from_this_site(request):
+                return HTMLResponse(
+                    self._home(token, self._error("Save your details from this page.")), status_code=403
+                )
+            form: dict[str, Any] = dict(await request.form())
+            message, status, errors = await asyncio.to_thread(self._save_details, claims, form)
+            # On an error the typed values go back into the form; once saved, nothing personal is echoed back.
+            typed: dict[str, Any] = form if errors else {}
+            screen: str = await asyncio.to_thread(self._details_screen, token, message, errors, typed)
+            return HTMLResponse(screen, status_code=status)
 
         return app
 
@@ -428,6 +465,108 @@ document.getElementById("upload-form").onsubmit = () => { send.disabled = true; 
         names: str = self._demo_customers().get(customers[0], "")
         return names.split()[0] if names else None
 
+    def _case_store(self) -> CaseStore:
+        """
+        :return: the case store, opened on first use so the portal starts without touching the database.
+        """
+        if self._store is None:
+            self._store = CaseStore()
+        return self._store
+
+    def _own_standalone_case(self, owner: str) -> str | None:
+        """
+        :return: the owner's active case if it is a standalone case they own, else None.
+        """
+        store: CaseStore = self._case_store()
+        case_id: str | None = store.get_active(owner)
+        if CaseStore.is_case(case_id) and store.case_owner(case_id) == owner:
+            return case_id
+        return None
+
+    def _save_details(self, claims: dict[str, Any], form: dict[str, Any]) -> tuple[str, int, dict[str, str]]:
+        """
+        Checks the "Your details" form and stores it encrypted: in the vault of the owner's standalone case, or held
+        for create_case if the case does not exist yet.
+        :return: (HTML message, HTTP status, errors by field).
+        """
+        if claims.get("customers"):
+            return self._error("Your details come from your bank record, so there is nothing to add here."), 400, {}
+        clean, errors = PersonalDetails.check(form)
+        if errors:
+            return self._error("Please check the highlighted fields."), 400, errors
+        owner: str = claims.get("sub")
+        case_id: str | None = self._own_standalone_case(owner)
+        if case_id is None:
+            self._case_store().save_pending_intake(owner, clean)
+            where: str = "They will be added to your case when you start it in the chat."
+        else:
+            self._case_store().save_personal(case_id, clean)
+            where = "They are on your case now; letters drafted from here on will use them."
+        logger.info("Saved personal details for one owner (%s)", "case" if case_id else "pending")
+        return self._ok(f"Saved, encrypted. {where}"), 200, {}
+
+    def _details_screen(self, token: str | None, message: str, errors: dict[str, str], typed: dict[str, Any]) -> str:
+        """
+        The secure form for a guest's full names, street addresses and email. Shows which details are on file but
+        never their values. A bank customer's details come from the bank record, so they get no form.
+        """
+        claims: dict[str, Any] = self._tokens.verify(token) or {}
+        head: str = '<div class="section-head"><h2>Your details</h2></div>'
+        if claims.get("customers"):
+            body: str = f"""{head}<div class="card"><div style="display:flex;gap:12px;align-items:flex-start">
+  <span class="avatar">{PortalIcons.SHIELD}</span><div><h2 class="title">Already on file</h2>
+  <p class="small muted">As a bank customer, your name, addresses and email come from your bank record. Letters use
+  them automatically when they are sent.</p></div></div></div>
+{StatementUploadServer.DEMO_NOTE}"""
+            return self._page(token, "/details", message + body)
+
+        owner: str = claims.get("sub", "")
+        case_id: str | None = self._own_standalone_case(owner)
+        store: CaseStore = self._case_store()
+        on_file: set[str] = set(store.personal_on_file(case_id) if case_id else store.pending_intake_fields(owner))
+        status: str = "".join(
+            f'<span class="chip{" soon" if field not in on_file else ""}">'
+            f"{'✓' if field in on_file else '•'} {html.escape(label)}</span> "
+            for field, label in PersonalDetails.LABELS.items()
+        )
+
+        def field(name: str, label: str, kind: str, hint: str, autocomplete: str) -> str:
+            # Nested: renders one labelled input with its error, escaping anything typed back into it.
+            value: str = html.escape(str(typed.get(name) or ""))
+            error: str = errors.get(name, "")
+            control: str = (
+                f'<textarea name="{name}" id="{name}" rows="2" autocomplete="{autocomplete}" '
+                f"required>{value}</textarea>"
+                if kind == "textarea"
+                else f'<input type="{kind}" name="{name}" id="{name}" value="{value}" '
+                f'autocomplete="{autocomplete}" required>'
+            )
+            return (
+                f'<label class="field" for="{name}">{label}</label>{control}'
+                f'<p class="small {"error-text" if error else "muted"}">{html.escape(error or hint)}</p>'
+            )
+
+        body = f"""{head}
+<div class="card">
+  <div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:6px">
+    <span class="avatar">{PortalIcons.SHIELD}</span>
+    <div><h2 class="title">For your letters, never the chat</h2>
+    <p class="small muted">Stored encrypted and filled into letters only when they are sent. The assistant never
+    sees them.</p></div>
+  </div>
+  <div class="meta" style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 4px">{status}</div>
+</div>
+<form class="card form" action="/details" method="post" autocomplete="on">
+  {field("full_names", "Full names", "textarea", "Each adult who is moving, one per line.", "name")}
+  {field("email", "Email", "email", "Where organisations can reply to you.", "email")}
+  {field("old_address_line1", "Current street address", "text", "House number and street.", "address-line1")}
+  {field("new_address_line1", "New street address", "text", "House number and street.", "address-line1")}
+  <p class="small muted">Towns and postcodes come from your move in the chat.</p>
+  <button class="btn block" type="submit">Save my details</button>
+</form>
+{StatementUploadServer.DEMO_NOTE}"""
+        return self._page(token, "/details", message + body)
+
     def _save(self, owner: str, original_name: str, content: bytes) -> tuple[str, int]:
         """
         Checks and stores one upload in the owner's folder.
@@ -445,6 +584,7 @@ document.getElementById("upload-form").onsubmit = () => { send.disabled = true; 
         except (UnicodeDecodeError, ValueError) as error:
             return self._error(f"That file could not be read as a statement: {error}"), 400
 
+        ImportStatement.purge_stale(self._upload_dir)
         folder: Path = self._upload_dir / ImportStatement.owner_folder(owner)
         folder.mkdir(parents=True, exist_ok=True)
         folder.chmod(0o700)
@@ -462,14 +602,24 @@ document.getElementById("upload-form").onsubmit = () => { send.disabled = true; 
     @staticmethod
     def _same_origin(request: Request) -> bool:
         """
-        Cross-site request forgery guard for approving, on top of the SameSite=strict cookie: the body must be JSON
-        (a cross-site form cannot send that without the browser asking first), and the Origin, when the browser
-        sends one, must be this portal.
+        Cross-site request forgery guard for approving: the body must be JSON (a cross-site form cannot send that
+        without the browser asking first), and the request must come from this portal (see _from_this_site).
         """
         if not request.headers.get("content-type", "").startswith("application/json"):
             return False
+        return StatementUploadServer._from_this_site(request)
+
+    @staticmethod
+    def _from_this_site(request: Request) -> bool:
+        """
+        Cross-site request forgery guard for every form post (sign-in, sign-out, upload, details, approve), on top of
+        the SameSite=strict cookie: when the browser says where a request comes from (Origin, or Sec-Fetch-Site), it
+        must be this portal. Tools without a browser send neither, and still need the session cookie.
+        """
         origin: str | None = request.headers.get("origin")
-        return origin is None or origin == f"{request.url.scheme}://{request.url.netloc}"
+        if origin is not None and origin != f"{request.url.scheme}://{request.url.netloc}":
+            return False
+        return request.headers.get("sec-fetch-site") in (None, "same-origin", "none")
 
     @staticmethod
     def _safe_name(original_name: str) -> str:

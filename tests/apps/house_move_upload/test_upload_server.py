@@ -1,10 +1,13 @@
+import os
 import re
 import stat
+import time
 from pathlib import Path
 
 from fastapi.testclient import TestClient
 
 from apps.house_move_upload.upload_server import StatementUploadServer
+from coded_tools.hackathon.house_move.case_store import CaseStore
 from coded_tools.hackathon.house_move.import_statement import ImportStatement
 from coded_tools.hackathon.house_move.session_tokens import SessionTokens
 from tests.coded_tools.hackathon.house_move.house_move_test_case import HouseMoveTestCase
@@ -143,3 +146,61 @@ class TestStatementUploadServer(HouseMoveTestCase):
         self.client.post("/signout")
         self.client.cookies.clear()
         self.assertEqual(401, self.client.post("/approve", json=body).status_code)
+
+    def test_details_form_saves_encrypted_and_echoes_nothing(self):
+        """
+        A guest's details are checked field by field, held encrypted for their case, and never shown back once saved.
+        A bank customer gets no form; a signed-out visitor is refused.
+        """
+        self.assertEqual(401, self.client.get("/details").status_code)
+        owner: str = SessionTokens().verify(self.sign_in("guest")).get("sub")
+        form: dict = {
+            "full_names": "Jordan Lee",
+            "email": "jordan.lee@example.com",
+            "old_address_line1": "8 Cotham Vale",
+            "new_address_line1": "21 Lenton Boulevard",
+        }
+        bad = self.client.post("/details", data={**form, "email": "nope"})
+        self.assertEqual(400, bad.status_code)
+        self.assertIn("Enter an email address", bad.text)
+        self.assertIn("21 Lenton Boulevard", bad.text)
+
+        saved = self.client.post("/details", data=form)
+        self.assertEqual(200, saved.status_code)
+        self.assertIn("Saved, encrypted", saved.text)
+        self.assertNotIn("Lenton", saved.text)
+        self.assertEqual(sorted(form), CaseStore().pending_intake_fields(owner))
+
+        self.client.post("/signout")
+        self.sign_in("C-10042")
+        self.assertIn("Already on file", self.client.get("/details").text)
+        self.assertEqual(400, self.client.post("/details", data=form).status_code)
+
+    def test_form_posts_from_another_site_are_refused(self):
+        """
+        Sign-in, upload, details and approval refuse a request a browser says came from another site.
+        """
+        cross: dict = {"Origin": "https://evil.test", "Sec-Fetch-Site": "cross-site"}
+        self.assertEqual(403, self.client.post("/signin", data={"who": "guest"}, headers=cross).status_code)
+        self.sign_in("guest")
+        csv_bytes: bytes = (self.SAMPLES / "jordan_lee_bristol.csv").read_bytes()
+        files: dict = {"file": ("s.csv", csv_bytes, "text/csv")}
+        self.assertEqual(403, self.client.post("/upload", files=files, headers=cross).status_code)
+        self.assertEqual(
+            403, self.client.post("/upload", files=files, headers={"Sec-Fetch-Site": "cross-site"}).status_code
+        )
+        self.assertEqual(403, self.client.post("/details", data={"email": "x"}, headers=cross).status_code)
+        self.assertFalse(any(self.uploads.iterdir()))
+
+    def test_uploads_never_imported_are_deleted(self):
+        """
+        An upload older than a day that was never imported is deleted, with its empty folder.
+        """
+        owner: str = SessionTokens().verify(self.sign_in("guest")).get("sub")
+        self.post("old.csv", (self.SAMPLES / "jordan_lee_bristol.csv").read_bytes())
+        folder: Path = self.uploads / ImportStatement.owner_folder(owner)
+        old: Path = folder / "old.csv"
+        stale: float = time.time() - ImportStatement.MAX_AGE_SECONDS - 60
+        os.utime(old, (stale, stale))
+        self.assertEqual(1, ImportStatement.purge_stale(self.uploads))
+        self.assertFalse(folder.exists())

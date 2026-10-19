@@ -6,15 +6,20 @@ from typing import Any
 
 from coded_tools.hackathon.house_move.case_tool import CaseTool
 from coded_tools.hackathon.house_move.house_move_data_store import HouseMoveDataStore
+from coded_tools.hackathon.house_move.send_notification import SendNotification
 
 logger = logging.getLogger(__name__)
 
 
 class CheckInbox(CaseTool):
     """
-    Returns new provider replies from data/inbox_mock.json. A reply only arrives once its task has been sent at
-    least once (it has a sent_ref), whatever its status now: a task re-drafted after a date change still gets
-    replies to the first send. Each reply is returned until record_reply has processed it.
+    Returns new provider replies from data/inbox_mock.json. The replies are scripted for the demo customer, so each
+    names the customers it is for, and it arrives only when all of these hold:
+    - the case is one of those customers (a standalone customer never gets the demo's canned replies);
+    - the task actually went to the organisation (a pack the customer still has to send gets no reply);
+    - the reply comes from the task's own provider, when the task names one.
+    A task re-drafted after a date change still gets replies to its first send. Each reply is returned until
+    record_reply has processed it.
     Reply text is untrusted (a prompt-injection route), so it is labelled as such and is read only by reply_agent, an
     agent with no approve or send tools.
     """
@@ -55,14 +60,25 @@ class CheckInbox(CaseTool):
             logger.error("Could not read the mock inbox: %s", error)
             return f"Error: the inbox could not be read ({error})."
 
+        delivered: dict[str, str] = {
+            entry.get("ref"): entry.get("delivery") for entry in sly_data.get("outbox") or [] if entry.get("ref")
+        }
         sent_tasks: dict[str, dict[str, Any]] = {
-            task.get("obligation_id"): task for task in sly_data.get("tasks") or [] if task.get("sent_ref")
+            task.get("obligation_id"): task
+            for task in sly_data.get("tasks") or []
+            if task.get("sent_ref")
+            and (task.get("delivery") or delivered.get(task.get("sent_ref"))) == SendNotification.TO_ORGANISATION
         }
         processed: set[str] = set(sly_data.get("processed_replies") or [])
         new_replies: list[dict[str, Any]] = []
         for reply in replies:
             task: dict[str, Any] | None = sent_tasks.get(reply.get("obligation_id"))
-            if task is None or reply.get("reply_id") in processed:
+            if (
+                task is None
+                or reply.get("reply_id") in processed
+                or sly_data.get("customer_id") not in (reply.get("customer_ids") or [])
+                or not CheckInbox._from_provider(reply, task)
+            ):
                 continue
             new_replies.append(
                 {
@@ -74,3 +90,16 @@ class CheckInbox(CaseTool):
                 }
             )
         return new_replies
+
+    @staticmethod
+    def _from_provider(reply: dict[str, Any], task: dict[str, Any]) -> bool:
+        """
+        :return: true if the reply is from the task's provider. A task that names no provider (its contact is just
+                 the organisation type) accepts the reply; one that names a provider needs the same first word, so
+                 Brightwatt's reply never reaches a customer whose supplier is someone else.
+        """
+        contact: str = task.get("contact_name") or ""
+        if not contact or contact == task.get("org"):
+            return True
+        sender: list[str] = (reply.get("from") or "").casefold().split()
+        return bool(sender) and sender[0] in contact.casefold().split()
