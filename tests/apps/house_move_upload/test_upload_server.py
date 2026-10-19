@@ -1,3 +1,4 @@
+import json
 import os
 import re
 import stat
@@ -6,10 +7,12 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from apps.house_move_upload.chat_relay import ChatRelay
 from apps.house_move_upload.upload_server import StatementUploadServer
 from coded_tools.hackathon.house_move.case_store import CaseStore
 from coded_tools.hackathon.house_move.import_statement import ImportStatement
 from coded_tools.hackathon.house_move.session_tokens import SessionTokens
+from tests.apps.house_move_upload.fake_agent_session import FakeAgentSession
 from tests.coded_tools.hackathon.house_move.house_move_test_case import HouseMoveTestCase
 from tests.coded_tools.hackathon.house_move.house_move_test_state import HouseMoveTestState
 
@@ -26,7 +29,10 @@ class TestStatementUploadServer(HouseMoveTestCase):
         A portal using the temporary uploads folder.
         """
         super().setUp()
-        self.client: TestClient = TestClient(StatementUploadServer(self.uploads).create_app())
+        FakeAgentSession.requests = []
+        self.client: TestClient = TestClient(
+            StatementUploadServer(self.uploads, chat=ChatRelay(session_factory=FakeAgentSession)).create_app()
+        )
 
     def sign_in(self, who: str) -> str:
         """
@@ -205,3 +211,53 @@ class TestStatementUploadServer(HouseMoveTestCase):
         os.utime(old, (stale, stale))
         self.assertEqual(1, ImportStatement.purge_stale(self.uploads))
         self.assertFalse(folder.exists())
+
+    def test_chat_tab_attaches_the_sign_in_and_streams_the_reply(self):
+        """
+        The Chat tab needs sign-in; a message goes to the agents with this sign-in's own session, the reply streams
+        back as JSON lines, history survives a reload, and sign-out forgets the conversation.
+        """
+        self.assertEqual(401, self.client.get("/chat").status_code)
+        self.assertEqual(401, self.client.post("/chat/send", json={"text": "hi"}).status_code)
+        token: str = self.sign_in("C-10042")
+        page = self.client.get("/chat")
+        self.assertIn("I&#x27;m customer C-10042 and I&#x27;m moving house", page.text)
+
+        cross = self.client.post("/chat/send", json={"text": "hi"}, headers={"Origin": "https://evil.test"})
+        self.assertEqual(403, cross.status_code)
+        self.assertEqual(400, self.client.post("/chat/send", json={"text": "  "}).status_code)
+        sent = self.client.post("/chat/send", json={"text": "I'm customer C-10042 and I'm moving house"})
+        events: list = [json.loads(line) for line in sent.text.splitlines()]
+        self.assertEqual(["progress", "reply"], [event.get("type") for event in events])
+        self.assertEqual({"session_token": token}, FakeAgentSession.requests[0].get("sly_data"))
+
+        history: dict = self.client.get("/chat/history.json").json()
+        self.assertEqual(["you", "assistant"], [m.get("role") for m in history.get("messages")])
+        self.assertEqual(200, self.client.post("/chat/new", json={}).status_code)
+        self.assertEqual([], self.client.get("/chat/history.json").json().get("messages"))
+
+        self.client.post("/chat/send", json={"text": "again"})
+        self.client.post("/signout")
+        self.sign_in("C-10042")
+        self.assertEqual([], self.client.get("/chat/history.json").json().get("messages"))
+
+    def test_home_checklist_follows_the_case(self):
+        """
+        A new guest's next step is their details; a bank customer with drafted letters is at "Approve your letters".
+        """
+        self.sign_in("guest")
+        home: str = self.client.get("/").text
+        self.assertIn("Your steps", home)
+        self.assertRegex(
+            home,
+            r'step-row next"><span class="step-mark">2</span><div class="main"><div class="name">Add your details',
+        )
+
+        self.client.post("/signout")
+        self.sign_in("C-10042")
+        HouseMoveTestState.drafted_session()
+        home = self.client.get("/").text
+        self.assertNotIn("Add your details", home)
+        self.assertRegex(home, r'step-row done">.*?Get your letters drafted')
+        self.assertRegex(home, r'step-row next">.*?Approve your letters')
+        self.assertIn('href="/status">Review letters', home)

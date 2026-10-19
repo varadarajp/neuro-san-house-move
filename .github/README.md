@@ -230,7 +230,19 @@ Python code changes need a server restart; HOCON changes are picked up automatic
 
 ## Running the demo
 
-In nsflow, open **hackathon → house_move**.
+Everything happens in the House Move app at <http://127.0.0.1:8090>, laid out like a phone app with five tabs:
+
+| Tab | What you do there |
+|---|---|
+| **Home** | "Your steps": what is done, and a button for the next thing to do |
+| **My move** | The plan by status; read and approve each letter; replies and recent activity |
+| **Chat** | Talk to the assistant. Your sign-in is attached on the server: nothing to copy or paste |
+| **Upload** | Bank statements (CSV, OFX or QFX), read once and then deleted |
+| **Details** | Guests only: full names, street addresses and email, stored encrypted, never typed in the chat |
+
+nsflow (<http://localhost:4173>, **hackathon → house_move**) shows the agent network working. To chat there instead
+of the Chat tab, open "Chatting in nsflow instead?" on Home, copy the session, paste it into nsflow's SlyData tab
+(replacing anything there) and tick "Use Edited Sly Data".
 
 To start every test customer from scratch (no plans, cases, codes, uploads or audit entries), reset the demo data.
 It is moved to `case_data/backups/` first, so a reset can be undone:
@@ -239,21 +251,22 @@ It is moved to `case_data/backups/` first, so a reset can be undone:
 venv/bin/python -m build_scripts.reset_house_move_demo --yes
 ```
 
-**First, sign in.** Open the portal at <http://127.0.0.1:8090> and choose a demo bank customer (for example
-C-10042) or "I'm not a customer". The portal shows a session, for example `{"session_token": "v1...."}`. Paste it into
-nsflow's SlyData tab and tick "Use Edited Sly Data" for the first message. The demo sign-in stands in for the bank's
-own login: a session opens only that customer's record, or only the cases its owner creates.
+**First, sign in** on the app and choose a demo bank customer (for example C-10042) or "I'm not a customer
+(guest)". The demo sign-in stands in for the bank's own login: it opens only that customer's record, or only the
+cases a guest creates. A bank customer's sign-in cannot start a separate move for someone else; sign in as a guest
+for that. Home then shows your steps; follow them.
 
-**Bank customer (about 5 minutes):**
+**Bank customer (about 5 minutes), in the Chat tab:**
 
-1. "Mortgage case M-55810 for customer C-10042 has a completion date set. Start the move journey."
+1. "I'm customer C-10042 and I'm moving house" (a suggestion button), or "Mortgage case M-55810 for customer
+   C-10042 has a completion date set. Start the move journey."
    Discovery finds 12 providers, including pet insurance, and infers a pet and a young child.
 2. Answer the questions and say "build the plan". Councils come from postcodes.io live; the plan is dated by
    week with legal items marked, followed by local GPs and water companies.
 3. "Yes please, prepare the drafts." Four AAOSA specialists and Comms produce a draft per task.
 4. "Approve all of them." The agent lists what will be approved, names the legal-requirement drafts that must be
    approved one by one, and shows a 6-digit code. Reply with the code (and name any legal drafts first). Or open
-   "See your move's status" on the portal and use Read and approve, one draft or all routine ones at once. Emails
+   **My move** and use Read and approve, one letter or all routine ones at once. Emails
    with known references then go to providers; the rest become pre-filled packs; the bank's own address update
    is made directly.
 5. "Completion has moved to 11 December." The Tracker sorts every task: needs correction, needs rebooking,
@@ -263,18 +276,16 @@ own login: a session opens only that customer's record, or only the cases its ow
 
 **Standalone:**
 
-1. Sign in on the portal as "I'm not a customer" and give the chat your session as above. Then open **Details**
-   on the portal and enter the synthetic details: Jordan Lee, jordan.lee@example.com, 8 Cotham Vale,
-   21 Lenton Boulevard. They are stored encrypted and never go through the chat.
-
-2. "Hi, I'm moving house and I don't bank with you. I'm Jordan, moving from BS6 6RB to NG7 2NF on
+1. Sign in as "I'm not a customer (guest)". On **Details**, enter the synthetic details: Jordan Lee,
+   jordan.lee@example.com, 8 Cotham Vale, 21 Lenton Boulevard.
+2. On **Chat**: "Hi, I'm moving house and I don't bank with you. I'm Jordan, moving from BS6 6RB to NG7 2NF on
    11 December 2026."
-3. Upload `coded_tools/hackathon/house_move/data/sample_statements/jordan_lee_bristol.csv` on the portal
-   (same sign-in), then say "I've uploaded jordan_lee_bristol.csv." The agent shows a code; reply with it to let
-   the statement be read.
-4. Continue as above. Later, with the same session, "My case reference is S-…" resumes the case.
+3. On **Upload**, upload `coded_tools/hackathon/house_move/data/sample_statements/jordan_lee_bristol.csv`, then
+   in Chat say "I've uploaded jordan_lee_bristol.csv." The agent shows a code; reply with it to let the statement
+   be read.
+4. Continue as above. Later, with the same sign-in, "My case reference is S-…" resumes the case.
 
-The same journeys run from the command line, passing the session from the portal:
+The same journeys run from the command line, passing the session from Home's "Chatting in nsflow instead?":
 
 ```bash
 venv/bin/python -m neuro_san.client.agent_cli --agent hackathon/house_move --http --port 8080 --sly_data '{"session_token": "v1...."}'
@@ -303,7 +314,8 @@ registries/hackathon/house_move.hocon         the agent network
 registries/manifest.hocon                     includes registries/hackathon/manifest.hocon (one added line)
 coded_tools/hackathon/house_move/             coded tools (one class per file)
 coded_tools/hackathon/house_move/data/        rules, synthetic data, directories, schools extract, samples
-apps/house_move_upload/upload_server.py       portal: demo sign-in, statement upload, My move status and approval
+apps/house_move_upload/upload_server.py       the app: sign-in, Home steps, My move, Chat, Upload, Details
+apps/house_move_upload/chat_relay.py          Chat tab relay to the agent network (session attached server-side)
 build_scripts/build_house_move_schools.py     builds the schools extract from GIAS
 tests/coded_tools/hackathon/house_move/       unit tests
 tests/apps/house_move_upload/                 portal tests
@@ -316,7 +328,7 @@ House_Move_Agent.pptx                         pitch deck
 venv/bin/python -m pytest tests/coded_tools/hackathon tests/apps/house_move_upload -q
 ```
 
-115 tests cover the rules engine (including Scotland, Wales and Northern Ireland), working-day dates, the approval
+123 tests cover the rules engine (including Scotland, Wales and Northern Ireland), working-day dates, the approval
 gate, mock sending, replanning, replies, the case store and encryption, statement parsing, the portal, and the GP,
 school and water finders. `test_session_security.py` replays the review's attacks through the real session path:
 forged approved state, opening another customer's record, missing or tampered tokens, guessing case IDs, reading
