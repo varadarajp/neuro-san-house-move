@@ -3,6 +3,7 @@
 import hashlib
 import logging
 import os
+import time
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +27,8 @@ class ImportStatement(CaseTool):
     # Repository root is three folders up: coded_tools/hackathon/house_move/import_statement.py
     DEFAULT_UPLOAD_DIR: Path = Path(__file__).resolve().parents[3] / "uploads"
     MAX_BYTES: int = 5 * 1024 * 1024
+    # An upload that is never imported is deleted after this long, so statements do not pile up on disk.
+    MAX_AGE_SECONDS: int = 24 * 60 * 60
 
     @staticmethod
     def owner_folder(owner_id: str) -> str:
@@ -34,6 +37,33 @@ class ImportStatement(CaseTool):
                  alone never reaches someone else's statement. Shared with the upload page.
         """
         return hashlib.sha256(owner_id.encode("utf-8")).hexdigest()[:24]
+
+    @staticmethod
+    def purge_stale(upload_dir: Path, max_age_seconds: int | None = None) -> int:
+        """
+        Deletes uploads older than MAX_AGE_SECONDS that were never imported, and any owner folder left empty.
+        Called by the portal (at start and on each upload) and before each import.
+        :return: the number of files deleted.
+        """
+        if not upload_dir.is_dir():
+            return 0
+        cutoff: float = time.time() - (
+            max_age_seconds if max_age_seconds is not None else ImportStatement.MAX_AGE_SECONDS
+        )
+        deleted: int = 0
+        for folder in (path for path in upload_dir.iterdir() if path.is_dir()):
+            for path in folder.iterdir():
+                try:
+                    if path.is_file() and path.stat().st_mtime < cutoff:
+                        path.unlink()
+                        deleted += 1
+                except OSError as error:
+                    logger.error("Could not delete stale upload %s: %s", path.name, error)
+            if not any(folder.iterdir()):
+                folder.rmdir()
+        if deleted:
+            logger.info("Deleted %d uploads that were never imported", deleted)
+        return deleted
 
     def __init__(self, case_store: CaseStore | None = None, upload_dir: Path | None = None):
         """
@@ -66,6 +96,7 @@ class ImportStatement(CaseTool):
         file_name: str | None = args.get("file_name") or next(iter(sly_data.get("uploaded_files") or []), None)
         if not file_name:
             return "Error: no uploaded file. Ask the customer to upload a CSV or OFX statement."
+        ImportStatement.purge_stale(self._upload_dir)
         rows: list[dict[str, Any]] | str = self._read(owner, file_name)
         if isinstance(rows, str):
             return rows

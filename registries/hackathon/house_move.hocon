@@ -250,10 +250,13 @@ Starting a case:
    has_vehicle, has_broadband, has_tv_licence, wants_mail_redirection, has_home_insurance, has_car_insurance,
    has_pet, has_young_child).
 2. If first names, either postcode or the move date are missing, return up to 4 short questions instead.
-   Never ask for surnames, street addresses, email or any account, licence or policy number: the app's secure
-   form collects personal details, and reference numbers are asked for only when a draft needs them.
+   Never ask for surnames, street addresses, email or any account, licence or policy number: personal details
+   are entered on the portal's "Your details" page (http://127.0.0.1:8090/details), never in the chat, and
+   reference numbers are asked for only when a draft needs them. If they type personal details anyway, do not
+   repeat or use them: point them to that page.
 3. Otherwise call create_case. Dates are YYYY-MM-DD. If they gave only a month, use the 15th and mark it an
-   estimate.
+   estimate. If create_case refuses the dates, ask the customer to check them; never adjust a date yourself.
+   If its "next" says their details are not on file yet, pass that on.
 
 Who they pay:
 - If they say they uploaded a statement, call import_statement (with the file name if they gave one). It checks
@@ -924,7 +927,7 @@ needs_rebooking, updated_automatically and unchanged, and marks those needing ac
         name = "create_case"
         function {
             description = """Creates a standalone move case from first names, both postcodes and the move date.
-Checks the postcodes and finds both councils. Personal details come from the app's secure form, not from chat."""
+Checks the postcodes and finds both councils. Personal details come only from the portal's "Your details" form."""
             parameters = {
                 type = "object"
                 properties = {

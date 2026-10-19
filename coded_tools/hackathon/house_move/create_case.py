@@ -1,6 +1,7 @@
 """Starts a standalone move case for someone who is not (or not yet) a bank customer."""
 
 import asyncio
+import logging
 from datetime import date
 from typing import Any
 
@@ -10,14 +11,17 @@ from coded_tools.hackathon.house_move.case_tool import CaseTool
 from coded_tools.hackathon.house_move.council_lookup import CouncilLookup
 from coded_tools.hackathon.house_move.move_dates import MoveDates
 
+logger = logging.getLogger(__name__)
+
 
 class CreateCase(CaseTool):
     """
     Creates a case from the few facts gathered in chat: first names, both postcodes and the move date.
     Postcodes are checked with council_lookup, which also records both councils.
-    Personal details (full names, street lines, email) never come through chat: the app's secure form puts them in
-    sly_data["intake_form"], and this tool moves them straight into the encrypted vault and removes them from
-    sly_data. The case belongs to the signed-in owner and looks like a CRM record to every other tool.
+    Personal details (full names, street lines, email) never come through chat: the customer types them into the
+    portal's "Your details" form, which holds them encrypted (CaseStore.save_pending_intake) until this tool moves them
+    into the new case's vault. Anything a client puts in sly_data["intake_form"] is discarded, since it did not come
+    through that form. The case belongs to the signed-in owner and looks like a CRM record to every other tool.
     """
 
     FACT_NAMES: tuple[str, ...] = (
@@ -54,7 +58,7 @@ class CreateCase(CaseTool):
         :param args: "first_names" (list), "old_postcode", "new_postcode", "move_date" (YYYY-MM-DD), optional
                      "move_date_is_estimate", "exchange_date", "old_property" (sold, let, rented_ended, kept) and
                      "facts" (true/false household facts).
-        :param sly_data: reads and removes "intake_form"; receives "customer_id", "customer_profile" and "councils".
+        :param sly_data: discards any "intake_form"; receives "customer_id", "customer_profile" and "councils".
         :return: the case summary, without personal data, or an "Error: ..." string.
         """
         first_names: list[str] = [name.strip() for name in args.get("first_names") or [] if name.strip()]
@@ -80,11 +84,13 @@ class CreateCase(CaseTool):
             sly_data.setdefault("councils", {})[council.get("postcode")] = council
 
         profile: dict[str, Any] = self._profile(args, first_names, councils, move_date, exchange_date)
-        form: dict[str, Any] = sly_data.pop("intake_form", None) or {}
+        if sly_data.pop("intake_form", None) is not None:
+            logger.warning("Discarded intake_form sent by the client: personal details come only from the portal")
         store: CaseStore = self._case_store or await asyncio.to_thread(CaseStore)
         owner: str | None = sly_data.get(CaseSession.OWNER_KEY)
         if not owner:
             return "Error: not signed in. Sign in on the House Move portal first."
+        form: dict[str, Any] = await asyncio.to_thread(store.take_pending_intake, owner)
         case_id: str = await asyncio.to_thread(store.create_case, profile, form, owner)
 
         sly_data["customer_id"] = case_id
@@ -98,7 +104,13 @@ class CreateCase(CaseTool):
             "move_date_is_estimate": bool(args.get("move_date_is_estimate")),
             "facts": profile.get("facts"),
             "personal_details_from_form": sorted(key for key in form if key in CaseStore.PERSONAL_FIELDS),
-            "next": "Ask how they want to share who they pay: upload a statement, or list providers.",
+            "next": "Ask how they want to share who they pay: upload a statement, or list providers."
+            + (
+                ""
+                if form
+                else " Their name, street addresses and email are not on file yet: ask them to add them under "
+                "'Your details' on the portal (never in the chat), or letters will come back to them to complete."
+            ),
         }
 
     def after_run(self, result: Any, sly_data: dict[str, Any], session: CaseSession) -> None:

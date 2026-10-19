@@ -9,6 +9,8 @@ class DraftRenderer:
     """
     Replaces profile and task placeholders with real values, and customer-supplied ones with a visible gap
     such as "[add your account number]". Any other placeholder is reported as unknown.
+    A profile value that is missing or blank is a gap too, never an empty string: a letter without a name, street
+    or email must go to the customer to complete, not to the organisation. An address counts only with its street.
     When the bank holds a Direct Debit mandate with the task's provider, the mandate's payer reference fills that
     provider's account, policy or licence number, so the customer does not have to look it up.
     Used when a draft is saved, and again by the Tracker when it is sent.
@@ -36,9 +38,9 @@ class DraftRenderer:
         def replace(match: re.Match) -> str:
             # Nested so re.sub can collect gaps and unknowns from this call's state.
             name: str = match.group(1)
-            if name in values:
+            if (values.get(name) or "").strip():
                 return values.get(name)
-            if name in self._customer_supplied:
+            if name in values or name in self._customer_supplied:
                 label: str = name.replace("_", " ")
                 gaps.append(label)
                 return f"[add your {label}]"
@@ -59,7 +61,8 @@ class DraftRenderer:
         old_address: dict[str, Any] = profile.get("old_address") or {}
         new_address: dict[str, Any] = profile.get("new_address") or {}
         values: dict[str, str] = {
-            "full_names": " and ".join(names),
+            # A standalone record keeps full names apart ("full_names"); a bank record's "names" are full names.
+            "full_names": " and ".join(profile.get("full_names") if "full_names" in profile else names),
             "first_names": " and ".join(name.split()[0] for name in names),
             "old_address": DraftRenderer._one_line(old_address),
             "new_address": DraftRenderer._one_line(new_address),
@@ -79,8 +82,11 @@ class DraftRenderer:
     @staticmethod
     def _one_line(address: dict[str, Any]) -> str:
         """
-        Joins the street line, town and postcode.
+        Joins the street line, town and postcode. Without a street line there is no address to write to, so the
+        result is blank (a gap) rather than just a town and postcode.
         """
+        if not (address.get("line1") or "").strip():
+            return ""
         return ", ".join(part for part in (address.get("line1"), address.get("town"), address.get("postcode")) if part)
 
     @staticmethod

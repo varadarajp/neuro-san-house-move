@@ -61,9 +61,10 @@ class TestStandalone(HouseMoveTestCase):
 
     def new_case(self) -> dict:
         """
-        :return: sly_data for a freshly created case, with the secure form already submitted.
+        :return: sly_data for a freshly created case, with the portal's "Your details" form already submitted.
         """
-        sly_data: dict = {"intake_form": dict(self.FORM), CaseSession.OWNER_KEY: self.OWNER}
+        CaseStore().save_pending_intake(self.OWNER, dict(self.FORM))
+        sly_data: dict = {CaseSession.OWNER_KEY: self.OWNER}
         result = CreateCase(council_lookup=self.offline_lookup()).run(dict(self.CASE_ARGS), sly_data)
         self.assertTrue(result.get("case_id").startswith("S-"), result)
         return sly_data
@@ -79,7 +80,7 @@ class TestStandalone(HouseMoveTestCase):
 
     def test_create_case_keeps_personal_data_encrypted(self):
         """
-        The form is moved into the vault and out of sly_data; the database file holds no personal data in plain text.
+        The portal form is moved into the case's vault; the database file holds no personal data in plain text.
         """
         sly_data: dict = self.new_case()
         profile: dict = sly_data.get("customer_profile")

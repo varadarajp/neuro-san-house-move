@@ -130,12 +130,25 @@ flowchart TD
 - **Personal data stays out of the LLM.** Full names, street addresses, email and account references stay on the
   server. The LLM sees first names, towns and postcodes, and writes drafts with placeholders such as
   `{{new_address}}` that code fills in at send time.
-- **Encrypted at rest** (`case_data/`, git-ignored): each case's plan state is one Fernet-encrypted blob per owner,
-  and a standalone customer's personal details are encrypted per field. Cases can be deleted on request and purged
-  after the move.
+- **Personal details come only from the portal.** A guest types their full names, street addresses and email on
+  the portal's "Your details" page (`/details`), checked field by field (`PersonalDetails`) and stored encrypted;
+  `create_case` moves them into the new case's vault. Anything sent through the chat client is discarded. A detail
+  that is missing or blank is a gap, never "filled": the letter goes to the customer to complete, not to the
+  organisation.
+- **Encrypted at rest, keys kept apart** (`case_data/`, git-ignored, folder `0700`, database `0600`): each case's
+  plan state is one Fernet-encrypted blob per owner; personal details are encrypted per field; statement rows are
+  encrypted per statement. The plan keeps drafts with their placeholders and only a fingerprint of what was sent,
+  never the filled-in letters. The vault key and session secret live in `~/.house_move/keys` (or
+  `HOUSE_MOVE_KEY_DIR`, or environment variables), not next to the data. SQLite's secure delete overwrites erased
+  data. Cases can be deleted on request and purged after the move.
 - **Statements never go through the chat.** nsflow's paperclip pastes file text into the message, so the agents
-  refuse pasted statements and send users to the portal. Uploads go to the signed-in person's own folder and are
-  deleted after reading.
+  refuse pasted statements and send users to the portal. Uploads go to the signed-in person's own folder, can be
+  imported only into a case that person owns, are deleted after reading, and are deleted after a day if never
+  imported. Every portal form post must come from the portal itself (Origin and Sec-Fetch-Site checks on top of
+  the strict-SameSite cookie).
+- **Replies are tied to what was really sent.** The mock inbox's scripted replies are for the demo customer only,
+  must come from the task's own provider, and arrive only for letters that reached the organisation; a pack the
+  customer still has to send shows as "Ready for you to send", not "Sent".
 - **Consent the LLM cannot fake:** approvals, statement imports and deletions issue a one-time 6-digit code (valid
   30 minutes, usable once). `CustomerMessageMiddleware` records what the customer actually types, server-side, and
   `confirm_with_code` acts only if that message arrived after the code and contains it. The customer's own message
@@ -152,7 +165,8 @@ flowchart TD
 
 ### Review status
 
-Two reviews found eight issues: four security issues, then four ways the plan could silently go wrong. Status:
+Three reviews found thirteen issues: four security issues, four ways the plan could silently go wrong, and five gaps
+in the standalone journey and data protection. Status:
 
 | Finding | Status |
 |---|---|
@@ -164,6 +178,11 @@ Two reviews found eight issues: four security issues, then four ways the plan co
 | Home insurance was dated from completion when exchange was unknown, after the customer is liable | **Fixed:** with no exchange date it is dated today, with a warning, and dated on exchange once known; regression tests |
 | Dates were not checked (exchange after completion, a move date years in the past) | **Fixed:** one shared check for case creation and the timeline: exchange on or before completion and within a year of it; completion no more than 30 days past (someone who has just moved still has tasks) or two years ahead; regression tests |
 | Moving within one council created two council tax tasks | **Fixed:** a move within one council is one council tax task; regression tests |
+| The "secure form" for personal details did not exist, so standalone vaults were empty | **Fixed:** the portal's "Your details" page, checked field by field and stored encrypted until the case is created; details sent through the chat client are discarded; regression tests |
+| A blank detail counted as filled, so a letter with no name, street or email went to the organisation | **Fixed:** missing or blank details, and an address without a street, are gaps, so the letter goes to the customer to complete; regression tests |
+| Uploads: shared, no CSRF protection, never-imported files kept | **Partly already fixed, now complete:** uploads were already per signed-in person and importable only into their own case; every form post now refuses other sites; uploads never imported are deleted after a day; regression tests |
+| Provider replies were canned for everyone, and could confirm a task that never reached the organisation | **Fixed:** scripted replies are for the demo customer only, must come from the task's own provider, and only follow letters that reached the organisation; customer packs show as "Ready for you to send"; regression tests |
+| Encryption at rest was mostly for show (key beside the data, plain transactions, filled-in letters in the plan) | **Fixed:** keys in a separate owner-only folder (existing keys moved there), owner-only database, encrypted statement rows (old rows encrypted on open), no filled-in letters stored, secure delete; regression tests |
 
 ## Getting started
 
@@ -193,7 +212,7 @@ UI on <http://localhost:4173>):
 venv/bin/python -m neuro_san_studio run
 ```
 
-Start the House Move portal (<http://127.0.0.1:8090>): sign-in, statement upload and the "My move" status page
+Start the House Move portal (<http://127.0.0.1:8090>): sign-in, "Your details", statement upload and the "My move" page
 (`/status`: stage, what is waiting for approval, tasks and recent activity, and Read and approve for each draft;
 own case only). Every journey needs it:
 
@@ -237,14 +256,9 @@ own login: a session opens only that customer's record, or only the cases its ow
 
 **Standalone:**
 
-1. Sign in on the portal as "I'm not a customer". In the SlyData tab, add the secure-form details next to the
-   session (this stands in for the app's own form) and tick "Use Edited Sly Data":
-
-   ```json
-   {"session_token": "v1....",
-    "intake_form": {"full_names": ["Jordan Lee"], "email": "jordan.lee@example.com",
-      "old_address_line1": "8 Cotham Vale", "new_address_line1": "21 Lenton Boulevard"}}
-   ```
+1. Sign in on the portal as "I'm not a customer" and give the chat your session as above. Then open **Details**
+   on the portal and enter the synthetic details: Jordan Lee, jordan.lee@example.com, 8 Cotham Vale,
+   21 Lenton Boulevard. They are stored encrypted and never go through the chat.
 
 2. "Hi, I'm moving house and I don't bank with you. I'm Jordan, moving from BS6 6RB to NG7 2NF on
    11 December 2026."
@@ -295,13 +309,13 @@ House_Move_Agent.pptx                         pitch deck
 venv/bin/python -m pytest tests/coded_tools/hackathon tests/apps/house_move_upload -q
 ```
 
-103 tests cover the rules engine (including Scotland, Wales and Northern Ireland), working-day dates, the approval
+115 tests cover the rules engine (including Scotland, Wales and Northern Ireland), working-day dates, the approval
 gate, mock sending, replanning, replies, the case store and encryption, statement parsing, the portal, and the GP,
 school and water finders. `test_session_security.py` replays the review's attacks through the real session path:
 forged approved state, opening another customer's record, missing or tampered tokens, guessing case IDs, reading
 another person's upload, and parallel tool calls. `test_confirmation_codes.py` shows the LLM cannot confirm for the
 customer: no message, wrong, expired or reused codes, codes seen only in tool or AI text, and drafts changed after
-approval are all refused. `test_reply_isolation.py` checks that no agent that reads provider replies can approve or send, and that an injected reply changes nothing. `test_plan_integrity.py` replays the second review's findings. `test_approve_on_portal.py` checks that a portal approval covers only the
+approval are all refused. `test_reply_isolation.py` checks that no agent that reads provider replies can approve or send, and that an injected reply changes nothing. `test_plan_integrity.py` and `test_data_protection.py` replay the second and third reviews' findings. `test_approve_on_portal.py` checks that a portal approval covers only the
 wording the customer opened, only their own case, legal drafts one at a time, and that the owner's lock holds across
 processes. Network calls are mocked in tests.
 
@@ -326,9 +340,11 @@ processes. Network calls are mocked in tests.
 - Schools cover England only; Wales, Scotland and Northern Ireland get pointers to their own admissions routes.
 - The portal address is fixed (`127.0.0.1:8090`) and only works on the machine running the demo.
 - The demo sign-in lets anyone pick a demo customer; production would use the bank's own login.
-- All four review findings are fixed for the demo; production would still need the bank's own sign-in and a managed key service.
+- All thirteen review findings are fixed for the demo; production would still need the bank's own sign-in, a managed
+  key service, and real provider replies in place of the scripted inbox.
 - The full draft turn takes several minutes: four specialists are each called twice (Determine, then Fulfill).
-- The vault key is a local file; production would use a managed key service.
+- The keys are local files (in `~/.house_move/keys`), kept apart from the data but on the same machine; production
+  would use a managed key service.
 
 ## Licence and credits
 

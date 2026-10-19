@@ -140,6 +140,15 @@ select { width: 100%; min-height: 52px; padding: 0 44px 0 14px; border-radius: 1
 .drop input { position: absolute; opacity: 0; pointer-events: none; }
 .drop .file-name { font-weight: 600; word-break: break-all; }
 
+input[type=text], input[type=email], textarea {
+  width: 100%; min-height: 50px; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--line);
+  background: var(--surface-2); font: inherit; color: inherit; resize: vertical; }
+textarea { min-height: 76px; }
+form.form label.field { margin-top: 14px; }
+form.form label.field:first-child { margin-top: 0; }
+form.form p.small { margin: 6px 2px 0; }
+.error-text { color: var(--accent); font-weight: 600; }
+
 /* Messages from the server (.ok / .error) and toasts */
 .ok, .error { display: block; padding: 12px 14px; border-radius: 14px; margin: 12px 0; font-size: .93rem; }
 .ok { background: var(--ok-soft); color: var(--text); border-left: 4px solid var(--ok); }

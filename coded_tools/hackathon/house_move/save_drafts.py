@@ -52,8 +52,9 @@ class SaveDrafts(CaseTool):
             if task is None:
                 rejected.append(f"{draft.get('task_id')}: no such task")
                 continue
-            subject, subject_gaps, subject_unknown = renderer.render(draft.get("subject", ""), task, sly_data)
-            body, body_gaps, body_unknown = renderer.render(draft.get("body", ""), task, sly_data)
+            # Rendered only to find gaps and unknown placeholders: the filled-in text is never stored.
+            _, subject_gaps, subject_unknown = renderer.render(draft.get("subject", ""), task, sly_data)
+            _, body_gaps, body_unknown = renderer.render(draft.get("body", ""), task, sly_data)
             unknown: list[str] = sorted(set(subject_unknown + body_unknown))
             if unknown:
                 rejected.append(f"{task.get('task_id')}: unknown placeholders {unknown}")
@@ -68,8 +69,6 @@ class SaveDrafts(CaseTool):
                 "channel": task.get("channel"),
                 "subject": draft.get("subject"),
                 "body": draft.get("body"),
-                "rendered_subject": subject,
-                "rendered_body": body,
                 "gaps_for_customer": gaps,
             }
             task["draft_id"] = draft_id

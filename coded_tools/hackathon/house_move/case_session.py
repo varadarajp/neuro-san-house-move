@@ -29,7 +29,8 @@ class CaseSession:
 
     TOKEN_KEY: str = "session_token"
     OWNER_KEY: str = "_owner"
-    # Plan state saved per case. Personal data in drafts and the outbox is protected by encrypting the whole blob.
+    # Plan state saved per case, encrypted. Drafts keep their {{placeholders}} and the outbox only fingerprints, so
+    # the state holds no filled-in personal details (see _without_rendered_text).
     STATE_KEYS: tuple[str, ...] = (
         "councils",
         "obligations",
@@ -150,7 +151,7 @@ class CaseSession:
         if self._owner is None or not case_id or not self._may_open(case_id):
             return
         state: dict[str, Any] = {key: sly_data.get(key) for key in CaseSession.STATE_KEYS if key in sly_data}
-        self._store.save_case_state(self._owner, case_id, state)
+        self._store.save_case_state(self._owner, case_id, CaseSession._without_rendered_text(state))
 
     def close(self, sly_data: dict[str, Any]) -> None:
         """
@@ -180,6 +181,25 @@ class CaseSession:
             self._load(view, active)
             view["case_id"] = active
         return view
+
+    @staticmethod
+    def _without_rendered_text(state: dict[str, Any]) -> dict[str, Any]:
+        """
+        Drops filled-in letter text that earlier versions saved in drafts and the outbox, so the saved plan never
+        holds personal details: they are filled in only at send time, from the vault or the bank's record.
+        """
+        rendered: tuple[str, ...] = ("rendered_subject", "rendered_body", "subject", "body")
+        clean: dict[str, Any] = dict(state)
+        if isinstance(state.get("drafts"), dict):
+            clean["drafts"] = {
+                draft_id: {k: v for k, v in draft.items() if k not in rendered[:2]}
+                for draft_id, draft in state.get("drafts").items()
+            }
+        if isinstance(state.get("outbox"), list):
+            clean["outbox"] = [
+                {k: v for k, v in entry.items() if k not in rendered[2:]} for entry in state.get("outbox")
+            ]
+        return clean
 
     def _may_open(self, case_id: str) -> bool:
         """
