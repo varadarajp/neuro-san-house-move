@@ -28,7 +28,7 @@ class GovServiceDirectory(CodedTool):
 
     def invoke(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
         """
-        :param args: "obligation_ids", a list such as ["dvla_licence", "council_tax_new"].
+        :param args: "obligation_ids", a list such as ["dvla_license", "council_tax_new"].
         :param sly_data: not used.
         :return: {"services": {id: entry}, "unknown": [ids]}, or an "Error: ..." string.
         """

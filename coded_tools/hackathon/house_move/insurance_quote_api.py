@@ -8,7 +8,7 @@ from coded_tools.hackathon.house_move.case_tool import CaseTool
 class InsuranceQuoteApi(CaseTool):
     """
     Returns an indicative monthly premium band for the new home, by postcode area.
-    Mock only: the result is always labelled indicative and is never a quote or a recommendation.
+    Mock only: the result is always labeled indicative and is never a quote or a recommendation.
     """
 
     BANDS_BY_AREA: dict[str, str] = {"HG": "£22 to £30 a month", "LS": "£26 to £36 a month"}

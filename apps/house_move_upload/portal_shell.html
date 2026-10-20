@@ -21,7 +21,7 @@
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <script>
-// Shared behaviour: a hairline under the app bar once the page scrolls.
+// Shared behavior: a hairline under the app bar once the page scrolls.
 const bar = document.getElementById("topbar");
 addEventListener("scroll", () => bar.classList.toggle("scrolled", scrollY > 4), {passive: true});
 function toast(text, bad) {

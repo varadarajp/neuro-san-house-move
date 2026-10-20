@@ -24,10 +24,10 @@ class HouseMoveTestState:
 
     OWNER: str = "bank:C-10042"
     FACTS: dict = {
-        "has_driving_licence": True,
+        "has_driving_license": True,
         "has_vehicle": True,
         "has_broadband": True,
-        "has_tv_licence": True,
+        "has_tv_license": True,
         "wants_mail_redirection": True,
         "has_home_insurance": True,
         "has_car_insurance": True,

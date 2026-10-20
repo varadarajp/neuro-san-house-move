@@ -26,10 +26,10 @@ class CreateCase(CaseTool):
     """
 
     FACT_NAMES: tuple[str, ...] = (
-        "has_driving_licence",
+        "has_driving_license",
         "has_vehicle",
         "has_broadband",
-        "has_tv_licence",
+        "has_tv_license",
         "wants_mail_redirection",
         "has_home_insurance",
         "has_car_insurance",
@@ -168,7 +168,7 @@ class CreateCase(CaseTool):
             "exchange_date": exchange_date.isoformat() if exchange_date else None,
             "move_date_is_estimate": bool(args.get("move_date_is_estimate")),
             "old_property_retained": args.get("old_property"),
-            "has_driving_licence": facts.get("has_driving_licence"),
+            "has_driving_license": facts.get("has_driving_license"),
             "vehicles": None,
             "employment": None,
             "products_held": [],

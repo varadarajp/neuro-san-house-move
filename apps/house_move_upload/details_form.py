@@ -91,7 +91,7 @@ class DetailsForm:
 
     def field(self, name: str, label: str, kind: str, hint: str = "") -> str:
         """
-        :return: one labelled control (textarea, select, checkbox, or an input of this type) with its error or hint.
+        :return: one labeled control (textarea, select, checkbox, or an input of this type) with its error or hint.
         """
         value: str = html.escape(str(self._typed.get(name) or ""))
         need: str = "" if name in DetailsForm.OPTIONAL else " required"

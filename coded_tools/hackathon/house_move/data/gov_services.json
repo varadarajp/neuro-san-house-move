@@ -1,7 +1,7 @@
 {
   "_note": "Official service directory, checked against the linked pages on 2026-10-18. Council tax links are council-specific: find any council at https://www.gov.uk/find-local-council.",
   "services": {
-    "dvla_licence": {
+    "dvla_license": {
       "service": "Change the address on your driving licence",
       "channel": "online_form",
       "url": "https://www.gov.uk/change-address-driving-licence",

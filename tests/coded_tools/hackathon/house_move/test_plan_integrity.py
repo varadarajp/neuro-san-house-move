@@ -64,7 +64,7 @@ class TestPlanIntegrity(HouseMoveTestCase):
         sly_data: dict = HouseMoveTestState.planned()
         self.assertEqual("T-14", HouseMoveTestState.task_for(sly_data, "home_insurance").get("task_id"))
         fewer: dict = HouseMoveTestState.planned()
-        self.replan(fewer, has_driving_licence=False, has_vehicle=False, has_broadband=False)
+        self.replan(fewer, has_driving_license=False, has_vehicle=False, has_broadband=False)
         self.assertEqual("T-14", HouseMoveTestState.task_for(fewer, "home_insurance").get("task_id"))
 
     def test_plans_saved_before_stable_ids_keep_their_ids(self):
