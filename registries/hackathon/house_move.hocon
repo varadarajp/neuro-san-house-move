@@ -607,14 +607,14 @@ cleaned payee name, with counts, payment types and evidence dates."""
                 properties = {
                     customer_id = {
                         type = "string"
-                        description = "The bank's customer ID, for example C-10042."
+                        description = """The customer ID from the profile lookup. Leave out to use the open case;
+any other ID is refused."""
                     }
                     days = {
                         type = "integer"
                         description = "How many days to look back. Defaults to 90."
                     }
                 }
-                required = ["customer_id"]
             }
         }
         class = "get_transactions.GetTransactions"
