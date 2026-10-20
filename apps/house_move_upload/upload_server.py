@@ -31,6 +31,7 @@ from fastapi import Request
 from fastapi import UploadFile
 from fastapi.responses import HTMLResponse
 from fastapi.responses import JSONResponse
+from fastapi.responses import RedirectResponse
 from fastapi.responses import Response
 from fastapi.responses import StreamingResponse
 
@@ -40,12 +41,14 @@ from apps.house_move_upload.journey_checklist import JourneyChecklist
 from apps.house_move_upload.portal_icons import PortalIcons
 from coded_tools.hackathon.house_move.approve_on_portal import ApproveOnPortal
 from coded_tools.hackathon.house_move.audit_log import AuditLog
+from coded_tools.hackathon.house_move.bank_address_api import BankAddressApi
 from coded_tools.hackathon.house_move.case_status import CaseStatus
 from coded_tools.hackathon.house_move.case_store import CaseStore
 from coded_tools.hackathon.house_move.create_case import CreateCase
 from coded_tools.hackathon.house_move.house_move_data_store import HouseMoveDataStore
 from coded_tools.hackathon.house_move.import_statement import ImportStatement
 from coded_tools.hackathon.house_move.personal_details import PersonalDetails
+from coded_tools.hackathon.house_move.send_notification import SendNotification
 from coded_tools.hackathon.house_move.session_tokens import SessionTokens
 from coded_tools.hackathon.house_move.statement_parser import StatementParser
 
@@ -71,16 +74,17 @@ class StatementUploadServer:  # pylint: disable=too-many-instance-attributes  # 
     # Every screen is the same app shell (app bar, content, tab bar) styled by portal.css; see portal_shell.html.
     SHELL: Template = Template((HERE / "portal_shell.html").read_text(encoding="utf-8"))
     STYLES: str = (HERE / "portal.css").read_text(encoding="utf-8")
-    # The "My move" screen renders the status JSON in the browser; see status_page.html.
-    STATUS_PAGE: str = (HERE / "status_page.html").read_text(encoding="utf-8")
+    # The Move tab renders the status and next step in the browser; see move_page.html. Its sheets and the chat's
+    # action cards share app.js.
+    MOVE_PAGE: str = (HERE / "move_page.html").read_text(encoding="utf-8")
+    SCRIPT: str = (HERE / "app.js").read_text(encoding="utf-8")
     # The Chat tab streams replies from /chat/send; see chat_page.html.
     CHAT_PAGE: str = (HERE / "chat_page.html").read_text(encoding="utf-8")
+    # Three tabs. Upload, Details and the letter review are not places to go: they open where they are needed.
     TABS: tuple[tuple[str, str, str], ...] = (
-        ("/", "Home", PortalIcons.HOME),
-        ("/status", "My move", PortalIcons.ROUTE),
+        ("/", "Move", PortalIcons.ROUTE),
         ("/chat", "Chat", PortalIcons.CHAT),
-        ("/upload", "Upload", PortalIcons.UPLOAD),
-        ("/details", "Details", PortalIcons.USER),
+        ("/account", "Account", PortalIcons.USER),
     )
     CURRENT: str = ' aria-current="page"'
     DEMO_NOTE: str = (
@@ -143,14 +147,50 @@ class StatementUploadServer:  # pylint: disable=too-many-instance-attributes  # 
         async def styles() -> Response:
             return Response(StatementUploadServer.STYLES, media_type="text/css")
 
+        @app.get("/app.js")
+        async def script() -> Response:
+            return Response(StatementUploadServer.SCRIPT, media_type="text/javascript")
+
+        @app.get("/next.json")
+        async def next_step(request: Request) -> JSONResponse:
+            token: str | None = request.cookies.get(StatementUploadServer.COOKIE)
+            claims: dict[str, Any] | None = self._tokens.verify(token)
+            if claims is None:
+                return JSONResponse({"error": "not signed in"}, status_code=401)
+            step: dict[str, Any] = await asyncio.to_thread(self._journey().next_step, token, claims)
+            return JSONResponse(step, headers={"Cache-Control": "no-store"})
+
+        @app.get("/account", response_class=HTMLResponse)
+        async def account(request: Request) -> HTMLResponse:
+            token: str | None = request.cookies.get(StatementUploadServer.COOKIE)
+            claims: dict[str, Any] | None = self._tokens.verify(token)
+            if claims is None:
+                return HTMLResponse(self._home(None, self._error("Sign in first.")), status_code=401)
+            return HTMLResponse(await asyncio.to_thread(self._account_screen, token, claims))
+
+        @app.get("/start", response_class=HTMLResponse)
+        async def start(request: Request) -> Response:
+            token: str | None = request.cookies.get(StatementUploadServer.COOKIE)
+            claims: dict[str, Any] | None = self._tokens.verify(token)
+            if claims is None:
+                return HTMLResponse(self._home(None, self._error("Sign in first.")), status_code=401)
+            if claims.get("customers") or self._own_standalone_case(claims.get("sub", "")):
+                return RedirectResponse("/", status_code=303)
+            return HTMLResponse(await asyncio.to_thread(self._details_screen, token, "", {}, {}))
+
         @app.post("/signin", response_class=HTMLResponse)
-        async def sign_in(request: Request, who: str = Form(...)) -> HTMLResponse:
+        async def sign_in(request: Request, who: str = Form(...)) -> Response:
             if not self._from_this_site(request):
                 return HTMLResponse(self._home(None, self._error("Please sign in from this page.")), status_code=403)
             token: str | None = self._issue(who)
             if token is None:
                 return HTMLResponse(self._home(None, self._error("Choose a customer or guest.")), status_code=400)
-            response: HTMLResponse = HTMLResponse(self._home(token, ""))
+            # Straight to where input is needed: a new guest's start form, otherwise the Move tab and its next step.
+            claims: dict[str, Any] = self._tokens.verify(token) or {}
+            landing: str = (
+                "/" if claims.get("customers") or self._own_standalone_case(claims.get("sub", "")) else "/start"
+            )
+            response: RedirectResponse = RedirectResponse(landing, status_code=303)
             response.set_cookie(
                 StatementUploadServer.COOKIE,
                 token,
@@ -177,15 +217,10 @@ class StatementUploadServer:  # pylint: disable=too-many-instance-attributes  # 
         """
 
         # Route handlers are nested so FastAPI can register them against this instance's settings.
-        @app.get("/status", response_class=HTMLResponse)
-        async def status_page(request: Request) -> HTMLResponse:
-            if self._tokens.verify(request.cookies.get(StatementUploadServer.COOKIE)) is None:
-                return HTMLResponse(self._home(None, self._error("Sign in to see your move.")), status_code=401)
-            return HTMLResponse(
-                self._page(
-                    request.cookies.get(StatementUploadServer.COOKIE), "/status", StatementUploadServer.STATUS_PAGE
-                )
-            )
+        @app.get("/status")
+        async def status_page() -> RedirectResponse:
+            # The old "My move" address: the Move tab now shows the status.
+            return RedirectResponse("/", status_code=307)
 
         @app.get("/status.json")
         async def status_json(request: Request) -> JSONResponse:
@@ -202,6 +237,17 @@ class StatementUploadServer:  # pylint: disable=too-many-instance-attributes  # 
             if draft is None:
                 return JSONResponse({"error": "no draft waiting for your approval"}, status_code=404)
             return JSONResponse(draft, headers={"Cache-Control": "no-store"})
+
+        @app.post("/send")
+        async def send_approved(request: Request) -> JSONResponse:
+            if self._tokens.verify(request.cookies.get(StatementUploadServer.COOKIE)) is None:
+                return JSONResponse({"error": "not signed in"}, status_code=401)
+            if not self._same_origin(request):
+                return JSONResponse({"error": "refused"}, status_code=403)
+            result, error = await self._send_approved(request.cookies.get(StatementUploadServer.COOKIE))
+            if result is None:
+                return JSONResponse({"error": error}, status_code=400)
+            return JSONResponse(result)
 
         @app.post("/approve")
         async def approve(request: Request) -> JSONResponse:
@@ -220,6 +266,24 @@ class StatementUploadServer:  # pylint: disable=too-many-instance-attributes  # 
                 status: int = 401 if "not signed in" in result else 400
                 return JSONResponse({"error": result.removeprefix("Error: ")}, status_code=status)
             return JSONResponse(result)
+
+    async def _send_approved(self, token: str | None) -> tuple[dict[str, Any] | None, str | None]:
+        """
+        "Send them now": sends every letter the customer approved, in its approved wording, and makes the bank's own
+        address change if that was approved. The same tools the agents use, so the same gate applies; the click
+        comes from the customer's own signed-in browser, so no LLM decides.
+        :return: (send_notification's groups plus "bank_update", None), or (None, the reason).
+        """
+        sly_data: dict[str, Any] = {"session_token": token}
+        sent: dict[str, Any] | str = await SendNotification(audit_log=self._audit_log).async_invoke(
+            {"task_ids": ["all"]}, sly_data
+        )
+        if isinstance(sent, str):
+            return None, sent.removeprefix("Error: ")
+        bank: dict[str, Any] | str | None = None
+        if sent.get("direct_updates_pending"):
+            bank = await BankAddressApi(self._audit_log).async_invoke({}, {"session_token": token})
+        return {**sent, "bank_update": bank if isinstance(bank, dict) else None}, None
 
     def _add_upload_routes(self, app: FastAPI) -> None:
         """
@@ -246,6 +310,17 @@ class StatementUploadServer:  # pylint: disable=too-many-instance-attributes  # 
             message, status = self._save(claims.get("sub"), file.filename or "", content)
             return HTMLResponse(self._upload_screen(token, message), status_code=status)
 
+        @app.post("/upload.json")
+        async def upload_json(request: Request, file: UploadFile = File(...)) -> JSONResponse:
+            claims: dict[str, Any] | None = self._tokens.verify(request.cookies.get(StatementUploadServer.COOKIE))
+            if claims is None:
+                return JSONResponse({"error": "not signed in"}, status_code=401)
+            if not self._from_this_site(request):
+                return JSONResponse({"error": "refused"}, status_code=403)
+            content: bytes = await file.read(ImportStatement.MAX_BYTES + 1)
+            saved, error, status = self._store_upload(claims.get("sub"), file.filename or "", content)
+            return JSONResponse(saved if saved else {"error": error}, status_code=status)
+
         @app.get("/details", response_class=HTMLResponse)
         async def details_page(request: Request) -> HTMLResponse:
             token: str | None = request.cookies.get(StatementUploadServer.COOKIE)
@@ -254,7 +329,7 @@ class StatementUploadServer:  # pylint: disable=too-many-instance-attributes  # 
             return HTMLResponse(await asyncio.to_thread(self._details_screen, token, "", {}, {}))
 
         @app.post("/details", response_class=HTMLResponse)
-        async def save_details(request: Request) -> HTMLResponse:
+        async def save_details(request: Request) -> Response:
             token: str | None = request.cookies.get(StatementUploadServer.COOKIE)
             claims: dict[str, Any] | None = self._tokens.verify(token)
             if claims is None:
@@ -265,6 +340,9 @@ class StatementUploadServer:  # pylint: disable=too-many-instance-attributes  # 
                 )
             form: dict[str, Any] = dict(await request.form())
             message, status, errors = await self._save_details(claims, token, form)
+            if status == 201:
+                # The guest's move has just started: the chat carries on from it, without asking anything again.
+                return RedirectResponse("/chat?do=start", status_code=303)
             # On an error the typed values go back into the form; once saved, nothing personal is echoed back.
             typed: dict[str, Any] = form if errors else {}
             screen: str = await asyncio.to_thread(self._details_screen, token, message, errors, typed)
@@ -365,22 +443,56 @@ class StatementUploadServer:  # pylint: disable=too-many-instance-attributes  # 
 
     def _home(self, token: str | None, message: str) -> str:
         """
-        The welcome screen with sign-in when signed out; the home screen when signed in: a summary of the move
-        (filled in from /status.json), "Your steps" (what is done and where to do the next thing), and, folded away,
-        the session for anyone chatting in nsflow instead of the Chat tab.
+        The welcome screen with sign-in when signed out; the Move tab when signed in: progress, the one next step
+        (which runs from here: a sheet, a screen, or the chat), the plan by date and recent activity.
         """
         claims: dict[str, Any] | None = self._tokens.verify(token)
         if claims is None:
             return self._welcome(message)
+        greeting: str = html.escape(f"Hi {self._first_name(claims) or 'there'}")
+        return self._page(token, "/", message + StatementUploadServer.MOVE_PAGE.replace("__GREETING__", greeting))
+
+    def _journey(self) -> JourneyChecklist:
+        """
+        :return: the journey over this portal's store and status.
+        """
+        return JourneyChecklist(self._case_store(), self._status)
+
+    def _account_screen(self, token: str, claims: dict[str, Any]) -> str:
+        """
+        The Account tab: who is signed in, their details and statements, the nsflow session, and sign-out.
+        """
+        customers: list[str] = claims.get("customers") or []
+        case_id, names = (
+            (customers[0] if customers else None, []) if customers else self._guest_case(claims.get("sub"))
+        )
+        who: str = (
+            html.escape(self._demo_customers().get(customers[0], customers[0]))
+            if customers
+            else html.escape(" and ".join(names) or "Guest")
+        )
+        reference: str = (
+            f'<p class="small muted">{"Customer ID" if customers else "Case"} '
+            f'<code class="ref">{html.escape(case_id)}</code></p>'
+            if case_id
+            else '<p class="small muted">No move started yet.</p>'
+        )
+        details: str = (
+            '<li><div class="row"><span class="avatar">' + PortalIcons.SHIELD + '</span><div class="main">'
+            '<div class="name">Your details</div><div class="small muted">From your bank record</div></div></div></li>'
+            if customers
+            else '<li><a class="row" href="/details"><span class="avatar">' + PortalIcons.USER + "</span>"
+            '<div class="main"><div class="name">Your details</div><div class="small muted">Names, addresses, email'
+            "</div></div></a></li>"
+        )
         sly: str = html.escape(json.dumps({"session_token": token}))
-        name: str = html.escape(self._first_name(claims) or "there")
-        body: str = f"""<section class="welcome" style="padding-top:8px"><h1>Hi {name}</h1>
-<p>Here is where your move stands.</p></section>
-<a class="card" id="summary" href="/status" style="display:block;text-decoration:none;color:inherit"
-  data-customer="{html.escape(", ".join(claims.get("customers") or []), quote=True)}">
-  <div class="skeleton" style="height:64px;margin:0"></div></a>
-<div class="section-head"><h2>Your steps</h2></div>
-{self._checklist(token, claims)}
+        body: str = f"""<div class="section-head"><h2>Account</h2></div>
+<div class="card"><h2 class="title">{who}</h2>{reference}</div>
+<ul class="list">
+  {details}
+  <li><a class="row" href="/upload"><span class="avatar">{PortalIcons.UPLOAD}</span><div class="main">
+    <div class="name">Bank statements</div><div class="small muted">Upload a CSV, OFX or QFX file</div></div></a></li>
+</ul>
 <details class="card dev">
   <summary><span class="avatar">{PortalIcons.CHAT}</span><span><b>Chatting in nsflow instead?</b>
     <span class="small muted">For developers and judges</span></span></summary>
@@ -390,100 +502,24 @@ class StatementUploadServer:  # pylint: disable=too-many-instance-attributes  # 
   <pre class="token" id="token">{sly}</pre>
   <button class="btn secondary block" type="button" id="copy">{PortalIcons.COPY} Copy session</button>
 </details>
+<form action="/signout" method="post"><button class="btn ghost block" type="submit">Sign out</button></form>
 {StatementUploadServer.DEMO_NOTE}"""
         script: str = """<script>
 document.getElementById("copy").onclick = async () => {
   const text = document.getElementById("token").textContent;
-  try { await navigator.clipboard.writeText(text); toast("Session copied. Paste it into the chat's SlyData."); }
+  try { await navigator.clipboard.writeText(text); toast("Session copied. Paste it into nsflow's SlyData."); }
   catch (e) { getSelection().selectAllChildren(document.getElementById("token")); toast("Selected: press Copy."); }
 };
-// The move summary, from the same feed as the My move screen. Built with textContent only.
-(async () => {
-  const box = document.getElementById("summary");
-  const el = (tag, text, cls) => { const e = document.createElement(tag); if (text) e.textContent = text;
-    if (cls) e.className = cls; return e; };
-  try {
-    const s = await (await fetch("/status.json", {cache: "no-store"})).json();
-    box.textContent = "";
-    if (!s.case) {
-      // A bank customer's ID is shown even before a move starts: it is what they give the assistant.
-      if (box.dataset.customer) {
-        const id = el("div", undefined, "small muted");
-        id.appendChild(document.createTextNode("Customer ID "));
-        id.appendChild(el("code", box.dataset.customer, "ref"));
-        box.appendChild(id);
-      }
-      box.appendChild(el("h2", "No move started yet", "title"));
-      box.appendChild(el("p", box.dataset.customer ? "Open Chat and say you're moving house. You're signed in, so "
-        + "the assistant already knows who you are." : s.hint, "small muted"));
-      return;
-    }
-    const label = el("div", undefined, "progress");
-    const head = el("div", undefined, "label");
-    head.appendChild(el("b", s.stage));
-    head.appendChild(el("span", "Step " + (s.stage_index + 1) + " of " + s.stages.length, "small muted"));
-    label.appendChild(head);
-    const seg = el("div", undefined, "segments");
-    s.stages.forEach((_, i) =>
-      seg.appendChild(el("i", "", i < s.stage_index ? "done" : i === s.stage_index ? "now" : "")));
-    label.appendChild(seg);
-    const ref = el("div", undefined, "small muted");
-    ref.appendChild(document.createTextNode("Case "));
-    ref.appendChild(el("code", s.case.reference, "ref"));
-    box.appendChild(ref);
-    box.appendChild(el("div", s.case.from + "  →  " + s.case.to, "small muted"));
-    box.appendChild(label);
-    const waiting = s.awaiting_approval.length;
-    const action = (s.groups.find(g => g.status === "needs_action") || {tasks: []}).tasks.length;
-    box.appendChild(el("p", waiting ? waiting + " letters waiting for your approval"
-      : action ? action + " replies need something from you" : s.hint, "small"));
-  } catch (e) { box.textContent = "Open My move to see your plan."; }
-})();
 </script>"""
-        return self._page(token, "/", message + body, script)
+        return self._page(token, "/account", body, script)
 
-    def _checklist(self, token: str | None, claims: dict[str, Any]) -> str:
+    def _chat_screen(self, token: str | None, claims: dict[str, Any]) -> str:  # pylint: disable=unused-argument
         """
-        "Your steps": each step of the journey, ticked when done, with the next one highlighted and linked to the
-        tab where it is done.
+        The Chat tab: talks to the assistant with this sign-in attached on the server. The next step shows as a card
+        under the conversation; its "say" actions may send only JourneyChecklist.SAY's set phrases.
         """
-        rows: list[str] = []
-        for number, step in enumerate(JourneyChecklist(self._case_store(), self._status).steps(token, claims), 1):
-            state: str = "done" if step.get("done") else "next" if step.get("next") else "todo"
-            marker: str = PortalIcons.CHECK if step.get("done") else str(number)
-            action: str = (
-                f'<a class="btn small{"" if step.get("next") else " ghost"}" href="{step.get("href")}">'
-                f"{html.escape(step.get('action'))}</a>"
-                if step.get("action") and not step.get("done")
-                else ""
-            )
-            rows.append(
-                f'<li class="step-row {state}"><span class="step-mark">{marker}</span>'
-                f'<div class="main"><div class="name">{html.escape(step.get("title"))}</div>'
-                f'<div class="small muted">{html.escape(step.get("hint"))}</div></div>{action}</li>'
-            )
-        return f'<ol class="list steps-list">{"".join(rows)}</ol>'
-
-    def _chat_screen(self, token: str | None, claims: dict[str, Any]) -> str:
-        """
-        The Chat tab: talks to the assistant with this sign-in attached on the server. Suggested first messages
-        depend on who is signed in.
-        """
-        customers: list[str] = claims.get("customers") or []
-        started: bool = bool(customers) or self._own_standalone_case(claims.get("sub", "")) is not None
-        suggestions: list[str] = (
-            ["I'm moving house", "I've uploaded my statement", "Has anyone replied yet?"]
-            if started and not customers
-            else ["I'm moving house", "Has anyone replied yet?"]
-            if customers
-            else [
-                "I'm moving house and I don't bank with you",
-                "I've uploaded my statement",
-                "Has anyone replied yet?",
-            ]
-        )
         body: str = StatementUploadServer.CHAT_PAGE.replace(
-            "__SUGGESTIONS__", html.escape(json.dumps(suggestions), quote=True)
+            "__SAY__", html.escape(json.dumps(JourneyChecklist.SAY), quote=True)
         )
         return self._page(token, "/chat", body)
 
@@ -561,7 +597,7 @@ input.onchange = () => {
 };
 document.getElementById("upload-form").onsubmit = () => { send.disabled = true; send.textContent = "Uploading…"; };
 </script>"""
-        return self._page(token, "/upload", message + body, script)
+        return self._page(token, "/account", message + body, script)
 
     def _page(self, token: str | None, tab: str, body: str, script: str = "") -> str:
         """
@@ -684,14 +720,8 @@ document.getElementById("upload-form").onsubmit = () => { send.disabled = true; 
             # The details stay held (encrypted) for the next attempt; the reason goes back to the form.
             return self._error(created.removeprefix("Error: ")), 400, {}
         logger.info("Started a standalone case from the details form")
-        return (
-            self._ok(
-                f"Your move is set up. Case reference {created.get('case_id')}. Next, open Chat and say you're "
-                "moving: the assistant already has your details."
-            ),
-            200,
-            {},
-        )
+        # 201 tells the route to carry straight on to the chat.
+        return self._ok(f"Your move is set up. Case reference {created.get('case_id')}."), 201, {}
 
     def _details_screen(self, token: str | None, message: str, errors: dict[str, str], typed: dict[str, Any]) -> str:
         """
@@ -708,33 +738,51 @@ document.getElementById("upload-form").onsubmit = () => { send.disabled = true; 
   <p class="small muted">As a bank customer, your name, addresses and email come from your bank record. Letters use
   them automatically when they are sent.</p></div></div></div>
 {StatementUploadServer.DEMO_NOTE}"""
-            return self._page(token, "/details", message + body)
+            return self._page(token, "/account", message + body)
 
         case_id: str | None = self._own_standalone_case(claims.get("sub", ""))
         form: DetailsForm = DetailsForm(errors, typed)
         if case_id is None:
+            head = '<div class="section-head"><h2>Start your move · about 2 minutes</h2></div>'
             body = head + form.start()
         else:
             store: CaseStore = self._case_store()
             body = head + form.update(case_id, store.get_customer(case_id) or {}, store.personal_on_file(case_id))
-        return self._page(token, "/details", f"{message}{body}{StatementUploadServer.DEMO_NOTE}")
+        return self._page(token, "/account", f"{message}{body}{StatementUploadServer.DEMO_NOTE}")
 
     def _save(self, owner: str, original_name: str, content: bytes) -> tuple[str, int]:
         """
-        Checks and stores one upload in the owner's folder.
+        Checks and stores one upload from the Upload page.
         :return: (HTML message, HTTP status).
+        """
+        saved, error, status = self._store_upload(owner, original_name, content)
+        if saved is None:
+            return self._error(error), status
+        return (
+            f'<p class="ok">Uploaded <strong>{html.escape(saved.get("file_name"))}</strong> ({saved.get("rows")} '
+            f"transactions found).<br>Now go back to the chat and say: <code>I've uploaded "
+            f"{html.escape(saved.get('file_name'))}. Yes, you can read it.</code></p>",
+            200,
+        )
+
+    def _store_upload(
+        self, owner: str, original_name: str, content: bytes
+    ) -> tuple[dict[str, Any] | None, str | None, int]:
+        """
+        Checks one upload and stores it in the owner's own folder, readable by them only.
+        :return: ({"file_name", "rows"}, None, 200), or (None, a plain-text reason, HTTP status).
         """
         name: str = self._safe_name(original_name)
         if name.lower().endswith(".pdf"):
-            return self._error("PDF statements are not supported yet. Download a CSV or OFX from online banking."), 400
+            return None, "PDF statements are not supported yet. Download a CSV or OFX from online banking.", 400
         if not name.lower().endswith(StatementUploadServer.EXTENSIONS):
-            return self._error("Please choose a CSV, OFX or QFX file."), 400
+            return None, "Please choose a CSV, OFX or QFX file.", 400
         if len(content) > ImportStatement.MAX_BYTES:
-            return self._error("The file is larger than 5 MB."), 400
+            return None, "The file is larger than 5 MB.", 400
         try:
             rows: int = len(self._parser.parse(content.decode("utf-8-sig"), name))
         except (UnicodeDecodeError, ValueError) as error:
-            return self._error(f"That file could not be read as a statement: {error}"), 400
+            return None, f"That file could not be read as a statement: {error}", 400
 
         ImportStatement.purge_stale(self._upload_dir)
         folder: Path = self._upload_dir / ImportStatement.owner_folder(owner)
@@ -744,12 +792,7 @@ document.getElementById("upload-form").onsubmit = () => { send.disabled = true; 
         target.write_bytes(content)
         target.chmod(0o600)
         logger.info("Saved an upload of %d transactions", rows)
-        return (
-            f'<p class="ok">Uploaded <strong>{html.escape(target.name)}</strong> ({rows} transactions found).<br>'
-            f"Now go back to the chat and say: <code>I've uploaded {html.escape(target.name)}. "
-            f"Yes, you can read it.</code></p>",
-            200,
-        )
+        return {"file_name": target.name, "rows": rows}, None, 200
 
     @staticmethod
     def _same_origin(request: Request) -> bool:

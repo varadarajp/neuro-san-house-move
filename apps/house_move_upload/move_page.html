@@ -1,0 +1,128 @@
+<!-- The Move tab, placed inside portal_shell.html: progress, the one next step, the plan and recent activity. -->
+<section class="move-head">
+  <h1 id="greeting">__GREETING__</h1>
+  <p class="muted small" id="route">Here is where your move stands.</p>
+</section>
+<div id="move" aria-live="polite"><div class="skeleton" style="height:110px"></div><div class="skeleton" style="height:170px"></div></div>
+<script src="/app.js"></script>
+<script>
+// Everything from the case is rendered with textContent, through HM.el.
+const {el, day} = HM;
+const STATE = {
+  awaiting_approval: ["Waiting for your approval", "warn"],
+  approved: ["Approved, not sent yet", ""],
+  planned: ["Planned", ""],
+  sent: ["Sent", "ok"],
+  with_customer: ["Ready for you to send", "warn"],
+  confirmed: ["Confirmed", "ok"],
+  needs_action: ["Needs your answer", "hot"],
+  skipped: ["Skipped", ""],
+};
+function ring(done, total) {
+  const ns = "http://www.w3.org/2000/svg", s = document.createElementNS(ns, "svg");
+  s.setAttribute("viewBox", "0 0 84 84"); s.setAttribute("class", "ring");
+  s.setAttribute("role", "img"); s.setAttribute("aria-label", done + " of " + total + " steps done");
+  const c = (stroke, dash) => { const k = document.createElementNS(ns, "circle");
+    k.setAttribute("cx", "42"); k.setAttribute("cy", "42"); k.setAttribute("r", "34"); k.setAttribute("fill", "none");
+    k.setAttribute("stroke-width", "9"); k.setAttribute("class", stroke);
+    if (dash) { k.setAttribute("stroke-dasharray", dash); k.setAttribute("stroke-linecap", "round");
+      k.setAttribute("transform", "rotate(-90 42 42)"); }
+    return k; };
+  const length = 2 * Math.PI * 34;
+  s.appendChild(c("track"));
+  s.appendChild(c("fill", (length * done / total).toFixed(1) + " " + length.toFixed(1)));
+  const t = (text, y, cls) => { const x = document.createElementNS(ns, "text"); x.textContent = text;
+    x.setAttribute("x", "42"); x.setAttribute("y", y); x.setAttribute("text-anchor", "middle"); x.setAttribute("class", cls);
+    return x; };
+  s.appendChild(t(done + "/" + total, "45", "ring-big"));
+  s.appendChild(t("steps", "60", "ring-small"));
+  return s;
+}
+function render(status, next) {
+  const box = document.getElementById("move");
+  box.textContent = "";
+  const c = status.case;
+  if (c) document.getElementById("route").textContent = c.from + " → " + c.to + " · Case " + c.reference;
+
+  const progress = el("div", undefined, "card progress-card");
+  progress.appendChild(ring(next.progress.done, next.progress.total));
+  const words = el("div", undefined, "progress-words");
+  if (c) {
+    const left = c.completion_date ? Math.round((new Date(c.completion_date + "T12:00:00") - new Date()) / 86400000) : null;
+    words.appendChild(el("span", "Completion " + day(c.completion_date) + (left !== null && left >= 0 ? " · " + left
+      + " days" : "") + (c.date_is_estimate ? " (estimate)" : ""), "small muted"));
+    words.appendChild(el("b", status.stage));
+  } else {
+    words.appendChild(el("b", "No move started yet"));
+  }
+  words.appendChild(el("span", next.progress.done + " of " + next.progress.total + " steps done", "small muted"));
+  progress.appendChild(words);
+  box.appendChild(progress);
+
+  (status.pending_confirmations || []).forEach(a => {
+    const b = el("div", undefined, "banner");
+    b.appendChild(el("strong", "Waiting for your code in the chat"));
+    b.appendChild(el("div", a.what + (a.items.length ? ": " + a.items.join(", ") : ""), "small"));
+    box.appendChild(b);
+  });
+
+  box.appendChild(HM.card(next, "hero"));
+
+  const tasks = (status.groups || []).flatMap(g => g.tasks.map(t => Object.assign({}, t, {status: g.status})))
+    .sort((a, b) => (a.due_date || "").localeCompare(b.due_date || ""));
+  if (tasks.length) {
+    const head = el("div", undefined, "section-head");
+    head.appendChild(el("h2", "Your plan"));
+    head.appendChild(el("span", tasks.length + " organisations", "small muted"));
+    box.appendChild(head);
+    const list = el("ul", undefined, "list plan-list");
+    tasks.forEach(t => {
+      const li = el("li", undefined, "plan-row");
+      const date = el("div", undefined, "date-col");
+      const d = t.due_date ? new Date(t.due_date + "T12:00:00") : null;
+      date.appendChild(el("span", d ? d.toLocaleDateString("en-GB", {month: "short"}) : "", "mon"));
+      date.appendChild(el("b", d ? String(d.getDate()) : "–"));
+      li.appendChild(date);
+      const main = el("div", undefined, "main");
+      main.appendChild(el("div", t.org, "name"));
+      const meta = el("div", undefined, "meta");
+      const [label, tone] = STATE[t.status] || [t.status, ""];
+      meta.appendChild(el("span", label, "chip " + tone));
+      if (t.legal_requirement) meta.appendChild(el("span", "Legal", "chip legal"));
+      main.appendChild(meta);
+      if (t.follow_up && t.follow_up.length) main.appendChild(el("div", "Asked for: " + t.follow_up.join(", "), "ask"));
+      li.appendChild(main);
+      list.appendChild(li);
+    });
+    box.appendChild(list);
+  }
+
+  if ((status.activity || []).length) {
+    const head = el("div", undefined, "section-head");
+    head.appendChild(el("h2", "Recent activity"));
+    box.appendChild(head);
+    const tl = el("ul", undefined, "timeline");
+    status.activity.forEach(a => {
+      const li = el("li");
+      li.appendChild(el("span", "", "dot"));
+      const t = el("div");
+      t.appendChild(el("div", a.event + (a.org ? ": " + a.org : "")));
+      t.appendChild(el("div", new Date(a.at).toLocaleString([], {day: "numeric", month: "short", hour: "2-digit",
+        minute: "2-digit"}), "when"));
+      li.appendChild(t);
+      tl.appendChild(li);
+    });
+    box.appendChild(tl);
+  }
+}
+async function refresh() {
+  try {
+    const [status, next] = await Promise.all([HM.json("/status.json"), HM.next()]);
+    render(status.body, next);
+  } catch (e) { /* Offline for a moment: keep showing the last state. */ }
+}
+HM.refresh = refresh;
+refresh();
+setInterval(() => { if (!document.hidden && !document.querySelector(".sheet.open")) refresh(); }, 10000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });
+</script>

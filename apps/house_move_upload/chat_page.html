@@ -3,9 +3,8 @@
   <div><b>Assistant</b><span class="small muted"> · your sign-in is attached, nothing to paste</span></div>
   <button class="btn small ghost" type="button" id="new-chat">New chat</button>
 </div>
-<div id="thread" class="thread" aria-live="polite" data-suggestions="__SUGGESTIONS__"></div>
+<div id="thread" class="thread" aria-live="polite" data-say="__SAY__"></div>
 <form class="composer" id="composer" autocomplete="off">
-  <div class="chips" id="chips"></div>
   <div class="composer-row">
     <label class="visually-hidden" for="text">Message</label>
     <textarea id="text" rows="1" maxlength="2000" placeholder="Message the assistant" required></textarea>
@@ -13,14 +12,16 @@
       <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
         stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg></button>
   </div>
-  <p class="small muted hint-line">Never type your surname, street address, email or account numbers here: use
-  <a href="/details">Details</a>. Approve letters on <a href="/status">My move</a> or here with a code.</p>
+  <p class="small muted hint-line">Never type your surname, street address, email or account numbers here. The card
+  under each reply takes you to the next step.</p>
 </form>
+<script src="/app.js"></script>
 <script>
 // Everything is built with DOM nodes and textContent: nothing in a message is ever interpreted as HTML.
 const thread = document.getElementById("thread"), box = document.getElementById("text");
-const send = document.getElementById("send"), chips = document.getElementById("chips");
-const SUGGESTIONS = JSON.parse(thread.dataset.suggestions || "[]");
+const send = document.getElementById("send");
+// The set phrases a next-step action may send (JourneyChecklist.SAY); never text taken from the URL.
+const SAY = JSON.parse(thread.dataset.say || "{}");
 const PORTAL = /^https?:\/\/(127\.0\.0\.1|localhost):8090(\/[^\s]*)?$/;
 let busy = false;
 
@@ -109,29 +110,56 @@ function working(label) {
 function doneWorking() { const w = document.getElementById("working"); if (w) w.remove(); }
 function setBusy(value) {
   busy = value; send.disabled = value; box.disabled = value;
-  chips.querySelectorAll("button").forEach(b => b.disabled = value);
+  thread.querySelectorAll(".chat-next button").forEach(b => b.disabled = value);
 }
-function showChips(show) {
-  chips.textContent = "";
-  if (!show) return;
-  SUGGESTIONS.forEach(text => {
-    const c = el("button", text, "chip-btn"); c.type = "button";
-    c.onclick = () => { box.value = text; submit(); };
-    chips.appendChild(c);
-  });
+// The next step, from the case state (not from the assistant's words), as a card under the conversation.
+async function showNext() {
+  thread.querySelectorAll(".chat-next").forEach(n => n.remove());
+  if (busy) return;
+  try {
+    const next = await HM.next();
+    const wrap = el("div", undefined, "chat-next");
+    wrap.appendChild(HM.card(next, "inline"));
+    thread.appendChild(wrap);
+    // After the reply's own scroll has finished, so the two do not cancel each other.
+    setTimeout(() => wrap.scrollIntoView({block: "end", behavior: "smooth"}), 400);
+  } catch (e) { /* No card this time; the conversation still works. */ }
+}
+// Sends a next-step action's words: a set phrase, an uploaded file's name, or a reply the customer typed in a sheet.
+window.chatSay = (action) => {
+  let text = "";
+  if (action.type === "text") text = action.text || "";
+  else if (action.say === "uploaded" && /^[\w.-]{1,120}$/.test(action.file || "")) {
+    text = "I've uploaded " + action.file + ". Yes, you can read it.";
+  } else text = SAY[action.say] || "";
+  if (!text || busy) return;
+  box.value = text;
+  submit();
+};
+// A step started on another screen (for example "Send them now" on Move) carries on here, once.
+function handoff() {
+  const params = new URLSearchParams(location.search);
+  const key = params.get("do");
+  if (!key) return;
+  history.replaceState(null, "", "/chat");
+  if (key === "text") {
+    const text = sessionStorage.getItem("hm_text");
+    sessionStorage.removeItem("hm_text");
+    if (text) window.chatSay({type: "text", text});
+  } else window.chatSay({type: "say", say: key, file: params.get("file")});
 }
 function welcome() {
   const w = el("div", undefined, "card chat-welcome");
   w.appendChild(el("b", "Tell the assistant about your move"));
   w.appendChild(el("p", "It finds who you need to tell, builds a dated plan and drafts every letter. Nothing is sent "
-    + "until you approve it. Start with one of the suggestions below, or type your own.", "small muted"));
+    + "until you approve it. Start with the card below, or type your own message.", "small muted"));
   thread.appendChild(w);
 }
 async function submit() {
   const text = box.value.trim();
   if (!text || busy) return;
   box.value = ""; autosize();
-  showChips(false);
+  thread.querySelectorAll(".chat-next").forEach(n => n.remove());
   const intro = thread.querySelector(".chat-welcome"); if (intro) intro.remove();
   bubble("you", text);
   setBusy(true); working("Thinking");
@@ -155,7 +183,7 @@ async function submit() {
     }
   } catch (e) {
     doneWorking(); bubble("error", "The connection dropped. Your message may still be answered: reopen Chat in a moment.");
-  } finally { doneWorking(); setBusy(false); box.focus(); }
+  } finally { doneWorking(); setBusy(false); box.focus(); showNext(); }
 }
 async function load() {
   const r = await fetch("/chat/history.json", {cache: "no-store"});
@@ -164,10 +192,12 @@ async function load() {
   thread.textContent = "";
   h.messages.forEach(m => bubble(m.role, m.text));
   if (!h.messages.length) welcome();
-  showChips(!h.messages.length);
-  if (h.busy) { setBusy(true); working("Still working on your last message"); setTimeout(load, 3000); }
-  else setBusy(false);
+  if (h.busy) { setBusy(true); working("Still working on your last message"); setTimeout(load, 3000); return; }
+  setBusy(false);
+  if (new URLSearchParams(location.search).get("do")) handoff();
+  else showNext();
 }
+HM.refresh = () => { if (!busy) showNext(); };
 function autosize() { box.style.height = "auto"; box.style.height = Math.min(box.scrollHeight, 160) + "px"; }
 box.addEventListener("input", autosize);
 box.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); submit(); } });
