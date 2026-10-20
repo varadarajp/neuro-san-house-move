@@ -5,7 +5,7 @@ from datetime import date
 from typing import Any
 
 
-class DraftRenderer:
+class DraftRenderer:  # pylint: disable=too-few-public-methods  # one job: render
     """
     Replaces profile and task placeholders with real values, and customer-supplied ones with a visible gap
     such as "[add your account number]". Any other placeholder is reported as unknown.

@@ -8,6 +8,7 @@ from typing import Any
 
 from coded_tools.hackathon.house_move.case_store import CaseStore
 from coded_tools.hackathon.house_move.case_tool import CaseTool
+from coded_tools.hackathon.house_move.discovery_records import DiscoveryRecords
 from coded_tools.hackathon.house_move.house_move_data_store import HouseMoveDataStore
 from coded_tools.hackathon.house_move.merchant_normalizer import MerchantNormalizer
 
@@ -30,7 +31,7 @@ class GetTransactions(CaseTool):
         self,
         data_store: HouseMoveDataStore | None = None,
         today: date | None = None,
-        case_store: CaseStore | None = None,
+        records: DiscoveryRecords | None = None,
     ):
         """
         :param data_store: source of transactions. Defaults to the synthetic data files.
@@ -39,7 +40,7 @@ class GetTransactions(CaseTool):
         self._data_store: HouseMoveDataStore = data_store or HouseMoveDataStore()
         self._normalizer: MerchantNormalizer = MerchantNormalizer()
         self._today: date | None = today
-        self._case_store: CaseStore | None = case_store
+        self._records: DiscoveryRecords | None = records
 
     def run(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
         """
@@ -55,7 +56,7 @@ class GetTransactions(CaseTool):
         stated: list[dict[str, Any]] = []
         try:
             if CaseStore.is_case(customer_id):
-                store: CaseStore = self._case_store or CaseStore()
+                store: DiscoveryRecords = self._records or DiscoveryRecords()
                 transactions: list[dict[str, Any]] = store.get_transactions(customer_id)
                 stated = store.get_manual_providers(customer_id)
                 sly_data["mandates"] = []

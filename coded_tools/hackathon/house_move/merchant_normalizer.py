@@ -3,7 +3,7 @@
 import re
 
 
-class MerchantNormalizer:
+class MerchantNormalizer:  # pylint: disable=too-few-public-methods  # one job: normalize
     """
     Strips reference numbers and payment-type markers from a raw descriptor,
     so "BRIGHTWATT EN DD 0034X1274" and "BRIGHTWATT EN DD 0034X2384" group as one payee.

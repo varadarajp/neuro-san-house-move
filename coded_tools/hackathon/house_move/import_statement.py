@@ -10,6 +10,8 @@ from typing import Any
 from coded_tools.hackathon.house_move.case_session import CaseSession
 from coded_tools.hackathon.house_move.case_store import CaseStore
 from coded_tools.hackathon.house_move.case_tool import CaseTool
+from coded_tools.hackathon.house_move.discovery_records import DiscoveryRecords
+from coded_tools.hackathon.house_move.pending_actions import PendingActions
 from coded_tools.hackathon.house_move.statement_parser import StatementParser
 
 logger = logging.getLogger(__name__)
@@ -65,12 +67,12 @@ class ImportStatement(CaseTool):
             logger.info("Deleted %d uploads that were never imported", deleted)
         return deleted
 
-    def __init__(self, case_store: CaseStore | None = None, upload_dir: Path | None = None):
+    def __init__(self, records: DiscoveryRecords | None = None, upload_dir: Path | None = None):
         """
-        :param case_store: where transactions are stored. Defaults to the SQLite case store.
+        :param records: where transactions and consents are stored. Defaults to the SQLite database.
         :param upload_dir: where the app places uploaded files. Defaults to HOUSE_MOVE_UPLOAD_DIR, then uploads/.
         """
-        self._case_store: CaseStore | None = case_store
+        self._records: DiscoveryRecords | None = records
         self._upload_dir: Path = (
             upload_dir or Path(os.environ.get(ImportStatement.UPLOAD_ENV) or ImportStatement.DEFAULT_UPLOAD_DIR)
         ).resolve()
@@ -101,9 +103,7 @@ class ImportStatement(CaseTool):
         if isinstance(rows, str):
             return rows
 
-        code, expires = (self._case_store or CaseStore()).create_pending(
-            owner, case_id, ImportStatement.KIND, {"file_name": file_name}
-        )
+        code, expires = PendingActions().create_pending(owner, case_id, ImportStatement.KIND, {"file_name": file_name})
         return {
             "file_name": file_name,
             "transactions_found": len(rows),
@@ -125,7 +125,7 @@ class ImportStatement(CaseTool):
         rows: list[dict[str, Any]] | str = self._read(owner, file_name)
         if isinstance(rows, str):
             return rows
-        store: CaseStore = self._case_store or CaseStore()
+        store: DiscoveryRecords = self._records or DiscoveryRecords()
         count: int = store.add_transactions(case_id, rows, source=f"statement:{file_name}")
         store.record_consent(case_id, "statement_import", consent_message)
         self._path(owner, file_name).unlink()

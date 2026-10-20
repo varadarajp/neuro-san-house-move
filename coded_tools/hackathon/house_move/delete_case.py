@@ -6,6 +6,7 @@ from coded_tools.hackathon.house_move.audit_log import AuditLog
 from coded_tools.hackathon.house_move.case_session import CaseSession
 from coded_tools.hackathon.house_move.case_store import CaseStore
 from coded_tools.hackathon.house_move.case_tool import CaseTool
+from coded_tools.hackathon.house_move.pending_actions import PendingActions
 
 
 class DeleteCase(CaseTool):
@@ -40,7 +41,7 @@ class DeleteCase(CaseTool):
                 "Error: only your own standalone case can be deleted here. "
                 "Bank customers' data is handled by the bank."
             )
-        code, expires = (self._case_store or CaseStore()).create_pending(owner, case_id, DeleteCase.KIND, {})
+        code, expires = PendingActions().create_pending(owner, case_id, DeleteCase.KIND, {})
         return {
             "case_id": case_id,
             "confirmation_code": code,

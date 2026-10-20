@@ -68,32 +68,37 @@ class SendNotification(CaseTool):
         requested: list[str] = args.get("task_ids") or []
         send_all: bool = any(item.lower() == "all" for item in requested)
         wanted: set[str] = {item.strip().upper().replace("D-", "T-") for item in requested}
-        renderer: DraftRenderer = DraftRenderer(customer_supplied)
-        to_organization: list[dict[str, Any]] = []
-        to_customer: list[dict[str, Any]] = []
-        refused: list[str] = []
-        direct_updates_pending: list[str] = []
-        for task in tasks:
-            if not send_all and task.get("task_id") not in wanted:
-                continue
+        chosen: list[dict[str, Any]] = [t for t in tasks if send_all or t.get("task_id") in wanted]
+        return self._send_chosen(chosen, send_all, sly_data, DraftRenderer(customer_supplied))
+
+    def _send_chosen(
+        self, chosen: list[dict[str, Any]], send_all: bool, sly_data: dict[str, Any], renderer: DraftRenderer
+    ) -> dict[str, Any]:
+        """
+        Sends each chosen task that may go, and sorts the results into separate groups.
+        :param send_all: true for "all": unapproved tasks are then simply not due, rather than refused.
+        """
+        groups: dict[str, list[Any]] = {
+            "sent_to_organization": [],
+            "packs_for_customer": [],
+            "refused": [],
+            "direct_updates_pending": [],
+        }
+        for task in chosen:
             if self._is_bank_direct_update(task):
                 if task.get("status") == "approved":
-                    direct_updates_pending.append(task.get("task_id"))
+                    groups["direct_updates_pending"].append(task.get("task_id"))
                 continue
             reason: str | None = self._refusal(task, sly_data)
             if reason is not None:
                 # With "all", unapproved tasks are simply not due to go; an approved task that cannot go is reported.
                 if not send_all or task.get("status") == "approved":
-                    refused.append(f"{task.get('task_id')} {task.get('org')}: {reason}")
+                    groups["refused"].append(f"{task.get('task_id')} {task.get('org')}: {reason}")
                 continue
             item: dict[str, Any] = self._send(task, sly_data, renderer)
-            (to_organization if item.get("delivery") == SendNotification.TO_ORGANIZATION else to_customer).append(item)
-        return {
-            "sent_to_organization": to_organization,
-            "packs_for_customer": to_customer,
-            "refused": refused,
-            "direct_updates_pending": direct_updates_pending,
-        }
+            delivered: bool = item.get("delivery") == SendNotification.TO_ORGANIZATION
+            groups["sent_to_organization" if delivered else "packs_for_customer"].append(item)
+        return groups
 
     @staticmethod
     def _refusal(task: dict[str, Any], sly_data: dict[str, Any]) -> str | None:

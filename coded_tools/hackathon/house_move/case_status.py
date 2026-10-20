@@ -5,6 +5,7 @@ from typing import Any
 from coded_tools.hackathon.house_move.case_session import CaseSession
 from coded_tools.hackathon.house_move.case_store import CaseStore
 from coded_tools.hackathon.house_move.draft_fingerprint import DraftFingerprint
+from coded_tools.hackathon.house_move.pending_actions import PendingActions
 from coded_tools.hackathon.house_move.send_notification import SendNotification
 from coded_tools.hackathon.house_move.session_tokens import SessionTokens
 
@@ -53,13 +54,26 @@ class CaseStatus:
         "case_deleted": "Case deleted",
     }
     ACTIVITY_LIMIT: int = 8
+    # A status still present holds the case at this stage, in this order (planned tasks are handled first).
+    WAITING_STAGES: tuple[tuple[str, str], ...] = (
+        ("awaiting_approval", "Drafts ready"),
+        ("approved", "Approved"),
+        ("needs_action", "Follow-up"),
+    )
 
-    def __init__(self, store: CaseStore | None = None, tokens: SessionTokens | None = None):
+    def __init__(
+        self,
+        store: CaseStore | None = None,
+        tokens: SessionTokens | None = None,
+        pending: PendingActions | None = None,
+    ):
         """
         :param store: the case store. Defaults to the SQLite store.
         :param tokens: verifies session tokens. Defaults to the shared secret.
+        :param pending: confirmations waiting for a code. Defaults to the SQLite database.
         """
         self._store: CaseStore = store or CaseStore()
+        self._pending_actions: PendingActions = pending or PendingActions()
         self._tokens: SessionTokens = tokens or SessionTokens()
 
     def build(self, token: str | None) -> dict[str, Any] | None:
@@ -118,17 +132,12 @@ class CaseStatus:
         statuses: set[str] = {t.get("status") for t in tasks}
         if not tasks:
             return "Started"
-        if "awaiting_approval" in statuses:
-            return "Drafts ready"
-        if "approved" in statuses:
-            return "Approved"
-        if "planned" in statuses:
+        if "planned" in statuses and not statuses & {"awaiting_approval", "approved"}:
             return "Drafts ready" if any(t.get("draft_id") for t in tasks) else "Plan ready"
-        if "needs_action" in statuses:
-            return "Follow-up"
-        if statuses <= {"confirmed", "skipped"}:
-            return "Done"
-        return "Sent"
+        for status, stage in CaseStatus.WAITING_STAGES:
+            if status in statuses:
+                return stage
+        return "Done" if statuses <= {"confirmed", "skipped"} else "Sent"
 
     @staticmethod
     def _case(view: dict[str, Any]) -> dict[str, Any]:
@@ -201,7 +210,7 @@ class CaseStatus:
         """
         orgs: dict[str, str] = {t.get("task_id"): t.get("org") for t in tasks}
         pending: list[dict[str, Any]] = []
-        for action in self._store.list_pending(owner, case_id):
+        for action in self._pending_actions.list_pending(owner, case_id):
             payload: dict[str, Any] = action.get("payload") or {}
             items: list[str] = [
                 orgs.get(item.get("task_id"), item.get("task_id")) for item in payload.get("approve") or []

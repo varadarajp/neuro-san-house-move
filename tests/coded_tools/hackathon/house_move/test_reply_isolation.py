@@ -4,10 +4,10 @@ from pathlib import Path
 
 from coded_tools.hackathon.house_move.audit_log import AuditLog
 from coded_tools.hackathon.house_move.case_session import CaseSession
-from coded_tools.hackathon.house_move.case_store import CaseStore
 from coded_tools.hackathon.house_move.check_inbox import CheckInbox
 from coded_tools.hackathon.house_move.confirm_with_code import ConfirmWithCode
 from coded_tools.hackathon.house_move.house_move_data_store import HouseMoveDataStore
+from coded_tools.hackathon.house_move.pending_actions import PendingActions
 from coded_tools.hackathon.house_move.record_reply import RecordReply
 from coded_tools.hackathon.house_move.request_approval import RequestApproval
 from coded_tools.hackathon.house_move.send_notification import SendNotification
@@ -150,7 +150,7 @@ class TestReplyIsolation(HouseMoveTestCase):
         self.assertEqual(InjectingInbox.BODY, reply.get("untrusted_body"))
 
         RequestApproval().run({"approve": ["all"]}, sly_data)
-        CaseStore().record_customer_message(HouseMoveTestState.OWNER, "what did Brightwatt say?")
+        PendingActions().record_customer_message(HouseMoveTestState.OWNER, "what did Brightwatt say?")
         self.assertTrue(ConfirmWithCode(audit_log=self.NO_FILE).run({}, sly_data).startswith("Error"))
 
         before: str = json.dumps({t.get("task_id"): t.get("status") for t in sly_data.get("tasks")})

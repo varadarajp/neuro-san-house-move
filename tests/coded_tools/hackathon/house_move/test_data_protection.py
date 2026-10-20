@@ -12,6 +12,7 @@ from coded_tools.hackathon.house_move.case_session import CaseSession
 from coded_tools.hackathon.house_move.case_store import CaseStore
 from coded_tools.hackathon.house_move.check_inbox import CheckInbox
 from coded_tools.hackathon.house_move.create_case import CreateCase
+from coded_tools.hackathon.house_move.discovery_records import DiscoveryRecords
 from coded_tools.hackathon.house_move.draft_renderer import DraftRenderer
 from coded_tools.hackathon.house_move.key_folder import KeyFolder
 from coded_tools.hackathon.house_move.obligations_rules import ObligationsRules
@@ -213,7 +214,7 @@ class TestDataProtection(HouseMoveTestCase):
         """
         The database and its folder are owner-only, and statement rows are not readable in the file.
         """
-        store: CaseStore = CaseStore()
+        store: DiscoveryRecords = DiscoveryRecords()
         db_path = self.folder / "cases.sqlite"
         store.add_transactions("S-x", [{"date": "2026-09-01", "descriptor": "OCTAVIA POWER DD", "amount": -42.0}], "s")
         self.assertEqual(0o600, stat.S_IMODE(db_path.stat().st_mode))
@@ -227,13 +228,14 @@ class TestDataProtection(HouseMoveTestCase):
         """
         CaseStore()
         db_path = self.folder / "cases.sqlite"
-        with closing(sqlite3.connect(db_path)) as connection, connection:
-            connection.execute(
-                "INSERT INTO transactions VALUES "
-                "('S-y', 'old-0001', '2026-08-01', 'LEGACYCO DD', -9.5, 'debit', 'old')"
-            )
+        with closing(sqlite3.connect(db_path)) as connection:
+            with connection:
+                connection.execute(
+                    "INSERT INTO transactions VALUES "
+                    "('S-y', 'old-0001', '2026-08-01', 'LEGACYCO DD', -9.5, 'debit', 'old')"
+                )
         self.assertIn(b"LEGACYCO", db_path.read_bytes())
-        store: CaseStore = CaseStore()
+        store: DiscoveryRecords = DiscoveryRecords()
         self.assertNotIn(b"LEGACYCO", db_path.read_bytes())
         self.assertEqual("LEGACYCO DD", store.get_transactions("S-y")[0].get("descriptor"))
 
