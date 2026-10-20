@@ -44,13 +44,19 @@ class GetTransactions(CaseTool):
 
     def run(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
         """
-        :param args: optional "days" (look-back window, default 90) and "customer_id".
-        :param sly_data: "customer_id" set by the profile lookup is used when args has none.
+        :param args: optional "days" (look-back window, default 90) and "customer_id", which must be the open case.
+        :param sly_data: "customer_id" of the case the session opened (see CaseSession). Only this customer is read.
         :return: {"customer_id", "window", "payees": [...]}, or an "Error: ..." string.
         """
-        customer_id: str | None = args.get("customer_id") or sly_data.get("customer_id")
+        # The ID in args is written by the LLM, so it never chooses whose transactions are read: only the case the
+        # session opened, which CaseSession has checked against the caller's token.
+        customer_id: str | None = sly_data.get("customer_id")
         if not customer_id:
             return "Error: no customer ID is known yet. Look up the customer profile first."
+        requested: str | None = args.get("customer_id")
+        if requested and requested != customer_id:
+            logger.warning("Refused transactions for %s: the open case is %s", requested, customer_id)
+            return f"Error: no customer or case {requested} is available to you. The open case is {customer_id}."
         days: int = int(args.get("days") or GetTransactions.DEFAULT_DAYS)
 
         stated: list[dict[str, Any]] = []
