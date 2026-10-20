@@ -94,6 +94,20 @@ class TestSessionSecurity(HouseMoveTestCase):
         sneaky: dict = {"session_token": token, "customer_id": "C-20001"}
         self.assertEqual("C-10042", GetTransactions().invoke({}, sneaky).get("customer_id"))
 
+    def test_transactions_only_for_the_open_case(self):
+        """
+        Issue #4, found by the discovery evals: a customer ID the LLM passes to get_transactions cannot read another
+        customer's payments. Only the case the session opened is read, and naming it is still allowed.
+        """
+        token: str = SessionTokens().issue("bank:C-20004", ["C-20004"])
+        sly: dict = {"session_token": token}
+        CustomerProfileLookup().invoke({}, sly)
+
+        refused = GetTransactions().invoke({"customer_id": "C-10042"}, sly)
+        self.assertEqual("Error: no customer or case C-10042 is available to you. The open case is C-20004.", refused)
+        self.assertEqual("C-20004", GetTransactions().invoke({"customer_id": "C-20004"}, sly).get("customer_id"))
+        self.assertEqual("C-20004", GetTransactions().invoke({}, sly).get("customer_id"))
+
     def test_missing_tampered_expired_or_foreign_tokens_are_refused(self):
         """
         Without a valid token signed with this server's secret, no tool runs.
