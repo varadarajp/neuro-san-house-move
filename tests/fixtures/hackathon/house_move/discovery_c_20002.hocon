@@ -1,0 +1,42 @@
+# Data-driven integration test for hackathon/house_move, run by tests/integration/test_house_move_hocons.py.
+# Format: https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/test_case_hocon_reference.md
+#
+# Discovery accuracy for C-20002 (Glasgow to Darlington, two cars). Ground truth, from the customer's synthetic
+# transactions in coded_tools/hackathon/house_move/data/transactions.json:
+# - providers: Brightwatt Energy, Fibrely Broadband, Clyde Home Cover, Glasgow City Council council tax, TV Licensing,
+#   DVLA vehicle tax (two vehicles), Shieldmotor Insurance (two policies), Pawsure Pet Insurance and the Westend Out of
+#   School Club. No water bill: in Scotland water is charged with council tax. Clydeside BS is their own mortgage.
+# - life facts: a pet (pet insurance, doggy daycare), a school-age child (out-of-school club) and vehicles.
+#
+# Providers are checked by keyword where the LLM writes the name consistently, and by `gist` where it may change the
+# capitalization (ShieldMotor, VoxMobile); inferred facts and anything worded freely are checked by `gist`.
+# The test module issues a fresh session for C-20002 into HOUSE_MOVE_TEST_SESSION_C_20002.
+{
+    "agent": "hackathon/house_move",
+    "timeout_in_seconds": 300,
+    "success_ratio": "1/1",
+    "connections": ["direct"],
+    "interactions": [
+        {
+            "text": "I'm moving house",
+            "sly_data": {"session_token": ${HOUSE_MOVE_TEST_SESSION_C_20002}},
+            "response": {
+                "text": {
+                    "keywords": ["Brightwatt", "Fibrely", "Clyde Home Cover", "TV Licen", "DVLA"],
+                    "gist": [
+                        """The reply names the providers Shieldmotor and Pawsure among the organizations found.
+Capitalization and the words after the brand (for example Insurance, Policy or Mobile) do not matter.""",
+                        """The reply lists council tax (Glasgow City Council, or council tax in general) among the
+organizations the customer pays.""",
+                        """The reply says the customer has, or probably has, a pet (for example because they pay for
+pet insurance or doggy daycare).""",
+                        """The reply says the customer has, or probably has, a child (for example because they pay an
+out- of-school club).""",
+                        """The reply says the customer has, or probably has, a car or other vehicle (for example from
+vehicle tax or car insurance).""",
+                    ]
+                }
+            }
+        },
+    ]
+}

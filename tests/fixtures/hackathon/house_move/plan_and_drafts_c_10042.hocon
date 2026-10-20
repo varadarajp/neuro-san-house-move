@@ -1,0 +1,69 @@
+# Data-driven integration test for hackathon/house_move, run by tests/integration/test_house_move_hocons.py.
+# Format: https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/test_case_hocon_reference.md
+#
+# Plan and draft quality for C-10042 (Leeds to Harrogate, completion 27 November 2026, exchange 13 November 2026),
+# over the first three turns of the journey: discover, plan, draft.
+#
+# Ground truth, from coded_tools/hackathon/house_move/data/obligations_rules.json with the facts the customer states
+# in turn 2: the legal requirements are council tax at the old council (Leeds) and the new council (North
+# Yorkshire), DVLA for the driving licence and for the vehicle log book (V5C), TV Licensing and the pet microchip
+# database. The only money amounts the rules give are the DVLA fine of up to £1,000, the £70 council tax penalty and
+# the fine of up to £500 for an unchipped dog or cat; the bank's indicative home insurance price is the only other.
+# Drafts keep dates and personal details as {{placeholders}}, filled in only when a draft is sent.
+#
+# The test module issues a fresh session for C-10042 into HOUSE_MOVE_TEST_SESSION_C_10042.
+{
+    "agent": "hackathon/house_move",
+    "timeout_in_seconds": 1800,
+    "success_ratio": "1/1",
+    "connections": ["direct"],
+    "interactions": [
+        {
+            "text": "I'm moving house",
+            "sly_data": {"session_token": ${HOUSE_MOVE_TEST_SESSION_C_10042}},
+            "response": {
+                "text": {
+                    "keywords": ["Brightwatt"],
+                }
+            }
+        },
+        {
+            "text": """Yes, those are all right. We both have driving licences and one car, we have a dog, and our
+daughter goes to Little Acorns Nursery. We have a TV licence, and yes, please redirect our post. Please go ahead
+with the plan.""",
+            "response": {
+                "text": {
+                    "keywords": ["Leeds", "North Yorkshire"],
+                    "gist": [
+                        """The reply gives a dated move plan in which each of these is marked as a legal requirement:
+council tax at the old council (Leeds), council tax at the new council (North Yorkshire), DVLA for the driving
+licence, DVLA for the vehicle log book (V5C), TV Licensing, and the pet microchip database.""",
+                        """The reply does not mark any of these as a legal requirement: energy, water, broadband,
+mobile, home or car insurance, Royal Mail redirection, GP, nursery, or the customer's bank.""",
+                        """Any money amount in the reply is one of: a fine of up to £1,000 (DVLA), a £70 council tax
+penalty, or a fine of up to £500 for a dog or cat that is not microchipped. A reply with no money amounts passes.""",
+                    ]
+                }
+            }
+        },
+        {
+            "text": "Yes please, prepare the drafts.",
+            "response": {
+                "text": {
+                    "keywords": ["{{"],
+                    "not_keywords": ["Wharf Approach", "Mayfield Grove", "BW-00347781", "sam.morgan@example.com"],
+                    "gist": [
+                        """The reply shows at least one draft letter, email, form or call script in full, written with
+placeholders in double curly braces such as {{move_date}} or {{new_address}}.""",
+                        """In the drafts shown in full (the words that would be sent to an organization), every date
+is a placeholder in double curly braces or is 27 November 2026 or 13 November 2026, and there is no money amount
+(fee, fine, penalty, charge or price). Due dates listed outside the drafts are allowed.""",
+                        """Any money amount in the reply is one of: a fine of up to £1,000 (DVLA), a £70 council tax
+penalty, a fine of up to £500 for a dog or cat that is not microchipped, or an indicative home insurance price
+offered by the bank. A reply with no money amounts passes.""",
+                    ]
+                }
+            }
+        },
+    ]
+}
