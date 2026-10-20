@@ -238,7 +238,7 @@ Everything happens in the House Move app at <http://127.0.0.1:8090>, laid out li
 | **My move** | The plan by status; read and approve each letter; replies and recent activity |
 | **Chat** | Talk to the assistant. Your sign-in is attached on the server: nothing to copy or paste |
 | **Upload** | Bank statements (CSV, OFX or QFX), read once and then deleted |
-| **Details** | Guests only: full names, street addresses and email, stored encrypted, never typed in the chat |
+| **Details** | Guests only: names, email, both full addresses and the move date. Saving it starts the case; personal details are stored encrypted and never typed in the chat |
 
 nsflow (<http://localhost:4173>, **hackathon → house_move**) shows the agent network working. To chat there instead
 of the Chat tab, open "Chatting in nsflow instead?" on Home, copy the session, paste it into nsflow's SlyData tab
@@ -283,9 +283,11 @@ for that. Home then shows your steps; follow them.
 **Standalone:**
 
 1. Sign in as "I'm not a customer (guest)". On **Details**, enter the synthetic details: Jordan Lee,
-   jordan.lee@example.com, 8 Cotham Vale, 21 Lenton Boulevard.
-2. On **Chat**: "Hi, I'm moving house and I don't bank with you. I'm Jordan, moving from BS6 6RB to NG7 2NF on
-   11 December 2026."
+   jordan.lee@example.com; current home 8 Cotham Vale, Bristol, BS6 6RB (sold); new home 21 Lenton Boulevard,
+   Nottingham, NG7 2NF; move date 11 December 2026. Saving starts the case: the app bar then shows the case reference
+   and name.
+2. On **Chat**: "I'm moving house". The assistant already has the move from Details, so it goes straight to who
+   you pay.
 3. On **Upload**, upload `coded_tools/hackathon/house_move/data/sample_statements/jordan_lee_bristol.csv`, then
    in Chat say "I've uploaded jordan_lee_bristol.csv." The agent shows a code; reply with it to let the statement
    be read.

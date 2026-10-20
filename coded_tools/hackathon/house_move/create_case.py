@@ -57,8 +57,8 @@ class CreateCase(CaseTool):
     async def arun(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
         """
         :param args: "first_names" (list), "old_postcode", "new_postcode", "move_date" (YYYY-MM-DD), optional
-                     "move_date_is_estimate", "exchange_date", "old_property" (sold, let, rented_ended, kept) and
-                     "facts" (true/false household facts).
+                     "move_date_is_estimate", "exchange_date", "old_property" (sold, let, rented_ended, kept),
+                     "facts" (true/false household facts), and "old_town" / "new_town" (from the portal's form).
         :param sly_data: discards any "intake_form"; receives "customer_id", "customer_profile" and "councils".
         :return: the case summary, without personal data, or an "Error: ..." string.
         """
@@ -161,8 +161,9 @@ class CreateCase(CaseTool):
         return {
             "first_names": first_names,
             "household": {"adults": len(first_names), "children": None, "pets": None},
-            "old_address": {"town": old.get("council_name"), "postcode": old.get("postcode")},
-            "new_address": {"town": new.get("council_name"), "postcode": new.get("postcode")},
+            # A town the customer typed (on the portal's Details form) is kept; otherwise the council's name.
+            "old_address": {"town": args.get("old_town") or old.get("council_name"), "postcode": old.get("postcode")},
+            "new_address": {"town": args.get("new_town") or new.get("council_name"), "postcode": new.get("postcode")},
             "completion_date": move_date.isoformat(),
             "exchange_date": exchange_date.isoformat() if exchange_date else None,
             "move_date_is_estimate": bool(args.get("move_date_is_estimate")),

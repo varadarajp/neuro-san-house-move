@@ -118,6 +118,32 @@ class TestDataProtection(HouseMoveTestCase):
         self.assertEqual({}, errors)
         self.assertEqual(["Jordan Lee", "Sam Lee"], clean.get("full_names"))
 
+        move, errors = PersonalDetails.check_move(
+            {
+                "old_postcode": "LS1",
+                "old_town": "Leeds",
+                "new_postcode": "hg1 1sy",
+                "new_town": "",
+                "move_date": "soon",
+            }
+        )
+        self.assertEqual(["move_date", "new_town", "old_postcode", "old_property"], sorted(errors))
+        self.assertEqual("HG1 1SY", move.get("new_postcode"))
+        move, errors = PersonalDetails.check_move(
+            {
+                "old_postcode": "LS1 3ED",
+                "old_town": "Leeds",
+                "new_postcode": "HG1 1SY",
+                "new_town": "Harrogate",
+                "move_date": "2026-11-27",
+                "move_date_is_estimate": "on",
+                "old_property": "let",
+            }
+        )
+        self.assertEqual({}, errors)
+        self.assertTrue(move.get("move_date_is_estimate"))
+        self.assertNotIn("exchange_date", move)
+
     # ----- 10. Blank values are gaps -----
 
     def test_a_letter_without_details_goes_to_the_customer_not_the_organisation(self):
