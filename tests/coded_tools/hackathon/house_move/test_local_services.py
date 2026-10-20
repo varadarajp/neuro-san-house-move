@@ -78,7 +78,7 @@ class TestLocalServices(HouseMoveTestCase):
 
     def test_gp_finder_fallback_and_other_nations(self):
         """
-        With the NHS service unreachable, demo data is used and labelled; Scotland gets a link, not a list.
+        With the NHS service unreachable, demo data is used and labeled; Scotland gets a link, not a list.
         """
         tool = GpFinder(council_lookup=self.offline(), transport=self.offline()._transport)
         fallback = tool.run({"postcode": "HG1 1SY"}, {})

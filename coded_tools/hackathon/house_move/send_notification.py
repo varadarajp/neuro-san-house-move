@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 class SendNotification(CaseTool):
     """
     Sends approved drafts (mock). Each draft is rendered again at send time, so a draft approved before a date change
-    goes out with the new date. A draft with no gaps is "sent to the organisation"; one that still needs the
+    goes out with the new date. A draft with no gaps is "sent to the organization"; one that still needs the
     customer's numbers, or is an online form or phone call, becomes a pre-filled pack for the customer to finish.
     Refuses any task that is not approved. The direct bank update is handled by bank_address_api instead.
     """
@@ -28,7 +28,7 @@ class SendNotification(CaseTool):
     TEMPLATES_FILE: str = "letter_templates.json"
     DIRECT: str = "direct"
     ORG_CHANNELS: frozenset[str] = frozenset({"email", "letter"})
-    TO_ORGANISATION: str = "mock email or letter sent to the organisation"
+    TO_ORGANIZATION: str = "mock email or letter sent to the organisation"
     TO_CUSTOMER: str = "pre-filled pack sent to the customer to complete and submit"
 
     def __init__(
@@ -50,7 +50,7 @@ class SendNotification(CaseTool):
         """
         :param args: "task_ids", a list of task IDs, or ["all"] for every approved task.
         :param sly_data: reads "tasks" and "drafts"; writes "outbox", task statuses and "audit_log".
-        :return: {"sent_to_organisation", "packs_for_customer", "refused", "direct_updates_pending"}, or an
+        :return: {"sent_to_organization", "packs_for_customer", "refused", "direct_updates_pending"}, or an
                  "Error: ..." string. The groups are separate so a summary cannot mix them up;
                  direct_updates_pending lists an approved bank address task for bank_address_api.
         """
@@ -69,7 +69,7 @@ class SendNotification(CaseTool):
         send_all: bool = any(item.lower() == "all" for item in requested)
         wanted: set[str] = {item.strip().upper().replace("D-", "T-") for item in requested}
         renderer: DraftRenderer = DraftRenderer(customer_supplied)
-        to_organisation: list[dict[str, Any]] = []
+        to_organization: list[dict[str, Any]] = []
         to_customer: list[dict[str, Any]] = []
         refused: list[str] = []
         direct_updates_pending: list[str] = []
@@ -87,9 +87,9 @@ class SendNotification(CaseTool):
                     refused.append(f"{task.get('task_id')} {task.get('org')}: {reason}")
                 continue
             item: dict[str, Any] = self._send(task, sly_data, renderer)
-            (to_organisation if item.get("delivery") == SendNotification.TO_ORGANISATION else to_customer).append(item)
+            (to_organization if item.get("delivery") == SendNotification.TO_ORGANIZATION else to_customer).append(item)
         return {
-            "sent_to_organisation": to_organisation,
+            "sent_to_organization": to_organization,
             "packs_for_customer": to_customer,
             "refused": refused,
             "direct_updates_pending": direct_updates_pending,
@@ -125,8 +125,8 @@ class SendNotification(CaseTool):
         draft: dict[str, Any] = sly_data.get("drafts").get(task.get("draft_id"))
         subject, _, _ = renderer.render(draft.get("subject", ""), task, sly_data)
         body, gaps, _ = renderer.render(draft.get("body", ""), task, sly_data)
-        to_organisation: bool = task.get("channel") in SendNotification.ORG_CHANNELS and not gaps
-        delivery: str = SendNotification.TO_ORGANISATION if to_organisation else SendNotification.TO_CUSTOMER
+        to_organization: bool = task.get("channel") in SendNotification.ORG_CHANNELS and not gaps
+        delivery: str = SendNotification.TO_ORGANIZATION if to_organization else SendNotification.TO_CUSTOMER
         sent_at: str = datetime.now(UTC).isoformat(timespec="seconds")
         ref: str = "MSG-" + hashlib.sha256(f"{task.get('task_id')}{body}".encode()).hexdigest()[:8]
 
@@ -145,7 +145,7 @@ class SendNotification(CaseTool):
         )
         task["status"] = "sent"
         task["sent_ref"] = ref
-        # Whether it reached the organisation or is a pack the customer still has to send: only the first can get
+        # Whether it reached the organization or is a pack the customer still has to send: only the first can get
         # a reply (check_inbox), and the portal shows packs as waiting for the customer.
         task["delivery"] = delivery
         task["sent_due_date"] = task.get("due_date")

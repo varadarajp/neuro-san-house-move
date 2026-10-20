@@ -11,7 +11,7 @@ from coded_tools.hackathon.house_move.session_tokens import SessionTokens
 
 class CaseStatus:
     """
-    Summarises the signed-in owner's active case: which stage it has reached, what is waiting for their approval,
+    Summarizes the signed-in owner's active case: which stage it has reached, what is waiting for their approval,
     any confirmation waiting for a code, every task by status, and recent activity.
     Read-only (approving is ApproveOnPortal's job), and only for the owner's own case (the same rules as the agents).
     Confirmation codes are never shown: they are given in the chat. Only first names, towns and postcodes are shown,
@@ -170,7 +170,7 @@ class CaseStatus:
     def _with_delivery(tasks: list[dict[str, Any]], outbox: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """
         Shows a sent pack the customer still has to submit as "with_customer", not "sent": it has not reached the
-        organisation. Plans saved before tasks recorded their delivery are matched to the outbox by reference.
+        organization. Plans saved before tasks recorded their delivery are matched to the outbox by reference.
         """
         delivered: dict[str, str] = {entry.get("ref"): entry.get("delivery") for entry in outbox}
         shown: list[dict[str, Any]] = []

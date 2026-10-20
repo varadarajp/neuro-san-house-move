@@ -186,7 +186,7 @@ class BuildTimeline(CaseTool):
             anchor: date = exchange if date_basis == "exchange" else completion
             offset: int = int(timing.get("offset_days", 0))
             due = date_calc.offset(anchor, offset, bool(timing.get("working_days")))
-            # Organisations are closed on weekends and bank holidays: "before" deadlines move earlier, others later.
+            # Organizations are closed on weekends and bank holidays: "before" deadlines move earlier, others later.
             due = date_calc.nearest_working_day(due, forward=timing.get("window") != "before")
         return {
             "task_id": task_id,

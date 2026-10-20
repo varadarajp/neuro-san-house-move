@@ -3,7 +3,7 @@
 
 class PortalIcons:  # pylint: disable=too-few-public-methods  # constants only
     """
-    Stroke icons drawn in the current text colour. Each is a complete <svg> element, marked aria-hidden: the text
+    Stroke icons drawn in the current text color. Each is a complete <svg> element, marked aria-hidden: the text
     next to it carries the meaning.
     """
 

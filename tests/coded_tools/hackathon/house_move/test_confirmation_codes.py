@@ -54,7 +54,7 @@ class TestConfirmationCodes(HouseMoveTestCase):
         self.assertTrue(request.get("name_individually"))
         self.assertFalse(any(line.get("legal_requirement") for line in request.get("will_approve")))
 
-        licence: dict = HouseMoveTestState.task_for(sly_data, "dvla_licence")
+        licence: dict = HouseMoveTestState.task_for(sly_data, "dvla_license")
         named = RequestApproval().run({"approve": [licence.get("task_id")]}, sly_data)
         self.assertEqual([licence.get("task_id")], [line.get("task_id") for line in named.get("will_approve")])
 
@@ -146,7 +146,7 @@ class TestConfirmationCodes(HouseMoveTestCase):
         for task in sly_data.get("tasks"):
             task["status"] = "approved"
         sent = SendNotification(audit_log=self.NO_FILE).run({"task_ids": ["all"]}, sly_data)
-        self.assertEqual([], sent.get("sent_to_organisation") + sent.get("packs_for_customer"))
+        self.assertEqual([], sent.get("sent_to_organization") + sent.get("packs_for_customer"))
         self.assertTrue(all("no customer-confirmed approval" in line for line in sent.get("refused")))
 
     def test_middleware_records_only_the_customers_own_message(self):
@@ -192,4 +192,4 @@ class TestConfirmationCodes(HouseMoveTestCase):
             [energy], ConfirmWithCode(audit_log=self.NO_FILE).invoke({}, sly).get("result").get("approved")
         )
         sent = SendNotification(audit_log=self.NO_FILE).invoke({"task_ids": [energy]}, sly)
-        self.assertEqual([energy], [item.get("task_id") for item in sent.get("sent_to_organisation")])
+        self.assertEqual([energy], [item.get("task_id") for item in sent.get("sent_to_organization")])

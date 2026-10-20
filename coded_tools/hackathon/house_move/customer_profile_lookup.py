@@ -28,7 +28,7 @@ class CustomerProfileLookup(CaseTool):
         "household.pets",
         "old_property_retained",
         "vehicles",
-        "has_driving_licence",
+        "has_driving_license",
     )
 
     def __init__(self, data_store: HouseMoveDataStore | None = None, case_store: CaseStore | None = None):
@@ -91,7 +91,7 @@ class CustomerProfileLookup(CaseTool):
     @staticmethod
     def _plan_summary(sly_data: dict[str, Any]) -> dict[str, Any] | None:
         """
-        Summarises a plan already in progress (for example a resumed standalone case), so the coordinator carries on
+        Summarizes a plan already in progress (for example a resumed standalone case), so the coordinator carries on
         from where the customer left off instead of starting again. None when there is no plan yet.
         """
         tasks: list[dict[str, Any]] = sly_data.get("tasks") or []

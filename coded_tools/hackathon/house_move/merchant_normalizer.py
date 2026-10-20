@@ -3,7 +3,7 @@
 import re
 
 
-class MerchantNormaliser:
+class MerchantNormalizer:
     """
     Strips reference numbers and payment-type markers from a raw descriptor,
     so "BRIGHTWATT EN DD 0034X1274" and "BRIGHTWATT EN DD 0034X2384" group as one payee.
@@ -13,7 +13,7 @@ class MerchantNormaliser:
     PAYMENT_MARKERS: frozenset[str] = frozenset({"DD", "SO", "FP", "BGC", "CHQ"})
     HAS_DIGIT: re.Pattern = re.compile(r"\d")
 
-    def normalise(self, descriptor: str) -> str:
+    def normalize(self, descriptor: str) -> str:
         """
         :param descriptor: a raw transaction descriptor, for example "PAWSURE LTD 4110415 PETPOL".
         :return: the cleaned payee string, for example "PAWSURE LTD PETPOL". Empty if nothing is left.
@@ -21,6 +21,6 @@ class MerchantNormaliser:
         kept: list[str] = [
             token
             for token in descriptor.upper().split()
-            if token not in MerchantNormaliser.PAYMENT_MARKERS and not MerchantNormaliser.HAS_DIGIT.search(token)
+            if token not in MerchantNormalizer.PAYMENT_MARKERS and not MerchantNormalizer.HAS_DIGIT.search(token)
         ]
         return " ".join(kept)

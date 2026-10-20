@@ -27,7 +27,7 @@
       "exchange_date": "2026-11-13",
       "old_property_retained": null,
       "vehicles": null,
-      "has_driving_licence": null,
+      "has_driving_license": null,
       "employment": "employed",
       "products_held": [
         "current_account",
@@ -63,7 +63,7 @@
       "exchange_date": "2026-11-20",
       "old_property_retained": null,
       "vehicles": null,
-      "has_driving_licence": null,
+      "has_driving_license": null,
       "employment": "self_employed",
       "products_held": [
         "current_account",
@@ -102,7 +102,7 @@
       "exchange_date": "2026-11-16",
       "old_property_retained": "sold",
       "vehicles": null,
-      "has_driving_licence": null,
+      "has_driving_license": null,
       "employment": "employed",
       "products_held": [
         "current_account",
@@ -139,7 +139,7 @@
       "exchange_date": "2026-12-11",
       "old_property_retained": "sold",
       "vehicles": null,
-      "has_driving_licence": null,
+      "has_driving_license": null,
       "employment": "employed",
       "products_held": [
         "current_account",
@@ -178,7 +178,7 @@
       "exchange_date": "2026-12-04",
       "old_property_retained": null,
       "vehicles": null,
-      "has_driving_licence": null,
+      "has_driving_license": null,
       "employment": "employed",
       "products_held": [
         "current_account",

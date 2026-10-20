@@ -45,7 +45,7 @@ class TestStandalone(HouseMoveTestCase):
         "move_date": "2026-12-11",
         "move_date_is_estimate": True,
         "old_property": "sold",
-        "facts": {"has_driving_licence": True, "has_vehicle": True, "has_pet": True, "not_a_fact": True},
+        "facts": {"has_driving_license": True, "has_vehicle": True, "has_pet": True, "not_a_fact": True},
     }
 
     def offline_lookup(self) -> CouncilLookup:
@@ -88,7 +88,7 @@ class TestStandalone(HouseMoveTestCase):
         self.assertNotIn("intake_form", sly_data)
         self.assertEqual("21 Lenton Boulevard", profile.get("new_address").get("line1"))
         self.assertEqual("NG7 2NF", profile.get("new_address").get("postcode"))
-        self.assertEqual({"has_driving_licence": True, "has_vehicle": True, "has_pet": True}, profile.get("facts"))
+        self.assertEqual({"has_driving_license": True, "has_vehicle": True, "has_pet": True}, profile.get("facts"))
         self.assertEqual("Nottingham", sly_data.get("councils").get("NG7 2NF").get("council_name"))
         database: bytes = (self.folder / "cases.sqlite").read_bytes()
         for secret in ("Jordan Lee", "Cotham", "Lenton Boulevard", "jordan.lee@example.com"):
@@ -125,7 +125,7 @@ class TestStandalone(HouseMoveTestCase):
 
     def test_parser_signed_amount_csv_and_unsupported(self):
         """
-        A single signed amount column works; PDFs and unrecognisable CSVs are rejected with a clear message.
+        A single signed amount column works; PDFs and unrecognizable CSVs are rejected with a clear message.
         """
         rows: list = StatementParser().parse(
             "Date,Description,Amount\n2026-09-01,BRIGHTWATT EN DD 1234,-50.00\n2026-09-02,SALARY,1000\n", "x.csv"
@@ -199,7 +199,7 @@ class TestStandalone(HouseMoveTestCase):
         facts: dict = {
             **self.CASE_ARGS.get("facts"),
             "has_broadband": True,
-            "has_tv_licence": True,
+            "has_tv_license": True,
             "wants_mail_redirection": False,
             "has_home_insurance": True,
             "has_car_insurance": True,

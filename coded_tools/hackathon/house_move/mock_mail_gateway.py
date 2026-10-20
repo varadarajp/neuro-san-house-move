@@ -15,7 +15,7 @@ class MockMailGateway:  # pylint: disable=too-few-public-methods  # one delivery
 
     def deliver(self, message: dict[str, str]) -> None:
         """
-        :param message: "ref" (recorded on the task), "task_id", "delivery" (to the organisation, or a pack to the
+        :param message: "ref" (recorded on the task), "task_id", "delivery" (to the organization, or a pack to the
                         customer), and the rendered "subject" and "body".
         """
         size: int = len(message.get("subject", "")) + len(message.get("body", ""))

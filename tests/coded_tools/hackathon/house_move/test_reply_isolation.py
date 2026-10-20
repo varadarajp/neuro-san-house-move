@@ -159,4 +159,4 @@ class TestReplyIsolation(HouseMoveTestCase):
         changed: list = [tid for tid, status in json.loads(before).items() if after.get(tid) != status]
         self.assertEqual([energy.get("task_id")], changed)
         sent = SendNotification(audit_log=self.NO_FILE).run({"task_ids": ["all"]}, sly_data)
-        self.assertEqual([], sent.get("sent_to_organisation") + sent.get("packs_for_customer"))
+        self.assertEqual([], sent.get("sent_to_organization") + sent.get("packs_for_customer"))

@@ -19,7 +19,7 @@ class AddManualProviders(CaseTool):
             "council_tax",
             "broadband",
             "mobile",
-            "tv_licence",
+            "tv_license",
             "vehicle_tax",
             "car_insurance",
             "home_insurance",

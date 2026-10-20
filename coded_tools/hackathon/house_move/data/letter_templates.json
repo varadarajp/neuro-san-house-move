@@ -1,7 +1,7 @@
 {
   "_note": "Draft templates. Placeholders in {{double braces}} are filled from sly_data by the draft tools, so the LLM never sees the personal data. Customer-supplied placeholders are left as visible gaps for the customer to complete.",
   "profile_placeholders": ["full_names", "first_names", "old_address", "new_address", "old_postcode", "new_postcode", "move_date", "exchange_date", "customer_email"],
-  "customer_supplied_placeholders": ["account_number", "policy_number", "licence_number", "v5c_reference", "meter_readings", "meter_serial_number", "microchip_number", "nhs_numbers", "child_name", "ni_number"],
+  "customer_supplied_placeholders": ["account_number", "policy_number", "license_number", "v5c_reference", "meter_readings", "meter_serial_number", "microchip_number", "nhs_numbers", "child_name", "ni_number"],
   "templates": {
     "email": {
       "subject": "Change of address from {{move_date}}: {{full_names}}",

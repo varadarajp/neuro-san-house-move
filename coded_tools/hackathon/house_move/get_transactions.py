@@ -9,7 +9,7 @@ from typing import Any
 from coded_tools.hackathon.house_move.case_store import CaseStore
 from coded_tools.hackathon.house_move.case_tool import CaseTool
 from coded_tools.hackathon.house_move.house_move_data_store import HouseMoveDataStore
-from coded_tools.hackathon.house_move.merchant_normaliser import MerchantNormaliser
+from coded_tools.hackathon.house_move.merchant_normalizer import MerchantNormalizer
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +37,7 @@ class GetTransactions(CaseTool):
         :param today: end of the look-back window. Defaults to the latest transaction date, so the demo is stable.
         """
         self._data_store: HouseMoveDataStore = data_store or HouseMoveDataStore()
-        self._normaliser: MerchantNormaliser = MerchantNormaliser()
+        self._normalizer: MerchantNormalizer = MerchantNormalizer()
         self._today: date | None = today
         self._case_store: CaseStore | None = case_store
 
@@ -92,7 +92,7 @@ class GetTransactions(CaseTool):
         """
         groups: dict[str, list[dict[str, Any]]] = {}
         for row in rows:
-            payee: str = self._normaliser.normalise(row.get("descriptor", ""))
+            payee: str = self._normalizer.normalize(row.get("descriptor", ""))
             groups.setdefault(payee, []).append(row)
 
         payees: list[dict[str, Any]] = []

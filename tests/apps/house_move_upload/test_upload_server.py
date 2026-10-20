@@ -349,7 +349,7 @@ class TestStatementUploadServer(HouseMoveTestCase):
         self.assertEqual(403, self.client.post("/send", data={"x": "1"}).status_code)
         sent = self.client.post("/send", json={})
         self.assertEqual(200, sent.status_code, sent.text)
-        went: list = sent.json().get("sent_to_organisation") + sent.json().get("packs_for_customer")
+        went: list = sent.json().get("sent_to_organization") + sent.json().get("packs_for_customer")
         self.assertEqual([task_id], [item.get("task_id") for item in went])
         groups: dict = {g.get("status"): g for g in self.client.get("/status.json").json().get("groups")}
         self.assertNotIn("approved", groups)

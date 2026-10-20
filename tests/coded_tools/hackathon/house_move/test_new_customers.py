@@ -15,10 +15,10 @@ class TestNewCustomers(HouseMoveTestCase):
     """
 
     FACTS: dict = {
-        "has_driving_licence": True,
+        "has_driving_license": True,
         "has_vehicle": True,
         "has_broadband": True,
-        "has_tv_licence": True,
+        "has_tv_license": True,
         "wants_mail_redirection": False,
         "has_home_insurance": True,
         "has_car_insurance": True,
@@ -66,7 +66,7 @@ class TestNewCustomers(HouseMoveTestCase):
             "ids"
         )
         self.assertTrue({"council_tax_old", "council_tax_new", "water_company", "water_company_new"} <= ids)
-        self.assertFalse(ids & {"dvla_v5c", "scotland_water_via_council_tax", "ni_rates_old", "ni_licence_to_gb"})
+        self.assertFalse(ids & {"dvla_v5c", "scotland_water_via_council_tax", "ni_rates_old", "ni_license_to_gb"})
 
     def test_glasgow_to_darlington(self):
         """
@@ -87,7 +87,7 @@ class TestNewCustomers(HouseMoveTestCase):
         Wales to Scotland: close the Welsh water account; new water comes with council tax; Scottish holidays apply.
         """
         water: list = [{"category": "water", "provider_name": "Taff Valley Water"}]
-        sly_data: dict = self.plan_for("C-20003", {**self.FACTS, "has_tv_licence": False}, water)
+        sly_data: dict = self.plan_for("C-20003", {**self.FACTS, "has_tv_license": False}, water)
         ids: set = sly_data.get("ids")
         self.assertTrue({"water_company", "scotland_water_via_council_tax", "council_tax_new"} <= ids)
         self.assertFalse(ids & {"water_company_new", "tv_licensing"})
@@ -98,11 +98,11 @@ class TestNewCustomers(HouseMoveTestCase):
 
     def test_belfast_to_leeds(self):
         """
-        Northern Ireland to England: LPS rates instead of old council tax, an NI licence route instead of DVLA's
+        Northern Ireland to England: LPS rates instead of old council tax, an NI license route instead of DVLA's
         change of address, no old water account, and new council tax and water in England.
         """
         ids: set = self.plan_for("C-20004", self.FACTS).get("ids")
         self.assertTrue(
-            {"ni_rates_old", "ni_licence_to_gb", "council_tax_new", "water_company_new", "dvla_v5c"} <= ids
+            {"ni_rates_old", "ni_license_to_gb", "council_tax_new", "water_company_new", "dvla_v5c"} <= ids
         )
-        self.assertFalse(ids & {"council_tax_old", "dvla_licence", "water_company", "ni_rates_new"})
+        self.assertFalse(ids & {"council_tax_old", "dvla_license", "water_company", "ni_rates_new"})

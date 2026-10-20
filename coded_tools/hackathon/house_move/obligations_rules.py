@@ -1,4 +1,4 @@
-"""Deterministic rules engine that decides which organisations a moving customer must tell."""
+"""Deterministic rules engine that decides which organizations a moving customer must tell."""
 
 import json
 import logging
@@ -141,7 +141,7 @@ class ObligationsRules(CaseTool):
         rule: dict[str, Any], status: str, missing: list[str], facts: dict[str, Any], providers: list[dict[str, Any]]
     ) -> dict[str, Any]:
         """
-        Copies the rule's fixed fields and names the organisation, adding the customer's provider when known.
+        Copies the rule's fixed fields and names the organization, adding the customer's provider when known.
         """
         org: str = rule.get("org", "").format(
             old_council=facts.get("old_council") or "unknown", new_council=facts.get("new_council") or "unknown"
