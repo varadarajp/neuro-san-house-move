@@ -1,4 +1,4 @@
-"""The Home tab's "Your steps" checklist: what is done, and where to do the next thing."""
+"""The customer's journey, and the one next step the app takes them to."""
 
 from typing import Any
 
@@ -6,115 +6,123 @@ from coded_tools.hackathon.house_move.case_status import CaseStatus
 from coded_tools.hackathon.house_move.case_store import CaseStore
 
 
-class JourneyChecklist:  # pylint: disable=too-few-public-methods  # one view
+class JourneyChecklist:
     """
-    Works out the customer's journey from the real case state, so the checklist always matches what has happened:
-    each step says whether it is done, what to do, and which tab to do it on. The first step not done is "next".
-    A guest has two extra steps (their details, and sharing who they pay); a bank customer's come from the bank.
+    Works out the customer's journey from the real case state, so it always matches what has happened. Each step
+    says whether it is done and what action does it; the first step not done is the next step, which the app routes
+    to after sign-in and after every task, shows as the hero on the Move tab, and offers as a card in the chat.
+    Actions are one of:
+    - {"type": "link", "target": "/start"}: a screen;
+    - {"type": "sheet", "sheet": "review" | "upload"}: a sheet opened over the current screen;
+    - {"type": "say", "say": "<key>"}: one of SAY's set phrases, sent to the assistant in the chat;
+    - {"type": "send"}: send the approved letters now (the portal's /send, no LLM);
+    - {"type": "reply"}: answer what a provider asked for, in the chat.
+    A guest has two extra steps (starting their move, and sharing who they pay); a bank customer's come from the bank.
     """
+
+    # The set phrases an action can send to the assistant. The chat sends only these for a "say" action, never text
+    # taken from a URL, so a link cannot make the chat say anything else.
+    SAY: dict[str, str] = {
+        "start": "I'm moving house",
+        "list": "I'd rather list who I pay than upload a statement.",
+        "plan": "Please build my plan.",
+        "draft": "Please prepare my letters.",
+        "send": "Please send my approved letters.",
+        "replies": "Has anyone replied yet?",
+    }
 
     def __init__(self, store: CaseStore, status: CaseStatus):
         """
-        :param store: says which personal details and statements a case holds.
-        :param status: the same status the My move tab shows.
+        :param store: says which statements and providers a case holds.
+        :param status: the same status the Move tab shows.
         """
         self._store: CaseStore = store
         self._status: CaseStatus = status
 
-    def steps(self, token: str, claims: dict[str, Any]) -> list[dict[str, Any]]:
+    def steps(self, token: str, claims: dict[str, Any], status: dict[str, Any] | None = None) -> list[dict[str, Any]]:
         """
-        :return: the steps in order: {"title", "hint", "href", "action", "done", "next"}.
+        :param status: the case status, if the caller already built it.
+        :return: the steps in order: {"key", "title", "hint", "action", "label", "done", "next"}.
         """
         guest: bool = not claims.get("customers")
-        status: dict[str, Any] = self._status.build(token) or {}
+        status = status if status is not None else self._status.build(token) or {}
         case: dict[str, Any] | None = status.get("case")
-        case_id: str | None = (case or {}).get("reference")
         counts: dict[str, int] = {g.get("status"): len(g.get("tasks") or []) for g in status.get("groups") or []}
         planned: bool = bool(counts)
         waiting: int = len(status.get("awaiting_approval") or [])
         went_out: int = sum(counts.get(key, 0) for key in ("sent", "with_customer", "confirmed", "needs_action"))
 
-        signed_in: str = (
-            "Done: you are signed in." if guest else f"Done: signed in as customer {claims.get('customers')[0]}."
-        )
-        steps: list[dict[str, Any]] = [self._step("Sign in", signed_in, "/", "", True)]
+        steps: list[dict[str, Any]] = [self._step("signin", "Sign in", "You are signed in.", None, "", True)]
         if guest:
-            # A guest starts on Details: names, both addresses and the move date, never typed in the chat. Saving it
-            # opens their case, so the assistant does not ask again.
             steps.append(
                 self._step(
+                    "start",
                     "Start your move",
-                    "Your names, both addresses and your move date, on Details. Never typed in the chat.",
-                    "/details",
-                    "Add details",
+                    "Your names, both addresses and your move date. About 2 minutes, never typed in the chat.",
+                    {"type": "link", "target": "/start"},
+                    "Start my move",
                     case is not None,
+                )
+            )
+            steps.append(
+                self._step(
+                    "share",
+                    "Share who you pay",
+                    "Upload a recent bank statement (CSV or OFX). It is read once to find who you pay, then deleted.",
+                    {"type": "sheet", "sheet": "upload"},
+                    "Upload a statement",
+                    planned or self._shared(case),
                 )
             )
         else:
             steps.append(
                 self._step(
-                    "Tell the assistant about your move",
-                    "Just say you're moving. You're signed in, so there is no customer ID to type.",
-                    "/chat",
-                    "Open chat",
+                    "tell",
+                    "Tell the assistant you're moving",
+                    "You're signed in, so it already knows who you are. It finds who you pay from your account.",
+                    {"type": "say", "say": "start"},
+                    "Start in the chat",
                     case is not None,
-                )
-            )
-        if guest:
-            shared: bool = bool(case_id) and bool(
-                self._store.get_transactions(case_id) or self._store.get_manual_providers(case_id)
-            )
-            steps.append(
-                self._step(
-                    "Share who you pay",
-                    "Upload a bank statement (CSV or OFX), then say so in the chat; or list your providers there.",
-                    "/upload",
-                    "Upload",
-                    shared or planned,
                 )
             )
         steps.extend(
             [
                 self._step(
+                    "plan",
                     "Get your dated plan",
-                    "Ask the assistant to build your plan: who to tell, and by when.",
-                    "/chat",
-                    "Open chat",
+                    "Who to tell, and by when, with legal deadlines flagged.",
+                    {"type": "say", "say": "plan"},
+                    "Build my plan",
                     planned,
                 ),
                 self._step(
+                    "draft",
                     "Get your letters drafted",
-                    "Ask the assistant to prepare the letters. It takes a few minutes.",
-                    "/chat",
-                    "Open chat",
+                    "A letter or form for every organisation. It takes a few minutes.",
+                    {"type": "say", "say": "draft"},
+                    "Prepare my letters",
                     status.get("stage_index", 0) >= CaseStatus.STAGES.index("Drafts ready")
                     and counts.get("planned", 0) == 0,
                 ),
                 self._step(
-                    "Approve your letters",
-                    f"{waiting} waiting. Read each one on My move and approve it there, or in the chat with a code."
+                    "review",
+                    f"Read and approve {waiting} letter{'s' if waiting != 1 else ''}"
                     if waiting
-                    else "Read each letter on My move and approve it there, or in the chat with a code.",
-                    "/status",
-                    "Review letters",
+                    else "Approve your letters",
+                    "One at a time. Legal requirements are marked.",
+                    {"type": "sheet", "sheet": "review"},
+                    "Review now",
                     planned and not waiting and (went_out > 0 or counts.get("approved", 0) > 0),
                 ),
                 self._step(
-                    "Send them",
-                    "Ask the assistant to send your approved letters.",
-                    "/chat",
-                    "Open chat",
+                    "send",
+                    "Send your approved letters",
+                    "Complete letters go to the organisation; any still missing a reference come back to you.",
+                    {"type": "send"},
+                    "Send them now",
                     went_out > 0,
                 ),
-                self._step(
-                    "Follow up on replies",
-                    "A provider has asked for something: see My move."
-                    if counts.get("needs_action")
-                    else "Ask the assistant if anyone has replied.",
-                    "/status" if counts.get("needs_action") else "/chat",
-                    "See replies" if counts.get("needs_action") else "Open chat",
-                    counts.get("confirmed", 0) > 0 and not counts.get("needs_action"),
-                ),
+                self._follow_up(status, counts),
             ]
         )
         for step in steps:
@@ -123,9 +131,79 @@ class JourneyChecklist:  # pylint: disable=too-few-public-methods  # one view
                 break
         return steps
 
+    def next_step(self, token: str, claims: dict[str, Any]) -> dict[str, Any]:
+        """
+        :return: the step to take the customer to, with progress: {"key", "title", "hint", "action", "label",
+                 "secondary", "progress": {"done", "total"}, "asks": [{"org", "asked"}]}. When everything is done the
+                 key is "done" and there is no action.
+        """
+        status: dict[str, Any] = self._status.build(token) or {}
+        steps: list[dict[str, Any]] = self.steps(token, claims, status)
+        current: dict[str, Any] = next((s for s in steps if s.get("next")), None) or self._step(
+            "done", "All done", "Everything is sent and confirmed. Nothing needs you.", None, "", True
+        )
+        result: dict[str, Any] = {
+            **current,
+            "secondary": {"type": "say", "say": "list", "label": "List them in the chat instead"}
+            if current.get("key") == "share"
+            else None,
+            "progress": {"done": sum(1 for s in steps if s.get("done")), "total": len(steps)},
+            "asks": [],
+        }
+        if current.get("key") == "follow":
+            result["asks"] = [
+                {"org": task.get("org"), "asked": ", ".join(task.get("follow_up") or [])}
+                for group in status.get("groups") or []
+                if group.get("status") == "needs_action"
+                for task in group.get("tasks") or []
+            ]
+        return result
+
+    def _shared(self, case: dict[str, Any] | None) -> bool:
+        """
+        :return: true if a guest's case already has statement transactions or listed providers.
+        """
+        case_id: str | None = (case or {}).get("reference")
+        if not case_id:
+            return False
+        return bool(self._store.get_transactions(case_id) or self._store.get_manual_providers(case_id))
+
+    def _follow_up(self, status: dict[str, Any], counts: dict[str, int]) -> dict[str, Any]:
+        """
+        The last step: answer what a provider asked for, or check for replies; done once something is confirmed and
+        nothing is waiting on the customer.
+        """
+        if counts.get("needs_action"):
+            return self._step(
+                "follow",
+                "A provider needs something from you",
+                "Answer it here and the assistant prepares the reply for your approval.",
+                {"type": "reply"},
+                "Answer",
+                False,
+            )
+        return self._step(
+            "follow",
+            "Check for replies",
+            "Providers reply over the next few days. You will see anything they ask for here.",
+            {"type": "say", "say": "replies"},
+            "Check for replies",
+            counts.get("confirmed", 0) > 0 and status.get("stage") == "Done",
+        )
+
     @staticmethod
-    def _step(title: str, hint: str, href: str, action: str, done: bool) -> dict[str, Any]:
+    def _step(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # one flat record
+        key: str, title: str, hint: str, action: dict[str, Any] | None, label: str, done: bool
+    ) -> dict[str, Any]:
         """
-        :return: one checklist step.
+        :return: one journey step.
         """
-        return {"title": title, "hint": hint, "href": href, "action": action, "done": done, "next": False}
+        return {
+            "key": key,
+            "title": title,
+            "hint": hint,
+            "action": action,
+            "label": label,
+            "done": done,
+            "next": False,
+        }

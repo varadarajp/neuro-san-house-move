@@ -61,8 +61,7 @@ class TestStatementUploadServer(HouseMoveTestCase):
         self.assertIn("Sign in", self.client.get("/").text)
         bank = SessionTokens().verify(self.sign_in("C-10042"))
         self.assertEqual(("bank:C-10042", ["C-10042"]), (bank.get("sub"), bank.get("customers")))
-        page: str = self.client.get("/").text
-        self.assertIn("session_token", page)
+        self.assertIn("session_token", self.client.get("/account").text)
         self.client.post("/signout")
         guest = SessionTokens().verify(self.sign_in("guest"))
         self.assertTrue(guest.get("sub").startswith("guest:"))
@@ -114,19 +113,22 @@ class TestStatementUploadServer(HouseMoveTestCase):
         self.assertEqual(["pass_wd.csv"], [path.name for path in folder.iterdir()])
         self.assertIsNotNone(re.fullmatch(r"[0-9a-f]{24}", folder.name))
 
-    def test_status_page_needs_sign_in_and_shows_own_case(self):
+    def test_move_tab_and_its_feeds_need_sign_in_and_show_own_case(self):
         """
-        "My move" and its JSON feed refuse signed-out visitors; signed in, the feed shows the owner's own case.
+        The Move tab's feeds refuse signed-out visitors; the old "My move" address now leads to the Move tab;
+        signed in, the feed shows the owner's own case.
         """
-        self.assertEqual(401, self.client.get("/status").status_code)
         self.assertEqual(401, self.client.get("/status.json").status_code)
+        self.assertEqual(401, self.client.get("/next.json").status_code)
+        old = self.client.get("/status", follow_redirects=False)
+        self.assertEqual((307, "/"), (old.status_code, old.headers.get("location")))
 
         self.sign_in("C-10042")
         self.assertIsNone(self.client.get("/status.json").json().get("case"))
         HouseMoveTestState.drafted_session()
-        page = self.client.get("/status")
-        self.assertEqual(200, page.status_code)
-        self.assertIn("My move", page.text)
+        page = self.client.get("/")
+        self.assertIn('id="move"', page.text)
+        self.assertIn("Hi Sam", page.text)
         feed = self.client.get("/status.json")
         self.assertEqual("no-store", feed.headers.get("cache-control"))
         self.assertEqual("Drafts ready", feed.json().get("stage"))
@@ -187,10 +189,8 @@ class TestStatementUploadServer(HouseMoveTestCase):
         self.assertIn("Enter a UK postcode", bad.text)
         self.assertIn("21 Lenton Boulevard", bad.text)
 
-        saved = self.client.post("/details", data=form)
-        self.assertEqual(200, saved.status_code, saved.text)
-        self.assertIn("Your move is set up", saved.text)
-        self.assertNotIn("Lenton", saved.text)
+        saved = self.client.post("/details", data=form, follow_redirects=False)
+        self.assertEqual((303, "/chat?do=start"), (saved.status_code, saved.headers.get("location")), saved.text)
         store: CaseStore = CaseStore()
         case_id: str = store.get_active(owner)
         self.assertTrue(case_id.startswith("S-"))
@@ -277,41 +277,80 @@ class TestStatementUploadServer(HouseMoveTestCase):
         self.sign_in("C-10042")
         self.assertEqual([], self.client.get("/chat/history.json").json().get("messages"))
 
-    def test_home_checklist_follows_the_case(self):
+    def test_sign_in_and_next_step_take_you_where_input_is_needed(self):
         """
-        A new guest's next step is their details; a bank customer with drafted letters is at "Approve your letters".
+        A new guest lands on the start form; a bank customer lands on Move. The next step follows the case: a
+        drafted plan's next step is the review sheet, and the chat may only send the set phrases.
         """
-        self.sign_in("guest")
-        home: str = self.client.get("/").text
-        self.assertIn("Your steps", home)
-        self.assertRegex(
-            home,
-            r'step-row next"><span class="step-mark">2</span><div class="main"><div class="name">Start your move',
-        )
+        landing = self.client.post("/signin", data={"who": "guest"}, follow_redirects=False)
+        self.assertEqual((303, "/start"), (landing.status_code, landing.headers.get("location")))
+        self.assertEqual("start", self.client.get("/next.json").json().get("key"))
+        self.assertIn("Save and start my move", self.client.get("/start").text)
 
         self.client.post("/signout")
-        self.sign_in("C-10042")
+        landing = self.client.post("/signin", data={"who": "C-10042"}, follow_redirects=False)
+        self.assertEqual((303, "/"), (landing.status_code, landing.headers.get("location")))
+        self.assertEqual(303, self.client.get("/start", follow_redirects=False).status_code)
+        first: dict = self.client.get("/next.json").json()
+        self.assertEqual(("tell", {"type": "say", "say": "start"}), (first.get("key"), first.get("action")))
         HouseMoveTestState.drafted_session()
-        home = self.client.get("/").text
-        self.assertNotIn("Start your move", home)
-        self.assertRegex(home, r'step-row done">.*?Get your letters drafted')
-        self.assertRegex(home, r'step-row next">.*?Approve your letters')
-        self.assertIn('href="/status">Review letters', home)
+        step: dict = self.client.get("/next.json").json()
+        self.assertEqual(("review", {"type": "sheet", "sheet": "review"}), (step.get("key"), step.get("action")))
+        self.assertIn("Please send my approved letters.", self.client.get("/chat").text)
+
+    def test_upload_sheet_stores_the_statement_and_names_it(self):
+        """
+        The upload sheet's endpoint stores the file in the owner's folder and returns its name and row count;
+        it refuses signed-out and cross-site requests and unreadable files, as JSON.
+        """
+        csv_bytes: bytes = (self.SAMPLES / "jordan_lee_bristol.csv").read_bytes()
+        files: dict = {"file": ("jordan_lee_bristol.csv", csv_bytes, "text/csv")}
+        self.assertEqual(401, self.client.post("/upload.json", files=files).status_code)
+        owner: str = SessionTokens().verify(self.sign_in("guest")).get("sub")
+        cross = self.client.post("/upload.json", files=files, headers={"Origin": "https://evil.test"})
+        self.assertEqual(403, cross.status_code)
+        saved = self.client.post("/upload.json", files=files)
+        self.assertEqual({"file_name": "jordan_lee_bristol.csv", "rows": 34}, saved.json())
+        self.assertTrue((self.uploads / ImportStatement.owner_folder(owner) / "jordan_lee_bristol.csv").exists())
+        bad = self.client.post("/upload.json", files={"file": ("s.pdf", b"%PDF", "application/pdf")})
+        self.assertEqual(400, bad.status_code)
+        self.assertIn("PDF", bad.json().get("error"))
 
     def test_customer_id_is_shown_after_sign_in(self):
         """
-        A bank customer sees their customer ID in the app bar on every tab, on Home before a move starts, and in
-        the step that says they need not type it; a guest has none to show.
+        A bank customer sees their customer ID in the app bar on every tab and on Account, and the first step says
+        they need not type it; a guest has none to show.
         """
         self.sign_in("C-20001")
         home: str = self.client.get("/").text
         self.assertIn("C-20001 · Priya Shah", home)
-        self.assertIn('data-customer="C-20001"', home)
-        self.assertIn("there is no customer ID to type", home)
-        self.assertIn("C-20001 · Priya Shah", self.client.get("/details").text)
+        account: str = self.client.get("/account").text
+        self.assertIn("Customer ID", account)
+        self.assertIn("C-20001", account)
+        self.assertIn("already knows who you are", self.client.get("/next.json").json().get("hint"))
 
         self.client.post("/signout")
         self.sign_in("guest")
-        home = self.client.get("/").text
-        self.assertIn("Signed in as a guest", home)
-        self.assertIn('data-customer=""', home)
+        self.assertIn("Signed in as a guest", self.client.get("/account").text)
+
+    def test_send_them_now_sends_only_what_was_approved(self):
+        """
+        "Send them now" sends the approved letter and nothing else, through the same gate as the agents; it needs
+        the sign-in and a same-origin JSON request.
+        """
+        self.assertEqual(401, self.client.post("/send", json={}).status_code)
+        self.sign_in("C-10042")
+        HouseMoveTestState.drafted_session()
+        waiting: list = self.client.get("/status.json").json().get("awaiting_approval")
+        task_id: str = next(t.get("task_id") for t in waiting if not t.get("legal_requirement"))
+        draft: dict = self.client.get(f"/draft/{task_id}.json").json()
+        self.client.post("/approve", json={"approve": [{"task_id": task_id, "draft_hash": draft.get("draft_hash")}]})
+
+        self.assertEqual(403, self.client.post("/send", data={"x": "1"}).status_code)
+        sent = self.client.post("/send", json={})
+        self.assertEqual(200, sent.status_code, sent.text)
+        went: list = sent.json().get("sent_to_organisation") + sent.json().get("packs_for_customer")
+        self.assertEqual([task_id], [item.get("task_id") for item in went])
+        groups: dict = {g.get("status"): g for g in self.client.get("/status.json").json().get("groups")}
+        self.assertNotIn("approved", groups)
+        self.assertEqual(len(waiting) - 1, len(groups.get("awaiting_approval").get("tasks")))

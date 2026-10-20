@@ -153,7 +153,9 @@ flowchart TD
   30 minutes, usable once). `CustomerMessageMiddleware` records what the customer actually types, server-side, and
   `confirm_with_code` acts only if that message arrived after the code and contains it. The customer's own message
   is what gets stored as consent.
-- **Approving on the portal:** the "My move" page opens each draft and approves the exact wording shown
+- **Approving and sending in the app:** "Send them now" sends only letters already approved, through the same
+  `send_notification` gate as the agents, from the customer's own signed-in browser (no LLM decides).
+- **Approving on the portal:** the review sheet opens each draft and approves the exact wording shown
   (`ApproveOnPortal`). The click comes from the customer's own signed-in browser, so no LLM is involved; the request
   must be same-origin JSON with the strict-SameSite session cookie. It takes the same per-owner lock as the agents,
   which is also a file lock, so the portal and the agent server never overwrite each other's changes.
@@ -230,15 +232,20 @@ Python code changes need a server restart; HOCON changes are picked up automatic
 
 ## Running the demo
 
-Everything happens in the House Move app at <http://127.0.0.1:8090>, laid out like a phone app with five tabs:
+Everything happens in the House Move app at <http://127.0.0.1:8090>, laid out like a phone app. It always takes you
+to where your input is needed: after sign-in, and after every task, it works out the next step from the real case
+state and goes there. There are three tabs:
 
-| Tab | What you do there |
+| Tab | What it is |
 |---|---|
-| **Home** | "Your steps": what is done, and a button for the next thing to do |
-| **My move** | The plan by status; read and approve each letter; replies and recent activity |
-| **Chat** | Talk to the assistant. Your sign-in is attached on the server: nothing to copy or paste |
-| **Upload** | Bank statements (CSV, OFX or QFX), read once and then deleted |
-| **Details** | Guests only: names, email, both full addresses and the move date. Saving it starts the case; personal details are stored encrypted and never typed in the chat |
+| **Move** | Progress, the one next step as a big button, your plan by date, and recent activity |
+| **Chat** | The assistant. Your sign-in is attached on the server, and under each reply a card offers the next step |
+| **Account** | Who is signed in, your details, statements, the nsflow session and sign-out |
+
+Tasks open where you are, as sheets: **Review** (one letter at a time, Approve and next, then "Send them now"),
+**Upload** (a statement, then the assistant is told), and **Reply** (answer what a provider asked for). A new guest
+starts on **Start your move**: names, email, both full addresses and the move date, stored encrypted and never typed in
+the chat; saving it starts the case and carries straight on in the chat.
 
 nsflow (<http://localhost:4173>, **hackathon → house_move**) shows the agent network working. To chat there instead
 of the Chat tab, open "Chatting in nsflow instead?" on Home, copy the session, paste it into nsflow's SlyData tab
@@ -260,19 +267,19 @@ venv/bin/python -m build_scripts.reset_house_move_demo --customer C-20001 --yes
 **First, sign in** on the app and choose a demo bank customer (for example C-10042) or "I'm not a customer
 (guest)". The demo sign-in stands in for the bank's own login: it opens only that customer's record, or only the
 cases a guest creates. A bank customer's sign-in cannot start a separate move for someone else; sign in as a guest
-for that. Home then shows your steps; follow them.
+for that. The app then takes you to each step in turn.
 
 **Bank customer (about 5 minutes), in the Chat tab:**
 
-1. "I'm moving house" (a suggestion button). The sign-in says who you are, so the assistant looks up your record
-   without asking for your customer ID; the ID is shown in the app bar if you need it.
+1. On Move, press **Start in the chat** (or say "I'm moving house"). The sign-in says who you are, so the assistant
+   looks up your record without asking for your customer ID; the ID is shown in the app bar if you need it.
    Discovery finds 12 providers, including pet insurance, and infers a pet and a young child.
 2. Answer the questions and say "build the plan". Councils come from postcodes.io live; the plan is dated by
    week with legal items marked, followed by local GPs and water companies.
 3. "Yes please, prepare the drafts." Four AAOSA specialists and Comms produce a draft per task.
 4. "Approve all of them." The agent lists what will be approved, names the legal-requirement drafts that must be
-   approved one by one, and shows a 6-digit code. Reply with the code (and name any legal drafts first). Or open
-   **My move** and use Read and approve, one letter or all routine ones at once. Emails
+   approved one by one, and shows a 6-digit code. Reply with the code (and name any legal drafts first). Or press
+   **Review now** on the card and approve one letter at a time, then **Send them now**. Emails
    with known references then go to providers; the rest become pre-filled packs; the bank's own address update
    is made directly.
 5. "Completion has moved to 11 December." The Tracker sorts every task: needs correction, needs rebooking,
@@ -282,16 +289,14 @@ for that. Home then shows your steps; follow them.
 
 **Standalone:**
 
-1. Sign in as "I'm not a customer (guest)". On **Details**, enter the synthetic details: Jordan Lee,
-   jordan.lee@example.com; current home 8 Cotham Vale, Bristol, BS6 6RB (sold); new home 21 Lenton Boulevard,
-   Nottingham, NG7 2NF; move date 11 December 2026. Saving starts the case: the app bar then shows the case reference
-   and name.
-2. On **Chat**: "I'm moving house". The assistant already has the move from Details, so it goes straight to who
-   you pay.
-3. On **Upload**, upload `coded_tools/hackathon/house_move/data/sample_statements/jordan_lee_bristol.csv`, then
-   in Chat say "I've uploaded jordan_lee_bristol.csv." The agent shows a code; reply with it to let the statement
-   be read.
-4. Continue as above. Later, with the same sign-in, "My case reference is S-…" resumes the case.
+1. Sign in as "I'm not a customer (guest)". The app opens **Start your move**: enter the synthetic details Jordan
+   Lee, jordan.lee@example.com; current home 8 Cotham Vale, Bristol, BS6 6RB (sold); new home 21 Lenton Boulevard,
+   Nottingham, NG7 2NF; move date 11 December 2026. Saving starts the case and opens the chat, which carries on
+   without asking again.
+2. Press **Upload a statement** on the card and choose
+   `coded_tools/hackathon/house_move/data/sample_statements/jordan_lee_bristol.csv`. The assistant is told and shows
+   a code; reply with it to let the statement be read.
+3. Continue as above. Later, with the same sign-in, the app picks up wherever you left off.
 
 The same journeys run from the command line, passing the session from Home's "Chatting in nsflow instead?":
 
@@ -322,7 +327,9 @@ registries/hackathon/house_move.hocon         the agent network
 registries/manifest.hocon                     includes registries/hackathon/manifest.hocon (one added line)
 coded_tools/hackathon/house_move/             coded tools (one class per file)
 coded_tools/hackathon/house_move/data/        rules, synthetic data, directories, schools extract, samples
-apps/house_move_upload/upload_server.py       the app: sign-in, Home steps, My move, Chat, Upload, Details
+apps/house_move_upload/upload_server.py       the app: sign-in, routing, Move, Chat, Account, start form
+apps/house_move_upload/journey_checklist.py   the journey and the one next step, from the case state
+apps/house_move_upload/app.js                 sheets (review, upload, reply) and next-step actions
 apps/house_move_upload/chat_relay.py          Chat tab relay to the agent network (session attached server-side)
 build_scripts/build_house_move_schools.py     builds the schools extract from GIAS
 tests/coded_tools/hackathon/house_move/       unit tests
@@ -336,7 +343,7 @@ House_Move_Agent.pptx                         pitch deck
 venv/bin/python -m pytest tests/coded_tools/hackathon tests/apps/house_move_upload -q
 ```
 
-126 tests cover the rules engine (including Scotland, Wales and Northern Ireland), working-day dates, the approval
+128 tests cover the rules engine (including Scotland, Wales and Northern Ireland), working-day dates, the approval
 gate, mock sending, replanning, replies, the case store and encryption, statement parsing, the portal, and the GP,
 school and water finders. `test_session_security.py` replays the review's attacks through the real session path:
 forged approved state, opening another customer's record, missing or tampered tokens, guessing case IDs, reading
