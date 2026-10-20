@@ -1,0 +1,39 @@
+# Judge for the `gist` checks in the House Move fixtures, used by tests/integration/test_house_move_hocons.py in
+# place of neuro-san's stock gist.hocon, which is pinned to one OpenAI model. This one uses the project's LLM config,
+# so the checks run with whichever provider key is set. It answers in the same way: "pass" or "fail" only.
+# This is not a fixture: it is not registered as a test case.
+
+include "config/llm_config.hocon"
+
+max_steps = 4
+max_execution_seconds = 120
+
+metadata {
+    description = "Judges whether a House Move reply meets a gist check's acceptance criteria."
+    tags = ["test_infrastructure"]
+}
+
+tools = [
+    {
+        name = "gist"
+        function {
+            description = """
+Returns the single word "pass" if the text sample meets the acceptance criteria, otherwise the single word "fail".
+"""
+        }
+        instructions = """
+You evaluate a text sample against acceptance criteria.
+
+You are given:
+1. acceptance_criteria: what a text sample must contain or avoid to pass.
+2. text_sample: the text to evaluate.
+
+Decide whether the text_sample meets every point of the acceptance_criteria, respecting any AND or OR between
+points. Judge only what the text_sample says; do not assume anything it does not state.
+
+Output only the single word "pass" if it does, or only the single word "fail" if it does not. Never add any
+explanation.
+"""
+        tools = []
+    }
+]

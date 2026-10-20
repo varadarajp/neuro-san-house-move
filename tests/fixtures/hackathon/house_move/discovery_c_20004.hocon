@@ -1,0 +1,40 @@
+# Data-driven integration test for hackathon/house_move, run by tests/integration/test_house_move_hocons.py.
+# Format: https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/test_case_hocon_reference.md
+#
+# Discovery accuracy for C-20004 (Belfast to Leeds). Ground truth, from the customer's synthetic transactions in
+# coded_tools/hackathon/house_move/data/transactions.json:
+# - providers: Laganside Power, Land & Property Services domestic rates (LPS RATES, Northern Ireland's council tax),
+#   Fibrely Broadband, Talkmore Mobile, TV Licensing, DVLA vehicle tax, Shieldmotor Insurance (car), Hearthguard Home
+#   Insurance and the Little Steps Creche. No water bill (none in Northern Ireland). Lagan BS is their own mortgage.
+# - life facts: a young child (creche) and a car (vehicle tax, car insurance).
+#
+# Providers are checked by keyword where the LLM writes the name consistently, and by `gist` where it may change the
+# capitalization (ShieldMotor, VoxMobile); inferred facts and anything worded freely are checked by `gist`.
+# The test module issues a fresh session for C-20004 into HOUSE_MOVE_TEST_SESSION_C_20004.
+{
+    "agent": "hackathon/house_move",
+    "timeout_in_seconds": 300,
+    "success_ratio": "1/1",
+    "connections": ["direct"],
+    "interactions": [
+        {
+            "text": "I'm moving house",
+            "sly_data": {"session_token": ${HOUSE_MOVE_TEST_SESSION_C_20004}},
+            "response": {
+                "text": {
+                    "keywords": ["Laganside", "Fibrely", "TV Licen", "DVLA"],
+                    "gist": [
+                        """The reply names the providers Talkmore, Shieldmotor and Hearthguard among the organizations
+found. Capitalization and the words after the brand (for example Insurance, Policy or Mobile) do not matter.""",
+                        """The reply lists domestic rates or Land & Property Services (LPS), or council tax, among the
+organizations the customer pays.""",
+                        """The reply says the customer has, or probably has, a young child (for example because they
+pay a creche or nursery).""",
+                        """The reply says the customer has, or probably has, a car or other vehicle (for example from
+vehicle tax or car insurance).""",
+                    ]
+                }
+            }
+        },
+    ]
+}

@@ -1,0 +1,44 @@
+# Data-driven integration test for hackathon/house_move, run by tests/integration/test_house_move_hocons.py.
+# Format: https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/test_case_hocon_reference.md
+#
+# Discovery accuracy for C-10042 (Leeds to Harrogate). Ground truth, from the customer's synthetic transactions in
+# coded_tools/hackathon/house_move/data/transactions.json:
+# - providers: Brightwatt Energy, NVW Water Services, Fibrely Broadband, Voxmobile, TV Licensing, DVLA vehicle tax,
+#   Shieldmotor Insurance (car), Hearthguard Home Insurance, Pawsure Pet Insurance, Little Acorns Nursery, PulseGym
+#   and the Hopewell Trust (charity). Northway BS is their own mortgage, not something to notify.
+# - life facts: a pet (pet insurance, vet, pet shop), a young child (nursery) and a car (vehicle tax, car insurance).
+#
+# Providers are checked by keyword where the LLM writes the name consistently, and by `gist` where it may change the
+# capitalization (ShieldMotor, VoxMobile); inferred facts and anything worded freely are checked by `gist`.
+# The test module issues a fresh session for C-10042 into HOUSE_MOVE_TEST_SESSION_C_10042.
+{
+    "agent": "hackathon/house_move",
+    "timeout_in_seconds": 300,
+    "success_ratio": "1/1",
+    "connections": ["direct"],
+    "interactions": [
+        {
+            "text": "I'm moving house",
+            "sly_data": {"session_token": ${HOUSE_MOVE_TEST_SESSION_C_10042}},
+            "response": {
+                "text": {
+                    "keywords": ["Brightwatt", "Fibrely", "TV Licen", "DVLA", "Little Acorns"],
+                    "gist": [
+                        """The reply names the providers Shieldmotor, Hearthguard and Pawsure among the organizations
+found. Capitalization and the words after the brand (for example Insurance, Policy or Mobile) do not matter.""",
+                        """The reply says the customer has, or probably has, a pet (for example because they pay for
+pet insurance).""",
+                        """The reply says the customer has, or probably has, a young child at nursery (for example
+Little Acorns Nursery).""",
+                        """The reply says the customer has, or probably has, a car or other vehicle (for example from
+vehicle tax or car insurance).""",
+                        """The reply names a water company (NVW Water Services or similar) and a mobile provider
+(Voxmobile or similar) among the organizations found.""",
+                        """The reply does not present everyday spending such as groceries, fuel, restaurants or parking
+as organizations to tell about the move.""",
+                    ]
+                }
+            }
+        },
+    ]
+}

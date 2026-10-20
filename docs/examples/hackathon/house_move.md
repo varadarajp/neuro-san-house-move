@@ -347,7 +347,7 @@ House_Move_Agent.pptx                         pitch deck
 venv/bin/python -m pytest tests/coded_tools/hackathon tests/apps/house_move_upload -q
 ```
 
-128 tests cover the rules engine (including Scotland, Wales and Northern Ireland), working-day dates, the approval
+127 tests cover the rules engine (including Scotland, Wales and Northern Ireland), working-day dates, the approval
 gate, mock sending, replanning, replies, the case store and encryption, statement parsing, the portal, and the GP,
 school and water finders. `test_session_security.py` replays the review's attacks through the real session path:
 forged approved state, opening another customer's record, missing or tampered tokens, guessing case IDs, reading
@@ -357,12 +357,45 @@ approval are all refused. `test_reply_isolation.py` checks that no agent that re
 wording the customer opened, only their own case, legal drafts one at a time, and that the owner's lock holds across
 processes. Network calls are mocked in tests.
 
-Three integration fixtures run the network against the LLM (an API key is needed; each run uses a temporary case
-database and keys): sign-in required, a guest sent to the start form, and a bank customer's discovery.
+Integration fixtures in `tests/fixtures/hackathon/house_move/` run the network against the LLM. An API key is
+needed. Each run uses temporary keys, and each fixture gets its own empty case database.
 
 ```bash
 venv/bin/python -m pytest tests/integration/test_house_move_hocons.py -m integration -v
 ```
+
+- Smoke tests: sign-in required, a guest sent to the start form, and a bank customer's discovery.
+- Discovery accuracy (`discovery_c_*.hocon`): one fixture per bank customer checks that "I'm moving house" finds
+  their providers (by keyword) and the life facts their payments imply (by `gist`).
+- Plan quality (`plan_c_20004.hocon`, and turn 2 of `plan_and_drafts_c_10042.hocon`): the plan marks exactly the
+  rules' legal requirements as legal, finds the right councils, and quotes no fine or penalty other than the rules'.
+- Draft quality (turn 3 of `plan_and_drafts_c_10042.hocon`): drafts are shown with `{{placeholders}}`, state no date
+  other than a placeholder or the move dates, and no fee or penalty. Street addresses, email and the Direct Debit
+  reference never appear in the chat.
+
+A `gist` check asks an LLM judge whether the reply meets a plain-English criterion. The judge is
+`tests/fixtures/hackathon/house_move/gist_judge.hocon`: it uses the project's LLM config, so any provider key works
+(neuro-san's stock judge needs an OpenAI key).
+
+The ground truth comes from the synthetic data in `coded_tools/hackathon/house_move/data/` (transactions and
+obligation rules), and each fixture's header comment lists it in full.
+
+| Customer | Providers discovery must find | Life facts it must infer |
+|---|---|---|
+| C-10042 | Brightwatt Energy, NVW Water Services, Fibrely Broadband, Voxmobile, TV Licensing, DVLA, Shieldmotor, Hearthguard, Pawsure, Little Acorns Nursery | Pet, young child, car |
+| C-20001 | Northgate Energy, Pennine Water, Lumen Fibre, Talkmore Mobile, TV Licensing, Hearthguard, council tax (Calderdale) | No pet, child or car |
+| C-20002 | Brightwatt Energy, Fibrely Broadband, Clyde Home Cover, TV Licensing, DVLA, Shieldmotor, Pawsure, council tax (Glasgow) | Pet, child, car |
+| C-20003 | Northgate Energy, Taff Valley Water, Lumen Fibre, DVLA, Shieldmotor, Hearthguard, council tax (Cardiff) | Car; no TV Licensing payment |
+| C-20004 | Laganside Power, LPS domestic rates, Fibrely Broadband, Talkmore Mobile, TV Licensing, DVLA, Shieldmotor, Hearthguard | Young child, car |
+
+| Customer | Legal requirements the plan must mark |
+|---|---|
+| C-10042 | Council tax at Leeds and North Yorkshire, DVLA licence, DVLA log book (V5C), TV Licensing, pet microchip |
+| C-20004 | LPS domestic rates (old home), council tax at Leeds, DVLA for the NI licence, DVLA log book (V5C), TV Licensing |
+
+The full set takes about half an hour, most of it the three-turn plan and drafts fixture. LLM output varies, so a
+failing `gist` check is worth reading before changing the network: the assertion message shows the criterion and
+the reply.
 
 ## Data sources
 

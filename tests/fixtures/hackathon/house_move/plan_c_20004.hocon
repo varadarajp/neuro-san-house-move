@@ -1,0 +1,48 @@
+# Data-driven integration test for hackathon/house_move, run by tests/integration/test_house_move_hocons.py.
+# Format: https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/test_case_hocon_reference.md
+#
+# Plan quality for C-20004 (Belfast to Leeds, completion 18 December 2026), whose old home has Northern Ireland's
+# rules: domestic rates instead of council tax, and a driving licence that DVA cannot move to a GB address.
+#
+# Ground truth, from coded_tools/hackathon/house_move/data/obligations_rules.json with the facts the customer states
+# in turn 2: the legal requirements are domestic rates with Land & Property Services for the old home, council tax
+# at the new council (Leeds), contacting DVLA about the Northern Ireland driving licence, DVLA for the vehicle log
+# book (V5C) and TV Licensing. There is no council tax for the old home.
+#
+# The test module issues a fresh session for C-20004 into HOUSE_MOVE_TEST_SESSION_C_20004.
+{
+    "agent": "hackathon/house_move",
+    "timeout_in_seconds": 1200,
+    "success_ratio": "1/1",
+    "connections": ["direct"],
+    "interactions": [
+        {
+            "text": "I'm moving house",
+            "sly_data": {"session_token": ${HOUSE_MOVE_TEST_SESSION_C_20004}},
+            "response": {
+                "text": {
+                    "keywords": ["Laganside"],
+                }
+            }
+        },
+        {
+            "text": """Yes, those are all right. We both have Northern Ireland driving licences and one car, and our
+son goes to Little Steps Creche. We have a TV licence. No post redirection, thanks. Please go ahead with the
+plan.""",
+            "response": {
+                "text": {
+                    "keywords": ["Leeds"],
+                    "gist": [
+                        """The reply gives a dated move plan in which each of these is marked as a legal requirement:
+domestic rates with Land & Property Services (LPS) for the old home, council tax at the new council (Leeds), DVLA
+for the Northern Ireland driving licence, DVLA for the vehicle log book (V5C), and TV Licensing.""",
+                        """The reply does not say the customer must tell a council in Northern Ireland or Belfast
+about council tax for the old home.""",
+                        """The reply does not mark any of these as a legal requirement: energy, broadband, mobile,
+home or car insurance, GP, nursery or creche, or the customer's bank.""",
+                    ]
+                }
+            }
+        },
+    ]
+}
