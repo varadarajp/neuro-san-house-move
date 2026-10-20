@@ -87,6 +87,12 @@ class CaseSession:
         self._owner = claims.get("sub")
         return None
 
+    def signed_in_customers(self) -> list[str]:
+        """
+        :return: the bank customer records the verified caller may open (empty for a guest). Call after verify().
+        """
+        return list(self._claims.get("customers") or [])
+
     def try_lock(self) -> bool:
         """
         Tries to take the owner's lock without waiting, so callers can wait asynchronously instead of tying up a

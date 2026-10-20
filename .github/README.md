@@ -258,8 +258,8 @@ for that. Home then shows your steps; follow them.
 
 **Bank customer (about 5 minutes), in the Chat tab:**
 
-1. "I'm customer C-10042 and I'm moving house" (a suggestion button), or "Mortgage case M-55810 for customer
-   C-10042 has a completion date set. Start the move journey."
+1. "I'm moving house" (a suggestion button). The sign-in says who you are, so the assistant looks up your record
+   without asking for your customer ID; the ID is shown in the app bar if you need it.
    Discovery finds 12 providers, including pet insurance, and infers a pet and a young child.
 2. Answer the questions and say "build the plan". Councils come from postcodes.io live; the plan is dated by
    week with legal items marked, followed by local GPs and water companies.
@@ -328,7 +328,7 @@ House_Move_Agent.pptx                         pitch deck
 venv/bin/python -m pytest tests/coded_tools/hackathon tests/apps/house_move_upload -q
 ```
 
-123 tests cover the rules engine (including Scotland, Wales and Northern Ireland), working-day dates, the approval
+125 tests cover the rules engine (including Scotland, Wales and Northern Ireland), working-day dates, the approval
 gate, mock sending, replanning, replies, the case store and encryption, statement parsing, the portal, and the GP,
 school and water finders. `test_session_security.py` replays the review's attacks through the real session path:
 forged approved state, opening another customer's record, missing or tampered tokens, guessing case IDs, reading

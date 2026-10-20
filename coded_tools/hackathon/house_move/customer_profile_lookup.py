@@ -17,6 +17,9 @@ class CustomerProfileLookup(CaseTool):
     Returns what the bank already knows about a moving customer.
     The full record, including street addresses, stays in sly_data. The LLM gets a redacted view
     plus the list of facts the bank does not know yet.
+    With no customer ID it looks up who is signed in: the case already open, else the bank customer the session is
+    for. A signed-in customer never has to type their ID. A guest has no bank record, which the error says, so the
+    coordinator starts a new move instead.
     """
 
     # Facts the move plan needs. A null value in the CRM record means the bank does not know it.
@@ -43,9 +46,14 @@ class CustomerProfileLookup(CaseTool):
         Opens the requested case only if the signed-in caller may: their own bank record, or a standalone case they
         created. Resuming loads the saved plan from the server.
         """
-        case_id: str | None = args.get("customer_id") or sly_data.get("customer_id")
+        signed_in: list[str] = session.signed_in_customers()
+        case_id: str | None = (
+            args.get("customer_id") or sly_data.get("customer_id") or (signed_in[0] if len(signed_in) == 1 else None)
+        )
         if not case_id:
             return None
+        # run() reads the ID from args, so the default chosen here is the one it looks up.
+        args["customer_id"] = case_id
         return session.select_case(sly_data, case_id)
 
     def run(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
@@ -56,7 +64,11 @@ class CustomerProfileLookup(CaseTool):
         """
         customer_id: str | None = args.get("customer_id") or sly_data.get("customer_id")
         if not customer_id:
-            return "Error: no customer ID was given. Ask the customer or the mortgage case for it."
+            return (
+                "Error: no bank customer is signed in (this is a guest sign-in) and no case is open. Use the "
+                "standalone start: ask for first names, both postcodes and the move date. Do not ask for a customer "
+                "ID."
+            )
 
         try:
             if CaseStore.is_case(customer_id):

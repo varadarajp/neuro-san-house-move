@@ -107,6 +107,30 @@ class TestSessionSecurity(HouseMoveTestCase):
             result = CustomerProfileLookup().invoke({"customer_id": "C-10042"}, {"session_token": token})
             self.assertTrue(str(result).startswith("Error: not signed in"), token)
 
+    def test_profile_lookup_defaults_to_the_signed_in_customer(self):
+        """
+        With no customer ID, the lookup opens the signed-in bank customer's own record; a guest with no case gets
+        a clear "no bank customer is signed in", and a guest with a case gets that case back.
+        """
+        bank: str = SessionTokens().issue(SessionTokens.bank_owner_id("C-20001"), ["C-20001"])
+        profile = CustomerProfileLookup().invoke({}, {"session_token": bank})
+        self.assertEqual("C-20001", profile.get("customer_id"))
+        self.assertEqual(["Priya"], profile.get("first_names"))
+
+        guest: str = SessionTokens().issue("guest:new", [])
+        refused = CustomerProfileLookup().invoke({}, {"session_token": guest})
+        self.assertIn("no bank customer is signed in", refused)
+        self.assertIn("Do not ask for a customer ID", refused)
+
+        args: dict = {
+            "first_names": ["Ana"],
+            "old_postcode": "BS6 6RB",
+            "new_postcode": "NG7 2NF",
+            "move_date": "2026-12-11",
+        }
+        case_id: str = CreateCase(council_lookup=self.offline()).invoke(args, {"session_token": guest}).get("case_id")
+        self.assertEqual(case_id, CustomerProfileLookup().invoke({}, {"session_token": guest}).get("customer_id"))
+
     def test_a_bank_session_cannot_start_someone_elses_move(self):
         """
         A chat signed in as bank customer C-10042 cannot create a standalone case: it would be filed under that

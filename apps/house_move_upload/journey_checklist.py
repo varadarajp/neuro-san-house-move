@@ -34,7 +34,9 @@ class JourneyChecklist:  # pylint: disable=too-few-public-methods  # one view
         waiting: int = len(status.get("awaiting_approval") or [])
         went_out: int = sum(counts.get(key, 0) for key in ("sent", "with_customer", "confirmed", "needs_action"))
 
-        steps: list[dict[str, Any]] = [self._step("Sign in", "Done: you are signed in.", "/", "", True)]
+        customers: list[str] = claims.get("customers") or []
+        signed_in: str = f"Done: signed in as customer {customers[0]}." if customers else "Done: you are signed in."
+        steps: list[dict[str, Any]] = [self._step("Sign in", signed_in, "/", "", True)]
         if guest:
             on_file: list[str] = (
                 self._store.personal_on_file(case_id)
@@ -53,7 +55,9 @@ class JourneyChecklist:  # pylint: disable=too-few-public-methods  # one view
         steps.append(
             self._step(
                 "Tell the assistant about your move",
-                "Your customer ID, or your postcodes and move date if you are new.",
+                "Just say you're moving. You're signed in, so there is no customer ID to type."
+                if customers
+                else "Your postcodes and move date; no customer ID is needed.",
                 "/chat",
                 "Open chat",
                 case is not None,
