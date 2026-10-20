@@ -22,8 +22,8 @@
       },
       {
         "service_user": "TV Licensing",
-        "category": "tv_licence",
-        "placeholder": "licence_number",
+        "category": "tv_license",
+        "placeholder": "license_number",
         "reference": "TVL-4410923871"
       },
       {
@@ -66,8 +66,8 @@
       },
       {
         "service_user": "TV Licensing",
-        "category": "tv_licence",
-        "placeholder": "licence_number",
+        "category": "tv_license",
+        "placeholder": "license_number",
         "reference": "TVL-5518820347"
       },
       {
@@ -92,8 +92,8 @@
       },
       {
         "service_user": "TV Licensing",
-        "category": "tv_licence",
-        "placeholder": "licence_number",
+        "category": "tv_license",
+        "placeholder": "license_number",
         "reference": "TVL-6620195533"
       },
       {
@@ -162,8 +162,8 @@
       },
       {
         "service_user": "TV Licensing",
-        "category": "tv_licence",
-        "placeholder": "licence_number",
+        "category": "tv_license",
+        "placeholder": "license_number",
         "reference": "TVL-7709123344"
       },
       {

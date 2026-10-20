@@ -5,12 +5,12 @@ import httpx
 from coded_tools.hackathon.house_move.audit_log import AuditLog
 from coded_tools.hackathon.house_move.build_timeline import BuildTimeline
 from coded_tools.hackathon.house_move.case_session import CaseSession
-from coded_tools.hackathon.house_move.case_store import CaseStore
 from coded_tools.hackathon.house_move.confirm_with_code import ConfirmWithCode
 from coded_tools.hackathon.house_move.council_lookup import CouncilLookup
 from coded_tools.hackathon.house_move.customer_profile_lookup import CustomerProfileLookup
 from coded_tools.hackathon.house_move.list_tasks import ListTasks
 from coded_tools.hackathon.house_move.obligations_rules import ObligationsRules
+from coded_tools.hackathon.house_move.pending_actions import PendingActions
 from coded_tools.hackathon.house_move.request_approval import RequestApproval
 from coded_tools.hackathon.house_move.save_drafts import SaveDrafts
 from coded_tools.hackathon.house_move.session_tokens import SessionTokens
@@ -24,10 +24,10 @@ class HouseMoveTestState:
 
     OWNER: str = "bank:C-10042"
     FACTS: dict = {
-        "has_driving_licence": True,
+        "has_driving_license": True,
         "has_vehicle": True,
         "has_broadband": True,
-        "has_tv_licence": True,
+        "has_tv_license": True,
         "wants_mail_redirection": True,
         "has_home_insurance": True,
         "has_car_insurance": True,
@@ -79,7 +79,7 @@ class HouseMoveTestState:
         """
         sly_data.setdefault(CaseSession.OWNER_KEY, HouseMoveTestState.OWNER)
         request: dict = RequestApproval().run({"approve": approve, "skip": skip or []}, sly_data)
-        CaseStore().record_customer_message(
+        PendingActions().record_customer_message(
             sly_data.get(CaseSession.OWNER_KEY), message.replace("{code}", request.get("confirmation_code", ""))
         )
         return ConfirmWithCode(audit_log=AuditLog(None)).run({}, sly_data)

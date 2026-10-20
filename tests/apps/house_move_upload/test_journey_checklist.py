@@ -1,5 +1,5 @@
 from apps.house_move_upload.journey_checklist import JourneyChecklist
-from coded_tools.hackathon.house_move.case_store import CaseStore
+from coded_tools.hackathon.house_move.discovery_records import DiscoveryRecords
 from tests.coded_tools.hackathon.house_move.house_move_test_case import HouseMoveTestCase
 
 
@@ -32,7 +32,7 @@ class TestJourneyChecklist(HouseMoveTestCase):
         """
         :return: the next step the app takes the customer to.
         """
-        return JourneyChecklist(CaseStore(), StubStatus(status)).next_step("t", claims or self.BANK)
+        return JourneyChecklist(DiscoveryRecords(), StubStatus(status)).next_step("t", claims or self.BANK)
 
     def test_each_stage_leads_to_the_right_action(self):
         """

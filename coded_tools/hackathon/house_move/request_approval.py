@@ -3,9 +3,9 @@
 from typing import Any
 
 from coded_tools.hackathon.house_move.case_session import CaseSession
-from coded_tools.hackathon.house_move.case_store import CaseStore
 from coded_tools.hackathon.house_move.case_tool import CaseTool
 from coded_tools.hackathon.house_move.draft_fingerprint import DraftFingerprint
+from coded_tools.hackathon.house_move.pending_actions import PendingActions
 
 
 class RequestApproval(CaseTool):
@@ -20,11 +20,11 @@ class RequestApproval(CaseTool):
     AWAITING: str = "awaiting_approval"
     KIND: str = "approve"
 
-    def __init__(self, case_store: CaseStore | None = None):
+    def __init__(self, pending: PendingActions | None = None):
         """
-        :param case_store: where the pending approval is kept. Defaults to the SQLite case store.
+        :param pending: where the pending approval is kept. Defaults to the SQLite database.
         """
-        self._case_store: CaseStore | None = case_store
+        self._pending: PendingActions | None = pending
 
     def run(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
         """
@@ -39,32 +39,7 @@ class RequestApproval(CaseTool):
         if not owner or not case_id or not tasks:
             return "Error: there is no open plan to approve."
         drafts: dict[str, Any] = sly_data.get("drafts") or {}
-        by_id: dict[str, dict[str, Any]] = {task.get("task_id"): task for task in tasks}
-
-        requested: list[str] = args.get("approve") or []
-        approve_all: bool = any(str(item).lower() == "all" for item in requested)
-        named: set[str] = self._task_ids(requested)
-        skip: set[str] = self._task_ids(args.get("skip") or [])
-
-        will_approve: list[dict[str, Any]] = []
-        name_individually: list[str] = []
-        not_awaiting: list[str] = []
-        for task in tasks:
-            task_id: str = task.get("task_id")
-            chosen: bool = task_id in named or (approve_all and task.get("status") == RequestApproval.AWAITING)
-            if not chosen or task_id in skip:
-                continue
-            if task.get("status") != RequestApproval.AWAITING or task.get("draft_id") not in drafts:
-                not_awaiting.append(f"{task_id} ({task.get('status')})")
-            elif task.get("legal_requirement") and task_id not in named:
-                name_individually.append(f"{task_id} {task.get('org')}")
-            else:
-                will_approve.append(task)
-        will_skip: list[dict[str, Any]] = [
-            by_id.get(task_id)
-            for task_id in sorted(skip)
-            if by_id.get(task_id) and by_id.get(task_id).get("status") == RequestApproval.AWAITING
-        ]
+        will_approve, will_skip, name_individually, not_awaiting = self._select(args, tasks, drafts)
         if not will_approve and not will_skip:
             return {
                 "will_approve": [],
@@ -74,14 +49,7 @@ class RequestApproval(CaseTool):
                 "instructions": "Nothing to confirm. Legal requirements must be named one by one.",
             }
 
-        payload: dict[str, Any] = {
-            "approve": [
-                {"task_id": t.get("task_id"), "draft_hash": DraftFingerprint.of(drafts.get(t.get("draft_id")))}
-                for t in will_approve
-            ],
-            "skip": [t.get("task_id") for t in will_skip],
-        }
-        code, expires = (self._case_store or CaseStore()).create_pending(owner, case_id, RequestApproval.KIND, payload)
+        code, expires = self._issue_code((owner, case_id), drafts, will_approve, [t.get("task_id") for t in will_skip])
         return {
             "confirmation_code": code,
             "expires_at": expires,
@@ -93,6 +61,70 @@ class RequestApproval(CaseTool):
             "to confirm. Never type, repeat as confirmed, or guess the code yourself: only the "
             "customer's own message can confirm it.",
         }
+
+    def _issue_code(
+        self, case: tuple[str, str], drafts: dict[str, Any], will_approve: list[dict[str, Any]], skip_ids: list[str]
+    ) -> tuple[str, str]:
+        """
+        Records what the code will approve, tying each draft to its current wording, and issues the code.
+        :param case: (owner, case ID).
+        :return: (code, expires_at).
+        """
+        owner, case_id = case
+        payload: dict[str, Any] = {
+            "approve": [
+                {"task_id": t.get("task_id"), "draft_hash": DraftFingerprint.of(drafts.get(t.get("draft_id")))}
+                for t in will_approve
+            ],
+            "skip": skip_ids,
+        }
+        return (self._pending or PendingActions()).create_pending(owner, case_id, RequestApproval.KIND, payload)
+
+    @staticmethod
+    def _select(
+        args: dict[str, Any], tasks: list[dict[str, Any]], drafts: dict[str, Any]
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str], list[str]]:
+        """
+        Works out what the request covers.
+        :return: (tasks to approve, tasks to skip, legal requirements to name one by one, tasks not awaiting approval).
+        """
+        requested: list[str] = args.get("approve") or []
+        approve_all: bool = any(str(item).lower() == "all" for item in requested)
+        skip: set[str] = RequestApproval._task_ids(args.get("skip") or [])
+        will_approve, name_individually, not_awaiting = RequestApproval._sort_requested(
+            tasks, drafts, (RequestApproval._task_ids(requested), skip), approve_all
+        )
+        will_skip: list[dict[str, Any]] = [
+            task for task in tasks if task.get("task_id") in skip and task.get("status") == RequestApproval.AWAITING
+        ]
+        return will_approve, will_skip, name_individually, not_awaiting
+
+    @staticmethod
+    def _sort_requested(
+        tasks: list[dict[str, Any]], drafts: dict[str, Any], chosen: tuple[set[str], set[str]], approve_all: bool
+    ) -> tuple[list[dict[str, Any]], list[str], list[str]]:
+        """
+        Sorts the requested tasks: those that can be approved now, legal requirements that "all" does not cover
+        (they must be named), and those not awaiting approval.
+        :param chosen: (task IDs named for approval, task IDs to skip).
+        :return: (tasks to approve, legal requirements to name one by one, tasks not awaiting approval).
+        """
+        named, skip = chosen
+        will_approve: list[dict[str, Any]] = []
+        name_individually: list[str] = []
+        not_awaiting: list[str] = []
+        for task in tasks:
+            task_id: str = task.get("task_id")
+            picked: bool = task_id in named or (approve_all and task.get("status") == RequestApproval.AWAITING)
+            if not picked or task_id in skip:
+                continue
+            if task.get("status") != RequestApproval.AWAITING or task.get("draft_id") not in drafts:
+                not_awaiting.append(f"{task_id} ({task.get('status')})")
+            elif task.get("legal_requirement") and task_id not in named:
+                name_individually.append(f"{task_id} {task.get('org')}")
+            else:
+                will_approve.append(task)
+        return will_approve, name_individually, not_awaiting
 
     @staticmethod
     def _task_ids(items: list[Any]) -> set[str]:

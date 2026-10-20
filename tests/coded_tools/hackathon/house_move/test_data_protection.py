@@ -12,6 +12,7 @@ from coded_tools.hackathon.house_move.case_session import CaseSession
 from coded_tools.hackathon.house_move.case_store import CaseStore
 from coded_tools.hackathon.house_move.check_inbox import CheckInbox
 from coded_tools.hackathon.house_move.create_case import CreateCase
+from coded_tools.hackathon.house_move.discovery_records import DiscoveryRecords
 from coded_tools.hackathon.house_move.draft_renderer import DraftRenderer
 from coded_tools.hackathon.house_move.key_folder import KeyFolder
 from coded_tools.hackathon.house_move.obligations_rules import ObligationsRules
@@ -29,7 +30,7 @@ class TestDataProtection(HouseMoveTestCase):
     """
     Third review, findings 9 to 13: personal details reach a standalone case only through the portal's form; a blank
     detail is a gap, never "filled"; canned replies reach only the demo customer, from the right provider, for
-    messages that reached the organisation; and data at rest is encrypted, owner-only and kept apart from its keys.
+    messages that reached the organization; and data at rest is encrypted, owner-only and kept apart from its keys.
     (Upload hardening, finding 11, is tested with the portal in test_upload_server.py.)
     """
 
@@ -41,7 +42,7 @@ class TestDataProtection(HouseMoveTestCase):
         "old_postcode": "BS6 6RB",
         "new_postcode": "NG7 2NF",
         "move_date": "2026-12-11",
-        "facts": {"has_driving_licence": False, "has_vehicle": False},
+        "facts": {"has_driving_license": False, "has_vehicle": False},
     }
     FORM: dict = {
         "full_names": "Jordan Lee",
@@ -146,17 +147,17 @@ class TestDataProtection(HouseMoveTestCase):
 
     # ----- 10. Blank values are gaps -----
 
-    def test_a_letter_without_details_goes_to_the_customer_not_the_organisation(self):
+    def test_a_letter_without_details_goes_to_the_customer_not_the_organization(self):
         """
         With no details on file, the name, street address and email are gaps, so the letter becomes a pack for the
-        customer. With details, the same letter goes to the organisation, filled in.
+        customer. With details, the same letter goes to the organization, filled in.
         """
         gateway: RecordingMailGateway = RecordingMailGateway()
         bare: dict = self.standalone(details=False)
         draft: dict = next(iter(bare.get("drafts").values()))
         self.assertEqual(["customer email", "full names", "new address"], draft.get("gaps_for_customer"))
         sent = self.send_energy(bare, gateway)
-        self.assertEqual([], sent.get("sent_to_organisation"))
+        self.assertEqual([], sent.get("sent_to_organization"))
         self.assertEqual(
             ["customer email", "full names", "new address"],
             sent.get("packs_for_customer")[0].get("customer_to_complete"),
@@ -166,7 +167,7 @@ class TestDataProtection(HouseMoveTestCase):
         full: dict = self.standalone(details=True)
         self.assertEqual([], next(iter(full.get("drafts").values())).get("gaps_for_customer"))
         sent = self.send_energy(full, gateway)
-        self.assertEqual(1, len(sent.get("sent_to_organisation")))
+        self.assertEqual(1, len(sent.get("sent_to_organization")))
         self.assertIn("Jordan Lee moves to 21 Lenton Boulevard, Nottingham, NG7 2NF", gateway.messages[-1].get("body"))
 
     def test_blank_and_street_less_values_are_gaps(self):
@@ -213,7 +214,7 @@ class TestDataProtection(HouseMoveTestCase):
         """
         The database and its folder are owner-only, and statement rows are not readable in the file.
         """
-        store: CaseStore = CaseStore()
+        store: DiscoveryRecords = DiscoveryRecords()
         db_path = self.folder / "cases.sqlite"
         store.add_transactions("S-x", [{"date": "2026-09-01", "descriptor": "OCTAVIA POWER DD", "amount": -42.0}], "s")
         self.assertEqual(0o600, stat.S_IMODE(db_path.stat().st_mode))
@@ -227,13 +228,14 @@ class TestDataProtection(HouseMoveTestCase):
         """
         CaseStore()
         db_path = self.folder / "cases.sqlite"
-        with closing(sqlite3.connect(db_path)) as connection, connection:
-            connection.execute(
-                "INSERT INTO transactions VALUES "
-                "('S-y', 'old-0001', '2026-08-01', 'LEGACYCO DD', -9.5, 'debit', 'old')"
-            )
+        with closing(sqlite3.connect(db_path)) as connection:
+            with connection:
+                connection.execute(
+                    "INSERT INTO transactions VALUES "
+                    "('S-y', 'old-0001', '2026-08-01', 'LEGACYCO DD', -9.5, 'debit', 'old')"
+                )
         self.assertIn(b"LEGACYCO", db_path.read_bytes())
-        store: CaseStore = CaseStore()
+        store: DiscoveryRecords = DiscoveryRecords()
         self.assertNotIn(b"LEGACYCO", db_path.read_bytes())
         self.assertEqual("LEGACYCO DD", store.get_transactions("S-y")[0].get("descriptor"))
 

@@ -1,0 +1,23 @@
+# Data-driven integration test for hackathon/house_move, run by tests/integration/test_house_move_hocons.py.
+# Format: https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/test_case_hocon_reference.md
+#
+# A bank customer signed in as C-10042 only says they are moving: the assistant looks them up from the session
+# (no customer ID typed) and finds who they pay from their transactions, including their energy supplier.
+# The test module issues a fresh session for C-10042 into HOUSE_MOVE_TEST_SESSION.
+{
+    "agent": "hackathon/house_move",
+    "timeout_in_seconds": 300,
+    "success_ratio": "1/1",
+    "connections": ["direct"],
+    "interactions": [
+        {
+            "text": "I'm moving house",
+            "sly_data": {"session_token": ${HOUSE_MOVE_TEST_SESSION}},
+            "response": {
+                "text": {
+                    "keywords": ["Brightwatt"],
+                }
+            }
+        },
+    ]
+}

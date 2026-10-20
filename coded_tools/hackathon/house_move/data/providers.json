@@ -58,7 +58,7 @@
         "TV LICENCE",
         "TV LICENCE MBP"
       ],
-      "category": "tv_licence",
+      "category": "tv_license",
       "contact_channel": "online_form",
       "url": "https://www.tvlicensing.co.uk/faqs/FAQ27",
       "fields_required": [

@@ -5,12 +5,12 @@
   "_ids_note": "Task IDs follow the order of this list (rule 1 is T-01), so add new rules at the end and never reorder or delete one: delete by making its applies_if impossible instead.",
   "rules": [
     {
-      "id": "dvla_licence",
+      "id": "dvla_license",
       "org": "DVLA: driving licence",
       "category": "government",
       "applies_if": [
         {
-          "fact": "has_driving_licence",
+          "fact": "has_driving_license",
           "equals": true
         },
         {
@@ -270,11 +270,11 @@
       "category": "utilities",
       "applies_if": [
         {
-          "fact": "has_tv_licence",
+          "fact": "has_tv_license",
           "equals": true
         }
       ],
-      "provider_category": "tv_licence",
+      "provider_category": "tv_license",
       "legal_requirement": true,
       "penalty_note": "A licence covers an address and does not move automatically. You can update it up to three months before you move.",
       "timing": {
@@ -538,12 +538,12 @@
       "verified": true
     },
     {
-      "id": "ni_licence_to_gb",
+      "id": "ni_license_to_gb",
       "org": "Northern Ireland driving licence: contact DVLA",
       "category": "government",
       "applies_if": [
         {
-          "fact": "has_driving_licence",
+          "fact": "has_driving_license",
           "equals": true
         },
         {

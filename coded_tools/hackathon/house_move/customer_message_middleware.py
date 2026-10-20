@@ -16,7 +16,7 @@ from langchain_core.messages import BaseMessage
 from langchain_core.messages import HumanMessage
 
 from coded_tools.hackathon.house_move.case_session import CaseSession
-from coded_tools.hackathon.house_move.case_store import CaseStore
+from coded_tools.hackathon.house_move.pending_actions import PendingActions
 from coded_tools.hackathon.house_move.session_tokens import SessionTokens
 
 logger = logging.getLogger(__name__)
@@ -35,17 +35,17 @@ class CustomerMessageMiddleware(AgentMiddleware):
     def __init__(
         self,
         sly_data: dict[str, Any] | None = None,
-        store: CaseStore | None = None,
+        store: PendingActions | None = None,
         tokens: SessionTokens | None = None,
     ):
         """
         :param sly_data: the request's sly_data, injected by neuro-san when the HOCON lists "sly_data": null.
-        :param store: where messages are stored. Defaults to the SQLite case store.
+        :param store: where messages are stored. Defaults to the SQLite database.
         :param tokens: verifies the session token. Defaults to the shared secret.
         """
         super().__init__()
         self._sly_data: dict[str, Any] = sly_data if sly_data is not None else {}
-        self._store: CaseStore | None = store
+        self._store: PendingActions | None = store
         self._tokens: SessionTokens | None = tokens
 
     @override
@@ -83,7 +83,7 @@ class CustomerMessageMiddleware(AgentMiddleware):
         text: str | None = self._latest_human_text(messages)
         if claims is None or text is None:
             return False
-        (self._store or CaseStore()).record_customer_message(claims.get("sub"), text)
+        (self._store or PendingActions()).record_customer_message(claims.get("sub"), text)
         return True
 
     @staticmethod

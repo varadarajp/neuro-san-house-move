@@ -4,6 +4,7 @@ from typing import Any
 
 from coded_tools.hackathon.house_move.case_store import CaseStore
 from coded_tools.hackathon.house_move.case_tool import CaseTool
+from coded_tools.hackathon.house_move.discovery_records import DiscoveryRecords
 
 
 class AddManualProviders(CaseTool):
@@ -19,7 +20,7 @@ class AddManualProviders(CaseTool):
             "council_tax",
             "broadband",
             "mobile",
-            "tv_licence",
+            "tv_license",
             "vehicle_tax",
             "car_insurance",
             "home_insurance",
@@ -33,11 +34,11 @@ class AddManualProviders(CaseTool):
         }
     )
 
-    def __init__(self, case_store: CaseStore | None = None):
+    def __init__(self, records: DiscoveryRecords | None = None):
         """
-        :param case_store: where providers are saved. Defaults to the SQLite case store.
+        :param records: where providers are saved. Defaults to the SQLite database.
         """
-        self._case_store: CaseStore | None = case_store
+        self._records: DiscoveryRecords | None = records
 
     def run(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
         """
@@ -57,5 +58,5 @@ class AddManualProviders(CaseTool):
                 )
             else:
                 rejected.append(f"{provider}: needs a provider_name and a category from {sorted(self.CATEGORIES)}")
-        total: int = (self._case_store or CaseStore()).add_manual_providers(case_id, accepted)
+        total: int = (self._records or DiscoveryRecords()).add_manual_providers(case_id, accepted)
         return {"added": [p.get("provider_name") for p in accepted], "rejected": rejected, "total": total}

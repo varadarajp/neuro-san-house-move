@@ -51,12 +51,12 @@ class TestTracker(HouseMoveTestCase):
         sender = SendNotification(audit_log=self.NO_FILE, gateway=self.gateway)
 
         refused = sender.run({"task_ids": [energy.get("task_id")]}, sly_data)
-        self.assertEqual([], refused.get("sent_to_organisation") + refused.get("packs_for_customer"))
+        self.assertEqual([], refused.get("sent_to_organization") + refused.get("packs_for_customer"))
         self.assertIn("not approved", refused.get("refused")[0])
 
         HouseMoveTestState.approve_everything(sly_data)
         result = sender.run({"task_ids": ["all"]}, sly_data)
-        to_org: list = [item.get("task_id") for item in result.get("sent_to_organisation")]
+        to_org: list = [item.get("task_id") for item in result.get("sent_to_organization")]
         to_customer: list = [item.get("task_id") for item in result.get("packs_for_customer")]
 
         self.assertEqual(17, len(to_org) + len(to_customer))
@@ -67,7 +67,7 @@ class TestTracker(HouseMoveTestCase):
         self.assertNotIn("body", sly_data.get("outbox")[0])
         self.assertEqual(64, len(sly_data.get("outbox")[0].get("content_sha256")))
 
-    def test_direct_debit_reference_lets_email_go_to_organisation(self):
+    def test_direct_debit_reference_lets_email_go_to_organization(self):
         """
         With the mandate on file, {{account_number}} is filled, so the broadband email has no gaps and is sent to
         the provider instead of becoming a customer pack.
@@ -92,7 +92,7 @@ class TestTracker(HouseMoveTestCase):
         HouseMoveTestState.approve(sly_data, [broadband.get("task_id")])
         sender = SendNotification(audit_log=self.NO_FILE, gateway=self.gateway)
         result = sender.run({"task_ids": [broadband.get("task_id")]}, sly_data)
-        self.assertEqual(broadband.get("task_id"), result.get("sent_to_organisation")[0].get("task_id"))
+        self.assertEqual(broadband.get("task_id"), result.get("sent_to_organization")[0].get("task_id"))
         self.assertIn("Ref FB-55120934", self.gateway.messages[-1].get("body"))
 
     def test_only_the_bank_address_task_can_be_direct(self):
@@ -156,7 +156,7 @@ class TestTracker(HouseMoveTestCase):
         HouseMoveTestState.approve_everything(sly_data)
         sender = SendNotification(audit_log=self.NO_FILE, gateway=self.gateway)
         resent = sender.run({"task_ids": [rebuilt_energy.get("task_id")]}, sly_data)
-        self.assertEqual(1, len(resent.get("sent_to_organisation")))
+        self.assertEqual(1, len(resent.get("sent_to_organization")))
         self.assertIn("11 December 2026", self.gateway.messages[-1].get("body"))
 
     def test_inbox_and_reply_handling(self):

@@ -3,7 +3,7 @@
 from typing import Any
 
 from coded_tools.hackathon.house_move.case_status import CaseStatus
-from coded_tools.hackathon.house_move.case_store import CaseStore
+from coded_tools.hackathon.house_move.discovery_records import DiscoveryRecords
 
 
 class JourneyChecklist:
@@ -31,12 +31,12 @@ class JourneyChecklist:
         "replies": "Has anyone replied yet?",
     }
 
-    def __init__(self, store: CaseStore, status: CaseStatus):
+    def __init__(self, records: DiscoveryRecords, status: CaseStatus):
         """
-        :param store: says which statements and providers a case holds.
+        :param records: says which statements and providers a case holds.
         :param status: the same status the Move tab shows.
         """
-        self._store: CaseStore = store
+        self._records: DiscoveryRecords = records
         self._status: CaseStatus = status
 
     def steps(self, token: str, claims: dict[str, Any], status: dict[str, Any] | None = None) -> list[dict[str, Any]]:
@@ -166,7 +166,7 @@ class JourneyChecklist:
         case_id: str | None = (case or {}).get("reference")
         if not case_id:
             return False
-        return bool(self._store.get_transactions(case_id) or self._store.get_manual_providers(case_id))
+        return bool(self._records.get_transactions(case_id) or self._records.get_manual_providers(case_id))
 
     def _follow_up(self, status: dict[str, Any], counts: dict[str, int]) -> dict[str, Any]:
         """

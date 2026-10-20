@@ -54,7 +54,7 @@ class TestApproveOnPortal(HouseMoveTestCase):
         self.assertEqual(len(self.awaiting) - 1, len(status.get("awaiting_approval")))
         self.assertEqual("Approved", status.get("activity")[0].get("event"))
         sent = SendNotification(audit_log=self.NO_FILE).invoke({"task_ids": ["all"]}, {"session_token": self.token})
-        went: list = sent.get("sent_to_organisation") + sent.get("packs_for_customer")
+        went: list = sent.get("sent_to_organization") + sent.get("packs_for_customer")
         self.assertEqual([draft.get("task_id")], [item.get("task_id") for item in went])
 
     def test_changed_wording_is_not_approved(self):

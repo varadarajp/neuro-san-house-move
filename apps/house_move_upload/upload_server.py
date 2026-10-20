@@ -45,6 +45,7 @@ from coded_tools.hackathon.house_move.bank_address_api import BankAddressApi
 from coded_tools.hackathon.house_move.case_status import CaseStatus
 from coded_tools.hackathon.house_move.case_store import CaseStore
 from coded_tools.hackathon.house_move.create_case import CreateCase
+from coded_tools.hackathon.house_move.discovery_records import DiscoveryRecords
 from coded_tools.hackathon.house_move.house_move_data_store import HouseMoveDataStore
 from coded_tools.hackathon.house_move.import_statement import ImportStatement
 from coded_tools.hackathon.house_move.personal_details import PersonalDetails
@@ -456,7 +457,7 @@ class StatementUploadServer:  # pylint: disable=too-many-instance-attributes  # 
         """
         :return: the journey over this portal's store and status.
         """
-        return JourneyChecklist(self._case_store(), self._status)
+        return JourneyChecklist(DiscoveryRecords(), self._status)
 
     def _account_screen(self, token: str, claims: dict[str, Any]) -> str:
         """

@@ -270,8 +270,8 @@ bank statement or the providers they list, and deletes a case on request."""
 Starting a case:
 1. From the inquiry, collect: the first name of each adult moving, the old postcode, the new postcode, the move
    date (or their best estimate, and whether it is an estimate), the exchange date if known, what happens to the
-   old home (sold, let, rented_ended or kept), and any yes/no household facts they mentioned (has_driving_licence,
-   has_vehicle, has_broadband, has_tv_licence, wants_mail_redirection, has_home_insurance, has_car_insurance,
+   old home (sold, let, rented_ended or kept), and any yes/no household facts they mentioned (has_driving_license,
+   has_vehicle, has_broadband, has_tv_license, wants_mail_redirection, has_home_insurance, has_car_insurance,
    has_pet, has_young_child).
 2. If first names, either postcode or the move date are missing, return up to 4 short questions instead.
    Never ask for surnames, street addresses, email or any account, licence or policy number: personal details
@@ -335,14 +335,14 @@ descriptor, payment types, a count and evidence dates.
 
 For every payee that is a provider the customer would need to tell about a move, return a DiscoveredProvider:
   {"category", "provider_name", "confidence", "evidence", "implies", "needs_confirmation"}
-- category is one of: energy, water, council_tax, broadband, mobile, tv_licence, vehicle_tax, car_insurance,
+- category is one of: energy, water, council_tax, broadband, mobile, tv_license, vehicle_tax, car_insurance,
   home_insurance, pet_insurance, mortgage, childcare, gym, subscription, charity, other.
   Northern Ireland domestic rates (for example "LPS RATES") count as council_tax.
 - provider_name: a tidy, human-readable name, for example "BRIGHTWATT EN" becomes "Brightwatt Energy".
 - confidence: 0 to 1. Repeated direct debits with a clear name score high. Guesses score low.
 - needs_confirmation: true when confidence is below 0.7.
 - implies: life facts this payment suggests, for example pet_insurance implies has_pet; vehicle_tax implies
-  has_vehicle and probably has_driving_licence; childcare implies has_young_child.
+  has_vehicle and probably has_driving_license; childcare implies has_young_child.
 
 If the tool returns customer_stated_providers (the customer listed them), include each one with confidence 1.0
 and evidence ["customer stated"]; do not ask them to confirm it again.
@@ -366,7 +366,7 @@ up the old and new local councils from the postcodes."""
         instructions = """
 1. Call council_lookup for the old postcode and for the new postcode. You can call both at once.
 2. Turn the facts in the inquiry into the "facts" argument for obligations_rules. Use only these names:
-   has_driving_licence, has_vehicle, has_broadband, has_tv_licence, wants_mail_redirection,
+   has_driving_license, has_vehicle, has_broadband, has_tv_license, wants_mail_redirection,
    has_home_insurance, has_car_insurance, has_pet, has_young_child.
    Set a fact to true or false only if the customer said so or it was inferred with confidence 0.7 or more.
    Otherwise leave it out: the rules engine will mark that rule needs_review, which is what we want.
@@ -497,7 +497,7 @@ templates, and saves them for the customer's approval."""
    - Never write personal data yourself. Names, addresses, dates, email and reference numbers must stay as
      placeholders: use only the placeholder names letter_templates lists, plus {{org_name}} and {{url}}.
      For an account, policy or licence number use its placeholder ({{account_number}}, {{policy_number}},
-     {{licence_number}}): the bank fills it from the customer's Direct Debit mandate when it has one, and
+     {{license_number}}): the bank fills it from the customer's Direct Debit mandate when it has one, and
      save_drafts tells you which gaps are left for the customer.
    - A task with "correction_needed" was already sent with an old date: write a short correction on the same
      channel saying the date has changed to {{move_date}} and apologising for any confusion. For the direct
@@ -539,7 +539,7 @@ Confirm and send (the customer replied with a code):
 3. If send_notification lists direct_updates_pending, call bank_address_api.
    Report every item in "refused" plainly: each one is an approved task that did not go out.
 4. Return send_notification's two groups exactly as given, never moving an item between them:
-   sent_to_organisation (organisation and reference) and packs_for_customer (organisation and what the customer
+   sent_to_organization (organisation and reference) and packs_for_customer (organisation and what the customer
    must still add or submit; a pack with nothing to add still needs the customer to submit it or make the call).
    Then the bank update reference, and anything skipped or refused.
 
@@ -648,10 +648,10 @@ organisations must be told, each marked applies or needs_review, with legal flag
                         type = "object"
                         description = """Household facts as true/false values. Leave out any fact that is not known."""
                         properties = {
-                            has_driving_licence = { type = "boolean" }
+                            has_driving_license = { type = "boolean" }
                             has_vehicle = { type = "boolean" }
                             has_broadband = { type = "boolean" }
-                            has_tv_licence = { type = "boolean" }
+                            has_tv_license = { type = "boolean" }
                             wants_mail_redirection = { type = "boolean" }
                             has_home_insurance = { type = "boolean" }
                             has_car_insurance = { type = "boolean" }
@@ -758,7 +758,7 @@ days and bank holidays. Rebuilds the plan when a date is given."""
                 properties = {
                     obligation_ids = {
                         type = "array"
-                        description = "Obligation IDs, for example dvla_licence."
+                        description = "Obligation IDs, for example dvla_license."
                         items = { type = "string" }
                     }
                 }

@@ -1,0 +1,8 @@
+{
+    # Switches on the hackathon House Move network (off by default in registries/hackathon/manifest.hocon, because
+    # it has optional dependencies). Use it after the standard manifest:
+    #     AGENT_MANIFEST_FILE=registries/manifest.hocon:registries/house_move_demo_manifest.hocon \
+    #         python -m neuro_san_studio run
+    # Install its optional dependencies first: pip install -r coded_tools/hackathon/house_move/requirements.txt
+    "hackathon/house_move.hocon": true,
+}

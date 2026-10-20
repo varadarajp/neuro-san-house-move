@@ -2,9 +2,9 @@ import json
 
 from coded_tools.hackathon.house_move.audit_log import AuditLog
 from coded_tools.hackathon.house_move.case_status import CaseStatus
-from coded_tools.hackathon.house_move.case_store import CaseStore
 from coded_tools.hackathon.house_move.confirm_with_code import ConfirmWithCode
 from coded_tools.hackathon.house_move.list_tasks import ListTasks
+from coded_tools.hackathon.house_move.pending_actions import PendingActions
 from coded_tools.hackathon.house_move.request_approval import RequestApproval
 from coded_tools.hackathon.house_move.send_notification import SendNotification
 from coded_tools.hackathon.house_move.session_tokens import SessionTokens
@@ -67,7 +67,7 @@ class TestCaseStatus(HouseMoveTestCase):
         sly: dict = {"session_token": token}
         waiting: list = [t.get("task_id") for t in ListTasks().invoke({}, sly).get("tasks")]
         code: str = RequestApproval().invoke({"approve": waiting}, sly).get("confirmation_code")
-        CaseStore().record_customer_message(HouseMoveTestState.OWNER, f"yes {code}")
+        PendingActions().record_customer_message(HouseMoveTestState.OWNER, f"yes {code}")
         ConfirmWithCode(audit_log=self.NO_FILE).invoke({}, sly)
         self.assertEqual("Approved", CaseStatus().build(token).get("stage"))
 
