@@ -69,6 +69,7 @@ Here are a few examples ordered by level of complexity.
     - [Insurance Underwriting Agents](#insurance-underwriting-agents)
     - [KeyBank Financial Services](#keybank-financial-services)
     - [Sentiment Analysis of News Sources](#sentiment-analysis-of-news-sources)
+    - [House Move](#house-move)
   - [🧪 Experimental and Research](#-experimental-and-research)
     - [Agent Network Designer](#agent-network-designer)
     - [Agent Network Architect](#agent-network-architect)
@@ -587,6 +588,15 @@ perspectives. Using keyword-driven sentiment analysis, it automates news retriev
 generation to provide concise, data-backed insights on sentiment polarity, tone variations, and media bias.
 
 **Tags:** `tool`, `API`, `AAOSA`
+
+### House Move
+
+[House Move](examples/hackathon/house_move.md) is a multi-agent assistant for someone moving home in the UK. It finds
+who they pay from their transactions, plans every notification against the completion date from sourced rules, drafts
+each letter with placeholders, and sends only what the customer approves with a one-time code. Disabled by default;
+see the doc for the demo manifest.
+
+**Tags:** `AAOSA`, `sly_data`, `app`, `hackathon`
 
 ## 🧪 Experimental and Research
 
