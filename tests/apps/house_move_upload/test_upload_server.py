@@ -10,7 +10,9 @@ from fastapi.testclient import TestClient
 from apps.house_move_upload.chat_relay import ChatRelay
 from apps.house_move_upload.upload_server import StatementUploadServer
 from coded_tools.hackathon.house_move.case_store import CaseStore
+from coded_tools.hackathon.house_move.create_case import CreateCase
 from coded_tools.hackathon.house_move.import_statement import ImportStatement
+from coded_tools.hackathon.house_move.personal_details import PersonalDetails
 from coded_tools.hackathon.house_move.session_tokens import SessionTokens
 from tests.apps.house_move_upload.fake_agent_session import FakeAgentSession
 from tests.coded_tools.hackathon.house_move.house_move_test_case import HouseMoveTestCase
@@ -31,7 +33,11 @@ class TestStatementUploadServer(HouseMoveTestCase):
         super().setUp()
         FakeAgentSession.requests = []
         self.client: TestClient = TestClient(
-            StatementUploadServer(self.uploads, chat=ChatRelay(session_factory=FakeAgentSession)).create_app()
+            StatementUploadServer(
+                self.uploads,
+                chat=ChatRelay(session_factory=FakeAgentSession),
+                case_creator=CreateCase(council_lookup=HouseMoveTestState.offline_lookup()),
+            ).create_app()
         )
 
     def sign_in(self, who: str) -> str:
@@ -154,29 +160,58 @@ class TestStatementUploadServer(HouseMoveTestCase):
         self.client.cookies.clear()
         self.assertEqual(401, self.client.post("/approve", json=body).status_code)
 
-    def test_details_form_saves_encrypted_and_echoes_nothing(self):
+    def test_details_form_starts_a_guests_move_and_echoes_nothing(self):
         """
-        A guest's details are checked field by field, held encrypted for their case, and never shown back once saved.
-        A bank customer gets no form; a signed-out visitor is refused.
+        A guest's first save of Details (names, email, both full addresses, move date) starts their case, with the
+        personal fields in the vault; afterwards the app shows their name and case reference, and later saves update
+        the personal fields only. Mistakes come back field by field. A bank customer gets no form.
         """
         self.assertEqual(401, self.client.get("/details").status_code)
         owner: str = SessionTokens().verify(self.sign_in("guest")).get("sub")
+        self.assertIn("Save and start my move", self.client.get("/details").text)
         form: dict = {
             "full_names": "Jordan Lee",
             "email": "jordan.lee@example.com",
             "old_address_line1": "8 Cotham Vale",
+            "old_town": "Bristol",
+            "old_postcode": "bs6 6rb",
+            "old_property": "sold",
             "new_address_line1": "21 Lenton Boulevard",
+            "new_town": "Nottingham",
+            "new_postcode": "NG7 2NF",
+            "move_date": "2026-12-11",
         }
-        bad = self.client.post("/details", data={**form, "email": "nope"})
+        bad = self.client.post("/details", data={**form, "email": "nope", "new_postcode": "12345"})
         self.assertEqual(400, bad.status_code)
         self.assertIn("Enter an email address", bad.text)
+        self.assertIn("Enter a UK postcode", bad.text)
         self.assertIn("21 Lenton Boulevard", bad.text)
 
         saved = self.client.post("/details", data=form)
-        self.assertEqual(200, saved.status_code)
-        self.assertIn("Saved, encrypted", saved.text)
+        self.assertEqual(200, saved.status_code, saved.text)
+        self.assertIn("Your move is set up", saved.text)
         self.assertNotIn("Lenton", saved.text)
-        self.assertEqual(sorted(form), CaseStore().pending_intake_fields(owner))
+        store: CaseStore = CaseStore()
+        case_id: str = store.get_active(owner)
+        self.assertTrue(case_id.startswith("S-"))
+        self.assertEqual(sorted(PersonalDetails.LABELS), store.personal_on_file(case_id))
+        profile: dict = store.get_customer(case_id)
+        self.assertEqual(
+            ("Bristol", "BS6 6RB"),
+            (profile.get("old_address").get("town"), profile.get("old_address").get("postcode")),
+        )
+        self.assertEqual("2026-12-11", profile.get("completion_date"))
+
+        home: str = self.client.get("/").text
+        self.assertIn(f"{case_id} · Jordan Lee", home)
+        self.assertIn("Hi Jordan", home)
+        page: str = self.client.get("/details").text
+        self.assertIn("Update my details", page)
+        self.assertIn("Bristol, BS6 6RB", page)
+        self.assertNotIn("Cotham", page)
+        updated = self.client.post("/details", data={**form, "email": "jordan@example.org"})
+        self.assertIn("Saved, encrypted", updated.text)
+        self.assertEqual("jordan@example.org", store.get_customer(case_id).get("email"))
 
         self.client.post("/signout")
         self.sign_in("C-10042")
@@ -251,14 +286,14 @@ class TestStatementUploadServer(HouseMoveTestCase):
         self.assertIn("Your steps", home)
         self.assertRegex(
             home,
-            r'step-row next"><span class="step-mark">2</span><div class="main"><div class="name">Add your details',
+            r'step-row next"><span class="step-mark">2</span><div class="main"><div class="name">Start your move',
         )
 
         self.client.post("/signout")
         self.sign_in("C-10042")
         HouseMoveTestState.drafted_session()
         home = self.client.get("/").text
-        self.assertNotIn("Add your details", home)
+        self.assertNotIn("Start your move", home)
         self.assertRegex(home, r'step-row done">.*?Get your letters drafted')
         self.assertRegex(home, r'step-row next">.*?Approve your letters')
         self.assertIn('href="/status">Review letters', home)

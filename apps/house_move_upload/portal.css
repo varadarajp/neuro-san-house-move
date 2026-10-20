@@ -331,3 +331,9 @@ details.dev[open] summary { margin-bottom: 10px; }
 .chip-btn { flex: none; border: 1px solid var(--line); background: var(--surface); color: var(--text); border-radius: 999px;
             padding: 7px 12px; font-size: .85rem; cursor: pointer; }
 .chip-btn:disabled { opacity: .5; }
+
+.chips-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 4px; }
+label.check { display: flex; gap: 10px; align-items: center; margin: 12px 2px 4px; font-size: .92rem; }
+label.check input { width: 20px; height: 20px; accent-color: var(--brand); }
+input[type=date] { width: 100%; min-height: 50px; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--line);
+                   background: var(--surface-2); font: inherit; color: inherit; }

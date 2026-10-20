@@ -34,35 +34,32 @@ class JourneyChecklist:  # pylint: disable=too-few-public-methods  # one view
         waiting: int = len(status.get("awaiting_approval") or [])
         went_out: int = sum(counts.get(key, 0) for key in ("sent", "with_customer", "confirmed", "needs_action"))
 
-        customers: list[str] = claims.get("customers") or []
-        signed_in: str = f"Done: signed in as customer {customers[0]}." if customers else "Done: you are signed in."
+        signed_in: str = (
+            "Done: you are signed in." if guest else f"Done: signed in as customer {claims.get('customers')[0]}."
+        )
         steps: list[dict[str, Any]] = [self._step("Sign in", signed_in, "/", "", True)]
         if guest:
-            on_file: list[str] = (
-                self._store.personal_on_file(case_id)
-                if case_id
-                else self._store.pending_intake_fields(claims.get("sub"))
-            )
+            # A guest starts on Details: names, both addresses and the move date, never typed in the chat. Saving it
+            # opens their case, so the assistant does not ask again.
             steps.append(
                 self._step(
-                    "Add your details",
-                    "Full names, street addresses and email, for your letters. Never typed in the chat.",
+                    "Start your move",
+                    "Your names, both addresses and your move date, on Details. Never typed in the chat.",
                     "/details",
                     "Add details",
-                    len(on_file) == 4,
+                    case is not None,
                 )
             )
-        steps.append(
-            self._step(
-                "Tell the assistant about your move",
-                "Just say you're moving. You're signed in, so there is no customer ID to type."
-                if customers
-                else "Your postcodes and move date; no customer ID is needed.",
-                "/chat",
-                "Open chat",
-                case is not None,
+        else:
+            steps.append(
+                self._step(
+                    "Tell the assistant about your move",
+                    "Just say you're moving. You're signed in, so there is no customer ID to type.",
+                    "/chat",
+                    "Open chat",
+                    case is not None,
+                )
             )
-        )
         if guest:
             shared: bool = bool(case_id) and bool(
                 self._store.get_transactions(case_id) or self._store.get_manual_providers(case_id)
@@ -70,7 +67,7 @@ class JourneyChecklist:  # pylint: disable=too-few-public-methods  # one view
             steps.append(
                 self._step(
                     "Share who you pay",
-                    "Upload a bank statement (CSV or OFX), or list your providers in the chat.",
+                    "Upload a bank statement (CSV or OFX), then say so in the chat; or list your providers there.",
                     "/upload",
                     "Upload",
                     shared or planned,

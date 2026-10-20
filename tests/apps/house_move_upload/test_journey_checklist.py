@@ -74,6 +74,6 @@ class TestJourneyChecklist(HouseMoveTestCase):
 
     def test_a_guest_adds_details_first(self):
         """
-        A guest with nothing on file is asked for their details before anything else.
+        A guest with no case starts on Details (names, addresses and move date) before anything else.
         """
-        self.assertEqual("Add your details", self.next_step({"case": None}, {"sub": "guest:x", "customers": []}))
+        self.assertEqual("Start your move", self.next_step({"case": None}, {"sub": "guest:x", "customers": []}))

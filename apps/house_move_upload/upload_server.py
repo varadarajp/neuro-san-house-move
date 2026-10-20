@@ -35,12 +35,14 @@ from fastapi.responses import Response
 from fastapi.responses import StreamingResponse
 
 from apps.house_move_upload.chat_relay import ChatRelay
+from apps.house_move_upload.details_form import DetailsForm
 from apps.house_move_upload.journey_checklist import JourneyChecklist
 from apps.house_move_upload.portal_icons import PortalIcons
 from coded_tools.hackathon.house_move.approve_on_portal import ApproveOnPortal
 from coded_tools.hackathon.house_move.audit_log import AuditLog
 from coded_tools.hackathon.house_move.case_status import CaseStatus
 from coded_tools.hackathon.house_move.case_store import CaseStore
+from coded_tools.hackathon.house_move.create_case import CreateCase
 from coded_tools.hackathon.house_move.house_move_data_store import HouseMoveDataStore
 from coded_tools.hackathon.house_move.import_statement import ImportStatement
 from coded_tools.hackathon.house_move.personal_details import PersonalDetails
@@ -93,6 +95,7 @@ class StatementUploadServer:  # pylint: disable=too-many-instance-attributes  # 
         data_store: HouseMoveDataStore | None = None,
         audit_log: AuditLog | None = None,
         chat: ChatRelay | None = None,
+        case_creator: CreateCase | None = None,
     ):
         """
         :param upload_dir: root of the per-owner upload folders. Defaults to the folder import_statement reads.
@@ -100,6 +103,7 @@ class StatementUploadServer:  # pylint: disable=too-many-instance-attributes  # 
         :param data_store: lists the demo bank customers for sign-in.
         :param audit_log: records approvals made on the portal. Defaults to the audit file under logs/.
         :param chat: relays the Chat tab to the agent network. Defaults to the Neuro SAN server on localhost:8080.
+        :param case_creator: starts a guest's case from the Details form. Defaults to create_case with live postcodes.
         """
         self._upload_dir: Path = upload_dir or ImportStatement.DEFAULT_UPLOAD_DIR
         self._tokens: SessionTokens = tokens or SessionTokens()
@@ -108,6 +112,7 @@ class StatementUploadServer:  # pylint: disable=too-many-instance-attributes  # 
         self._status: CaseStatus = CaseStatus(tokens=self._tokens)
         self._audit_log: AuditLog = audit_log or AuditLog()
         self._chat: ChatRelay = chat or ChatRelay()
+        self._case_creator: CreateCase = case_creator or CreateCase()
         # Holds the personal details given on the "Your details" form; opened on first use (see _case_store).
         self._store: CaseStore | None = None
 
@@ -259,7 +264,7 @@ class StatementUploadServer:  # pylint: disable=too-many-instance-attributes  # 
                     self._home(token, self._error("Save your details from this page.")), status_code=403
                 )
             form: dict[str, Any] = dict(await request.form())
-            message, status, errors = await asyncio.to_thread(self._save_details, claims, form)
+            message, status, errors = await self._save_details(claims, token, form)
             # On an error the typed values go back into the form; once saved, nothing personal is echoed back.
             typed: dict[str, Any] = form if errors else {}
             screen: str = await asyncio.to_thread(self._details_screen, token, message, errors, typed)
@@ -465,8 +470,11 @@ document.getElementById("copy").onclick = async () => {
         depend on who is signed in.
         """
         customers: list[str] = claims.get("customers") or []
+        started: bool = bool(customers) or self._own_standalone_case(claims.get("sub", "")) is not None
         suggestions: list[str] = (
-            ["I'm moving house", "Has anyone replied yet?"]
+            ["I'm moving house", "I've uploaded my statement", "Has anyone replied yet?"]
+            if started and not customers
+            else ["I'm moving house", "Has anyone replied yet?"]
             if customers
             else [
                 "I'm moving house and I don't bank with you",
@@ -595,8 +603,10 @@ document.getElementById("upload-form").onsubmit = () => { send.disabled = true; 
         """
         :return: who is signed in, as shown in the app bar.
         """
-        if claims.get("sub", "").startswith("guest:"):
-            return "Signed in as a guest"
+        if not claims.get("customers"):
+            # A guest has a name and a reference once their case is started (on Details, or in the chat).
+            case_id, names = self._guest_case(claims.get("sub", ""))
+            return f"{case_id} · {' and '.join(names)}" if case_id else "Signed in as a guest"
         # The customer ID comes first so it stays visible when a long name is cut off on a phone.
         customers: list[str] = claims.get("customers", [])
         names: str = ", ".join(self._demo_customers().get(cid, cid) for cid in customers)
@@ -604,13 +614,25 @@ document.getElementById("upload-form").onsubmit = () => { send.disabled = true; 
 
     def _first_name(self, claims: dict[str, Any]) -> str | None:
         """
-        :return: the signed-in customer's first name for the greeting, or None for a guest.
+        :return: the signed-in customer's first name for the greeting, or None for a guest with no case yet.
         """
         customers: list[str] = claims.get("customers") or []
         if not customers:
-            return None
+            _, names = self._guest_case(claims.get("sub", ""))
+            return names[0].split()[0] if names else None
         names: str = self._demo_customers().get(customers[0], "")
         return names.split()[0] if names else None
+
+    def _guest_case(self, owner: str) -> tuple[str | None, list[str]]:
+        """
+        :return: a guest's own open case and the names on it (full names from the vault, else first names), or
+                 (None, []) before they have started one.
+        """
+        case_id: str | None = self._own_standalone_case(owner) if owner else None
+        if case_id is None:
+            return None, []
+        profile: dict[str, Any] = self._case_store().get_customer(case_id) or {}
+        return case_id, list(profile.get("full_names") or profile.get("first_names") or [])
 
     def _case_store(self) -> CaseStore:
         """
@@ -630,32 +652,53 @@ document.getElementById("upload-form").onsubmit = () => { send.disabled = true; 
             return case_id
         return None
 
-    def _save_details(self, claims: dict[str, Any], form: dict[str, Any]) -> tuple[str, int, dict[str, str]]:
+    async def _save_details(
+        self, claims: dict[str, Any], token: str, form: dict[str, Any]
+    ) -> tuple[str, int, dict[str, str]]:
         """
-        Checks the "Your details" form and stores it encrypted: in the vault of the owner's standalone case, or held
-        for create_case if the case does not exist yet.
+        Checks the "Your details" form and stores it encrypted. A guest's first save also starts their case, through
+        create_case (the same tool the chat uses: postcodes checked, dates checked, details moved into the vault), so
+        the assistant already knows their move and never asks for it again. Later saves update the personal details.
         :return: (HTML message, HTTP status, errors by field).
         """
         if claims.get("customers"):
             return self._error("Your details come from your bank record, so there is nothing to add here."), 400, {}
-        clean, errors = PersonalDetails.check(form)
+        owner: str = claims.get("sub")
+        personal, errors = PersonalDetails.check(form)
+        case_id: str | None = await asyncio.to_thread(self._own_standalone_case, owner)
+        if case_id is not None:
+            if errors:
+                return self._error("Please check the highlighted fields."), 400, errors
+            await asyncio.to_thread(self._case_store().save_personal, case_id, personal)
+            logger.info("Updated personal details on an existing case")
+            return self._ok("Saved, encrypted. Letters drafted from now on will use them."), 200, {}
+
+        move, move_errors = PersonalDetails.check_move(form)
+        errors.update(move_errors)
         if errors:
             return self._error("Please check the highlighted fields."), 400, errors
-        owner: str = claims.get("sub")
-        case_id: str | None = self._own_standalone_case(owner)
-        if case_id is None:
-            self._case_store().save_pending_intake(owner, clean)
-            where: str = "They will be added to your case when you start it in the chat."
-        else:
-            self._case_store().save_personal(case_id, clean)
-            where = "They are on your case now; letters drafted from here on will use them."
-        logger.info("Saved personal details for one owner (%s)", "case" if case_id else "pending")
-        return self._ok(f"Saved, encrypted. {where}"), 200, {}
+        await asyncio.to_thread(self._case_store().save_pending_intake, owner, personal)
+        args: dict[str, Any] = {**move, "first_names": [name.split()[0] for name in personal.get("full_names")]}
+        created: dict[str, Any] | str = await self._case_creator.async_invoke(args, {"session_token": token})
+        if isinstance(created, str):
+            # The details stay held (encrypted) for the next attempt; the reason goes back to the form.
+            return self._error(created.removeprefix("Error: ")), 400, {}
+        logger.info("Started a standalone case from the details form")
+        return (
+            self._ok(
+                f"Your move is set up. Case reference {created.get('case_id')}. Next, open Chat and say you're "
+                "moving: the assistant already has your details."
+            ),
+            200,
+            {},
+        )
 
     def _details_screen(self, token: str | None, message: str, errors: dict[str, str], typed: dict[str, Any]) -> str:
         """
-        The secure form for a guest's full names, street addresses and email. Shows which details are on file but
-        never their values. A bank customer's details come from the bank record, so they get no form.
+        The secure form for a guest. Before their case exists it asks for everything needed to start it: full names,
+        email, both full addresses, the move date and what happens to the current home. Once the case exists it
+        shows the move and lets them update their personal details. Saved personal values are never shown back.
+        A bank customer's details come from the bank record, so they get no form.
         """
         claims: dict[str, Any] = self._tokens.verify(token) or {}
         head: str = '<div class="section-head"><h2>Your details</h2></div>'
@@ -667,52 +710,14 @@ document.getElementById("upload-form").onsubmit = () => { send.disabled = true; 
 {StatementUploadServer.DEMO_NOTE}"""
             return self._page(token, "/details", message + body)
 
-        owner: str = claims.get("sub", "")
-        case_id: str | None = self._own_standalone_case(owner)
-        store: CaseStore = self._case_store()
-        on_file: set[str] = set(store.personal_on_file(case_id) if case_id else store.pending_intake_fields(owner))
-        status: str = "".join(
-            f'<span class="chip{" soon" if field not in on_file else ""}">'
-            f"{'✓' if field in on_file else '•'} {html.escape(label)}</span> "
-            for field, label in PersonalDetails.LABELS.items()
-        )
-
-        def field(name: str, label: str, kind: str, hint: str, autocomplete: str) -> str:
-            # Nested: renders one labelled input with its error, escaping anything typed back into it.
-            value: str = html.escape(str(typed.get(name) or ""))
-            error: str = errors.get(name, "")
-            control: str = (
-                f'<textarea name="{name}" id="{name}" rows="2" autocomplete="{autocomplete}" '
-                f"required>{value}</textarea>"
-                if kind == "textarea"
-                else f'<input type="{kind}" name="{name}" id="{name}" value="{value}" '
-                f'autocomplete="{autocomplete}" required>'
-            )
-            return (
-                f'<label class="field" for="{name}">{label}</label>{control}'
-                f'<p class="small {"error-text" if error else "muted"}">{html.escape(error or hint)}</p>'
-            )
-
-        body = f"""{head}
-<div class="card">
-  <div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:6px">
-    <span class="avatar">{PortalIcons.SHIELD}</span>
-    <div><h2 class="title">For your letters, never the chat</h2>
-    <p class="small muted">Stored encrypted and filled into letters only when they are sent. The assistant never
-    sees them.</p></div>
-  </div>
-  <div class="meta" style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 4px">{status}</div>
-</div>
-<form class="card form" action="/details" method="post" autocomplete="on">
-  {field("full_names", "Full names", "textarea", "Each adult who is moving, one per line.", "name")}
-  {field("email", "Email", "email", "Where organisations can reply to you.", "email")}
-  {field("old_address_line1", "Current street address", "text", "House number and street.", "address-line1")}
-  {field("new_address_line1", "New street address", "text", "House number and street.", "address-line1")}
-  <p class="small muted">Towns and postcodes come from your move in the chat.</p>
-  <button class="btn block" type="submit">Save my details</button>
-</form>
-{StatementUploadServer.DEMO_NOTE}"""
-        return self._page(token, "/details", message + body)
+        case_id: str | None = self._own_standalone_case(claims.get("sub", ""))
+        form: DetailsForm = DetailsForm(errors, typed)
+        if case_id is None:
+            body = head + form.start()
+        else:
+            store: CaseStore = self._case_store()
+            body = head + form.update(case_id, store.get_customer(case_id) or {}, store.personal_on_file(case_id))
+        return self._page(token, "/details", f"{message}{body}{StatementUploadServer.DEMO_NOTE}")
 
     def _save(self, owner: str, original_name: str, content: bytes) -> tuple[str, int]:
         """
