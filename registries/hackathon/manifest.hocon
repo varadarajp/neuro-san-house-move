@@ -1,4 +1,6 @@
 {
     # Hackathon agent networks. Included from registries/manifest.hocon.
-    "hackathon/house_move.hocon": true,
+    # Disabled by default: house_move has optional dependencies (coded_tools/hackathon/house_move/requirements.txt).
+    # To run it, add registries/house_move_demo_manifest.hocon (see docs/examples/hackathon/house_move.md).
+    "hackathon/house_move.hocon": false,
 }
