@@ -371,7 +371,8 @@ class StatementUploadServer:  # pylint: disable=too-many-instance-attributes  # 
         name: str = html.escape(self._first_name(claims) or "there")
         body: str = f"""<section class="welcome" style="padding-top:8px"><h1>Hi {name}</h1>
 <p>Here is where your move stands.</p></section>
-<a class="card" id="summary" href="/status" style="display:block;text-decoration:none;color:inherit">
+<a class="card" id="summary" href="/status" style="display:block;text-decoration:none;color:inherit"
+  data-customer="{html.escape(", ".join(claims.get("customers") or []), quote=True)}">
   <div class="skeleton" style="height:64px;margin:0"></div></a>
 <div class="section-head"><h2>Your steps</h2></div>
 {self._checklist(token, claims)}
@@ -400,8 +401,16 @@ document.getElementById("copy").onclick = async () => {
     const s = await (await fetch("/status.json", {cache: "no-store"})).json();
     box.textContent = "";
     if (!s.case) {
+      // A bank customer's ID is shown even before a move starts: it is what they give the assistant.
+      if (box.dataset.customer) {
+        const id = el("div", undefined, "small muted");
+        id.appendChild(document.createTextNode("Customer ID "));
+        id.appendChild(el("code", box.dataset.customer, "ref"));
+        box.appendChild(id);
+      }
       box.appendChild(el("h2", "No move started yet", "title"));
-      box.appendChild(el("p", s.hint, "small muted"));
+      box.appendChild(el("p", box.dataset.customer ? "Open Chat and say you're moving house. You're signed in, so "
+        + "the assistant already knows who you are." : s.hint, "small muted"));
       return;
     }
     const label = el("div", undefined, "progress");
@@ -457,7 +466,7 @@ document.getElementById("copy").onclick = async () => {
         """
         customers: list[str] = claims.get("customers") or []
         suggestions: list[str] = (
-            [f"I'm customer {customers[0]} and I'm moving house", "Has anyone replied yet?"]
+            ["I'm moving house", "Has anyone replied yet?"]
             if customers
             else [
                 "I'm moving house and I don't bank with you",
@@ -588,8 +597,10 @@ document.getElementById("upload-form").onsubmit = () => { send.disabled = true; 
         """
         if claims.get("sub", "").startswith("guest:"):
             return "Signed in as a guest"
-        names: str = ", ".join(self._demo_customers().get(cid, cid) for cid in claims.get("customers", []))
-        return f"Signed in as {names}"
+        # The customer ID comes first so it stays visible when a long name is cut off on a phone.
+        customers: list[str] = claims.get("customers", [])
+        names: str = ", ".join(self._demo_customers().get(cid, cid) for cid in customers)
+        return f"{', '.join(customers)} · {names}"
 
     def _first_name(self, claims: dict[str, Any]) -> str | None:
         """

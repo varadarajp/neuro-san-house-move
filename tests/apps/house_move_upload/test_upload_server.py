@@ -221,12 +221,13 @@ class TestStatementUploadServer(HouseMoveTestCase):
         self.assertEqual(401, self.client.post("/chat/send", json={"text": "hi"}).status_code)
         token: str = self.sign_in("C-10042")
         page = self.client.get("/chat")
-        self.assertIn("I&#x27;m customer C-10042 and I&#x27;m moving house", page.text)
+        self.assertIn("I&#x27;m moving house", page.text)
+        self.assertNotIn("I&#x27;m customer", page.text)
 
         cross = self.client.post("/chat/send", json={"text": "hi"}, headers={"Origin": "https://evil.test"})
         self.assertEqual(403, cross.status_code)
         self.assertEqual(400, self.client.post("/chat/send", json={"text": "  "}).status_code)
-        sent = self.client.post("/chat/send", json={"text": "I'm customer C-10042 and I'm moving house"})
+        sent = self.client.post("/chat/send", json={"text": "I'm moving house"})
         events: list = [json.loads(line) for line in sent.text.splitlines()]
         self.assertEqual(["progress", "reply"], [event.get("type") for event in events])
         self.assertEqual({"session_token": token}, FakeAgentSession.requests[0].get("sly_data"))
@@ -261,3 +262,21 @@ class TestStatementUploadServer(HouseMoveTestCase):
         self.assertRegex(home, r'step-row done">.*?Get your letters drafted')
         self.assertRegex(home, r'step-row next">.*?Approve your letters')
         self.assertIn('href="/status">Review letters', home)
+
+    def test_customer_id_is_shown_after_sign_in(self):
+        """
+        A bank customer sees their customer ID in the app bar on every tab, on Home before a move starts, and in
+        the step that says they need not type it; a guest has none to show.
+        """
+        self.sign_in("C-20001")
+        home: str = self.client.get("/").text
+        self.assertIn("C-20001 · Priya Shah", home)
+        self.assertIn('data-customer="C-20001"', home)
+        self.assertIn("there is no customer ID to type", home)
+        self.assertIn("C-20001 · Priya Shah", self.client.get("/details").text)
+
+        self.client.post("/signout")
+        self.sign_in("guest")
+        home = self.client.get("/").text
+        self.assertIn("Signed in as a guest", home)
+        self.assertIn('data-customer=""', home)
