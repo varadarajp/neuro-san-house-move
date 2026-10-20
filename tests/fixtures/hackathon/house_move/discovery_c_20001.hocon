@@ -1,0 +1,37 @@
+# Data-driven integration test for hackathon/house_move, run by tests/integration/test_house_move_hocons.py.
+# Format: https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/test_case_hocon_reference.md
+#
+# Discovery accuracy for C-20001 (Halifax to Chelmsford, single, no car). Ground truth, from the customer's synthetic
+# transactions in coded_tools/hackathon/house_move/data/transactions.json:
+# - providers: Northgate Energy, Pennine Water, Lumen Fibre, Talkmore Mobile, TV Licensing, Hearthguard Home Insurance
+#   and Calderdale council tax. Skipton Road BS is their own mortgage.
+# - life facts: none of pet, child or vehicle (no pet insurance, childcare, vehicle tax or car insurance).
+#
+# Providers are checked by keyword where the LLM writes the name consistently, and by `gist` where it may change the
+# capitalization (ShieldMotor, VoxMobile); inferred facts and anything worded freely are checked by `gist`.
+# The test module issues a fresh session for C-20001 into HOUSE_MOVE_TEST_SESSION_C_20001.
+{
+    "agent": "hackathon/house_move",
+    "timeout_in_seconds": 300,
+    "success_ratio": "1/1",
+    "connections": ["direct"],
+    "interactions": [
+        {
+            "text": "I'm moving house",
+            "sly_data": {"session_token": ${HOUSE_MOVE_TEST_SESSION_C_20001}},
+            "response": {
+                "text": {
+                    "keywords": ["Northgate", "Pennine", "Lumen", "TV Licen"],
+                    "gist": [
+                        """The reply names the providers Talkmore and Hearthguard among the organizations found.
+Capitalization and the words after the brand (for example Insurance, Policy or Mobile) do not matter.""",
+                        """The reply lists council tax (Calderdale council, or council tax in general) among the
+organizations the customer pays.""",
+                        """The reply does not say that the customer has a pet, a child or a vehicle. Asking whether
+they have one is allowed.""",
+                    ]
+                }
+            }
+        },
+    ]
+}
