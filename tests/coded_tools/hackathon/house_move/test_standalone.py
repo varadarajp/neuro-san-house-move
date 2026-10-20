@@ -15,9 +15,11 @@ from coded_tools.hackathon.house_move.council_lookup import CouncilLookup
 from coded_tools.hackathon.house_move.create_case import CreateCase
 from coded_tools.hackathon.house_move.customer_profile_lookup import CustomerProfileLookup
 from coded_tools.hackathon.house_move.delete_case import DeleteCase
+from coded_tools.hackathon.house_move.discovery_records import DiscoveryRecords
 from coded_tools.hackathon.house_move.get_transactions import GetTransactions
 from coded_tools.hackathon.house_move.import_statement import ImportStatement
 from coded_tools.hackathon.house_move.obligations_rules import ObligationsRules
+from coded_tools.hackathon.house_move.pending_actions import PendingActions
 from coded_tools.hackathon.house_move.session_tokens import SessionTokens
 from coded_tools.hackathon.house_move.statement_parser import StatementParser
 from tests.coded_tools.hackathon.house_move.house_move_test_case import HouseMoveTestCase
@@ -150,13 +152,13 @@ class TestStandalone(HouseMoveTestCase):
 
         request = tool.run({"file_name": name}, sly_data)
         self.assertEqual(34, request.get("transactions_found"))
-        self.assertEqual([], CaseStore().get_transactions(sly_data.get("customer_id")))
+        self.assertEqual([], DiscoveryRecords().get_transactions(sly_data.get("customer_id")))
         typed: str = f"Yes, you can read it: {request.get('confirmation_code')}"
-        CaseStore().record_customer_message(self.OWNER, typed)
+        PendingActions().record_customer_message(self.OWNER, typed)
         result = ConfirmWithCode(audit_log=AuditLog(None)).run({}, sly_data).get("result")
         self.assertEqual(34, result.get("transactions_imported"))
         self.assertFalse((self.uploads / ImportStatement.owner_folder(self.OWNER) / name).exists())
-        self.assertEqual(typed, CaseStore().get_consents(sly_data.get("customer_id"))[0].get("words"))
+        self.assertEqual(typed, DiscoveryRecords().get_consents(sly_data.get("customer_id"))[0].get("words"))
 
         payees: dict = {p.get("payee"): p for p in GetTransactions().run({}, sly_data).get("payees")}
         self.assertEqual(3, payees.get("AVONSIDE ENERGY").get("count"))
@@ -231,7 +233,7 @@ class TestStandalone(HouseMoveTestCase):
         case_id: str = sly_data.get("customer_id")
         request = DeleteCase(audit_log=AuditLog(None)).run({}, sly_data)
         self.assertIsNotNone(CaseStore().get_customer(case_id))
-        CaseStore().record_customer_message(self.OWNER, f"Delete it all {request.get('confirmation_code')}")
+        PendingActions().record_customer_message(self.OWNER, f"Delete it all {request.get('confirmation_code')}")
         result = ConfirmWithCode(audit_log=AuditLog(None)).run({}, sly_data)
         self.assertEqual({"case_id": case_id, "deleted": True}, result.get("result"))
         self.assertNotIn("customer_id", sly_data)
