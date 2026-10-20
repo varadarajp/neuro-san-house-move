@@ -474,6 +474,25 @@ class CaseStore:
         with closing(self._connect()) as connection, connection:
             connection.execute("DELETE FROM pending_actions WHERE action_id = ?", (action_id,))
 
+    def forget_owner(self, owner_id: str) -> int:
+        """
+        Removes everything held for one signed-in owner, so their journey starts again: the standalone cases they
+        created (deleted in full), their saved plan state, active case, captured chat message, waiting codes and
+        held details. Other owners are untouched.
+        :return: the number of standalone cases deleted.
+        """
+        with closing(self._connect()) as connection:
+            owned: list[str] = [
+                row[0] for row in connection.execute("SELECT case_id FROM cases WHERE owner_id = ?", (owner_id,))
+            ]
+        for case_id in owned:
+            self.delete_case(case_id)
+        with closing(self._connect()) as connection, connection:
+            for table in ("case_state", "active_cases", "customer_messages", "pending_actions", "pending_intake"):
+                connection.execute(f"DELETE FROM {table} WHERE owner_id = ?", (owner_id,))  # noqa: S608 - fixed names
+        logger.info("Forgot owner %s and %d standalone cases", owner_id, len(owned))
+        return len(owned)
+
     def delete_case(self, case_id: str) -> bool:
         """
         Erases everything held for a case (right to erasure). The audit file keeps only IDs and events.
