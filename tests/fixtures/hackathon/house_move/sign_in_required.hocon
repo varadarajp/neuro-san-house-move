@@ -1,0 +1,20 @@
+# Data-driven integration test for hackathon/house_move, run by tests/integration/test_house_move_hocons.py.
+# Format: https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/test_case_hocon_reference.md
+#
+# With no session, every tool refuses, and the assistant sends the customer to sign in on the House Move app.
+{
+    "agent": "hackathon/house_move",
+    "timeout_in_seconds": 120,
+    "success_ratio": "1/1",
+    "connections": ["direct"],
+    "interactions": [
+        {
+            "text": "I'm moving house",
+            "response": {
+                "text": {
+                    "keywords": ["8090"],
+                }
+            }
+        },
+    ]
+}
