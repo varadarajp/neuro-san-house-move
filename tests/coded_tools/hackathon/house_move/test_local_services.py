@@ -14,16 +14,23 @@ class TestLocalServices(HouseMoveTestCase):
     """
 
     @staticmethod
-    def offline() -> CouncilLookup:
+    def outage() -> httpx.MockTransport:
         """
-        :return: a council lookup that answers from the cache.
+        :return: a transport whose every request fails, as if the service were down.
         """
 
         def handler(request: httpx.Request) -> httpx.Response:
             # Nested to simulate an outage; MockTransport needs a plain callable.
             raise httpx.ConnectError("offline", request=request)
 
-        return CouncilLookup(transport=httpx.MockTransport(handler))
+        return httpx.MockTransport(handler)
+
+    @staticmethod
+    def offline() -> CouncilLookup:
+        """
+        :return: a council lookup that answers from the cache.
+        """
+        return CouncilLookup(transport=TestLocalServices.outage())
 
     @staticmethod
     def nhs_mock(request: httpx.Request) -> httpx.Response:
@@ -78,9 +85,9 @@ class TestLocalServices(HouseMoveTestCase):
 
     def test_gp_finder_fallback_and_other_nations(self):
         """
-        With the NHS service unreachable, demo data is used and labelled; Scotland gets a link, not a list.
+        With the NHS service unreachable, demo data is used and labeled; Scotland gets a link, not a list.
         """
-        tool = GpFinder(council_lookup=self.offline(), transport=self.offline()._transport)
+        tool = GpFinder(council_lookup=self.offline(), transport=self.outage())
         fallback = tool.run({"postcode": "HG1 1SY"}, {})
         self.assertTrue(fallback.get("source").startswith("demo data"))
         self.assertEqual(3, len(fallback.get("practices")))

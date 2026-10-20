@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Any
 
 
-class StatementParser:
+class StatementParser:  # pylint: disable=too-few-public-methods  # one job: parse
     """
     Turns a statement file's text into {"date", "descriptor", "amount", "type"} rows, the same shape as the bank's
     own transaction feed, so the Discovery agent works unchanged.
@@ -80,38 +80,49 @@ class StatementParser:
         """
         reader: csv.DictReader = csv.DictReader(io.StringIO(text.lstrip("﻿")))
         headers: dict[str, str] = {(name or "").strip().lower(): name for name in reader.fieldnames or []}
-        date_col: str | None = self._column(headers, StatementParser.DATE_HEADERS)
-        description_col: str | None = self._column(headers, StatementParser.DESCRIPTION_HEADERS)
-        amount_col: str | None = self._column(headers, StatementParser.AMOUNT_HEADERS)
-        out_col: str | None = self._column(headers, StatementParser.OUT_HEADERS)
-        in_col: str | None = self._column(headers, StatementParser.IN_HEADERS)
-        type_col: str | None = self._column(headers, StatementParser.TYPE_HEADERS)
-        if not date_col or not description_col or not (amount_col or out_col or in_col):
+        columns: dict[str, str | None] = {
+            "date": self._column(headers, StatementParser.DATE_HEADERS),
+            "description": self._column(headers, StatementParser.DESCRIPTION_HEADERS),
+            "amount": self._column(headers, StatementParser.AMOUNT_HEADERS),
+            "out": self._column(headers, StatementParser.OUT_HEADERS),
+            "in": self._column(headers, StatementParser.IN_HEADERS),
+            "type": self._column(headers, StatementParser.TYPE_HEADERS),
+        }
+        if (
+            not columns.get("date")
+            or not columns.get("description")
+            or not (columns.get("amount") or columns.get("out") or columns.get("in"))
+        ):
             raise ValueError(
                 f"The CSV needs a date, a description and an amount (or paid out / paid in) column. "
                 f"Found columns: {list(headers)}"
             )
-
         rows: list[dict[str, Any]] = []
         for record in reader:
-            when: date | None = self._date(record.get(date_col, ""))
-            if when is None:
-                continue
-            if amount_col:
-                amount: float = self._number(record.get(amount_col))
-            else:
-                amount = self._number(record.get(in_col)) - self._number(record.get(out_col))
-            descriptor: str = (record.get(description_col) or "").strip()
-            raw_type: str = (record.get(type_col) or "").strip() if type_col else ""
-            rows.append(
-                {
-                    "date": when.isoformat(),
-                    "descriptor": descriptor,
-                    "amount": amount,
-                    "type": self._type(raw_type, descriptor, amount),
-                }
-            )
+            row: dict[str, Any] | None = self._csv_row(record, columns)
+            if row is not None:
+                rows.append(row)
         return rows
+
+    def _csv_row(self, record: dict[str, str], columns: dict[str, str | None]) -> dict[str, Any] | None:
+        """
+        :return: one CSV record as a transaction, or None if its date cannot be read.
+        """
+        when: date | None = self._date(record.get(columns.get("date"), ""))
+        if when is None:
+            return None
+        if columns.get("amount"):
+            amount: float = self._number(record.get(columns.get("amount")))
+        else:
+            amount = self._number(record.get(columns.get("in"))) - self._number(record.get(columns.get("out")))
+        descriptor: str = (record.get(columns.get("description")) or "").strip()
+        raw_type: str = (record.get(columns.get("type")) or "").strip() if columns.get("type") else ""
+        return {
+            "date": when.isoformat(),
+            "descriptor": descriptor,
+            "amount": amount,
+            "type": self._type(raw_type, descriptor, amount),
+        }
 
     def _parse_ofx(self, text: str) -> list[dict[str, Any]]:
         """

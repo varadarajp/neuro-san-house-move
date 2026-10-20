@@ -221,7 +221,7 @@ const HM = (() => {
       items.forEach(i => ul.appendChild(el("li", line(i))));
       body.push(ul);
     };
-    group(res.sent_to_organisation.length + " sent to the organisation", res.sent_to_organisation, i => i.org);
+    group(res.sent_to_organization.length + " sent to the organisation", res.sent_to_organization, i => i.org);
     group(res.packs_for_customer.length + " ready for you to send", res.packs_for_customer,
       i => i.org + (i.customer_to_complete && i.customer_to_complete.length ? ": add " + i.customer_to_complete.join(", ")
         : ""));

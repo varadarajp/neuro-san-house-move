@@ -6,11 +6,11 @@ from typing import Any
 
 from coded_tools.hackathon.house_move.audit_log import AuditLog
 from coded_tools.hackathon.house_move.case_session import CaseSession
-from coded_tools.hackathon.house_move.case_store import CaseStore
 from coded_tools.hackathon.house_move.case_tool import CaseTool
 from coded_tools.hackathon.house_move.delete_case import DeleteCase
 from coded_tools.hackathon.house_move.draft_fingerprint import DraftFingerprint
 from coded_tools.hackathon.house_move.import_statement import ImportStatement
+from coded_tools.hackathon.house_move.pending_actions import PendingActions
 from coded_tools.hackathon.house_move.request_approval import RequestApproval
 
 
@@ -24,12 +24,12 @@ class ConfirmWithCode(CaseTool):
     the approval is recorded in sly_data["approvals"] with that fingerprint, which send_notification checks.
     """
 
-    def __init__(self, case_store: CaseStore | None = None, audit_log: AuditLog | None = None):
+    def __init__(self, pending: PendingActions | None = None, audit_log: AuditLog | None = None):
         """
-        :param case_store: holds pending actions and captured messages. Defaults to the SQLite case store.
+        :param pending: holds pending actions and captured messages. Defaults to the SQLite database.
         :param audit_log: records each confirmation. Defaults to the audit file under logs/.
         """
-        self._case_store: CaseStore | None = case_store
+        self._pending: PendingActions | None = pending
         self._audit_log: AuditLog = audit_log or AuditLog()
 
     def run(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any] | str:
@@ -42,7 +42,7 @@ class ConfirmWithCode(CaseTool):
         case_id: str | None = sly_data.get("customer_id")
         if not owner or not case_id:
             return "Error: not signed in, or no case is open."
-        store: CaseStore = self._case_store or CaseStore()
+        store: PendingActions = self._pending or PendingActions()
         latest: tuple[str, str] | None = store.latest_customer_message(owner)
         if latest is None:
             return "Error: no message from the customer has been received yet."
@@ -59,9 +59,9 @@ class ConfirmWithCode(CaseTool):
         if kind == RequestApproval.KIND:
             result: dict[str, Any] | str = self._approve(payload, message, sly_data)
         elif kind == ImportStatement.KIND:
-            result = ImportStatement(case_store=store).complete(owner, case_id, payload.get("file_name"), message)
+            result = ImportStatement().complete(owner, case_id, payload.get("file_name"), message)
         elif kind == DeleteCase.KIND:
-            result = DeleteCase(case_store=store, audit_log=self._audit_log).complete(sly_data, case_id)
+            result = DeleteCase(audit_log=self._audit_log).complete(sly_data, case_id)
         else:
             return f"Error: unknown pending action {kind}."
         store.consume_pending(action.get("action_id"))

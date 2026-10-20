@@ -60,53 +60,17 @@ class BuildTimeline(CaseTool):
         obligations: list[dict[str, Any]] = sly_data.get("obligations") or []
         if not obligations:
             return "Error: no obligations yet. Run the obligations rules first."
-        profile: dict[str, Any] = sly_data.get("customer_profile") or {}
-
-        try:
-            completion: date = date.fromisoformat(args.get("completion_date") or profile.get("completion_date"))
-            exchange_text: str | None = args.get("exchange_date") or profile.get("exchange_date")
-            exchange: date | None = date.fromisoformat(exchange_text) if exchange_text else None
-        except (TypeError, ValueError) as error:
-            return f"Error: the completion or exchange date is missing or not YYYY-MM-DD ({error})."
         today: date = self._today or date.today()
-        date_error: str | None = MoveDates.check(completion, exchange, today)
-        if date_error is not None:
-            return date_error
-
-        try:
-            date_calc: DateCalc = DateCalc(self._data_store.get_bank_holidays(self._division(sly_data)))
-            rule_numbers: dict[str, int] = {
-                rule.get("id"): number for number, rule in enumerate(self._data_store.get_obligation_rules(), start=1)
-            }
-        except (OSError, json.JSONDecodeError) as error:
-            logger.error("Could not read bank holidays or rules: %s", error)
-            return f"Error: the bank holidays or rules file could not be read ({error})."
+        dates: tuple[date, date | None] | str = self._move_dates(args, sly_data.get("customer_profile") or {}, today)
+        if isinstance(dates, str):
+            return dates
+        reference: tuple[DateCalc, dict[str, int]] | str = self._reference_data(sly_data)
+        if isinstance(reference, str):
+            return reference
 
         previous_tasks: list[dict[str, Any]] = sly_data.get("tasks") or []
-        previous_by_obligation: dict[str, dict[str, Any]] = {t.get("obligation_id"): t for t in previous_tasks}
-        warnings: list[str] = []
-        tasks: list[dict[str, Any]] = []
-        needs_review: list[dict[str, Any]] = []
-        for obligation in obligations:
-            if obligation.get("status") != "applies":
-                needs_review.append(
-                    {
-                        "obligation_id": obligation.get("id"),
-                        "org": obligation.get("org"),
-                        "missing_facts": obligation.get("missing_facts"),
-                    }
-                )
-                continue
-            previous: dict[str, Any] | None = previous_by_obligation.get(obligation.get("id"))
-            task_id: str = self._task_id(obligation.get("id"), rule_numbers, previous, previous_tasks)
-            when: tuple[date, date | None, date] = (completion, exchange, today)
-            task: dict[str, Any] = self._to_task(task_id, obligation, when, date_calc, warnings)
-            task = self._keep_progress(task, previous)
-            if date.fromisoformat(task.get("due_date")) < today:
-                warnings.append(f"{task.get('org')} was due on {task.get('due_date')}: do it as soon as possible.")
-            tasks.append(task)
-
-        tasks.sort(key=lambda task: (task.get("due_date"), not task.get("legal_requirement")))
+        tasks, needs_review, warnings = self._date_obligations(obligations, previous_tasks, (*dates, today), reference)
+        completion, exchange = dates
         plan_dates: dict[str, str | None] = {
             "completion_date": completion.isoformat(),
             "exchange_date": exchange.isoformat() if exchange else None,
@@ -126,6 +90,71 @@ class BuildTimeline(CaseTool):
         if previous_tasks:
             result["changes"] = self._compare(previous_tasks, tasks)
         return result
+
+    @staticmethod
+    def _move_dates(args: dict[str, Any], profile: dict[str, Any], today: date) -> tuple[date, date | None] | str:
+        """
+        :return: (completion, exchange or None) from the arguments or the profile, checked by MoveDates; or an
+                 "Error: ..." string.
+        """
+        try:
+            completion: date = date.fromisoformat(args.get("completion_date") or profile.get("completion_date"))
+            exchange_text: str | None = args.get("exchange_date") or profile.get("exchange_date")
+            exchange: date | None = date.fromisoformat(exchange_text) if exchange_text else None
+        except (TypeError, ValueError) as error:
+            return f"Error: the completion or exchange date is missing or not YYYY-MM-DD ({error})."
+        return MoveDates.check(completion, exchange, today) or (completion, exchange)
+
+    def _reference_data(self, sly_data: dict[str, Any]) -> tuple[DateCalc, dict[str, int]] | str:
+        """
+        :return: (working-day calculator for the new home's nation, each rule's position in the rules file), or an
+                 "Error: ..." string.
+        """
+        try:
+            date_calc: DateCalc = DateCalc(self._data_store.get_bank_holidays(self._division(sly_data)))
+            rules: list[dict[str, Any]] = self._data_store.get_obligation_rules()
+        except (OSError, json.JSONDecodeError) as error:
+            logger.error("Could not read bank holidays or rules: %s", error)
+            return f"Error: the bank holidays or rules file could not be read ({error})."
+        return date_calc, {rule.get("id"): number for number, rule in enumerate(rules, start=1)}
+
+    def _date_obligations(
+        self,
+        obligations: list[dict[str, Any]],
+        previous_tasks: list[dict[str, Any]],
+        when: tuple[date, date | None, date],
+        reference: tuple[DateCalc, dict[str, int]],
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str]]:
+        """
+        Dates every applying obligation as a task, keeping progress from the previous plan.
+        :param when: (completion, exchange or None, today).
+        :return: (tasks sorted by date, obligations still needing review, warnings).
+        """
+        date_calc, rule_numbers = reference
+        previous_by_obligation: dict[str, dict[str, Any]] = {t.get("obligation_id"): t for t in previous_tasks}
+        tasks: list[dict[str, Any]] = []
+        needs_review: list[dict[str, Any]] = []
+        warnings: list[str] = []
+        for obligation in obligations:
+            if obligation.get("status") != "applies":
+                needs_review.append(
+                    {
+                        "obligation_id": obligation.get("id"),
+                        "org": obligation.get("org"),
+                        "missing_facts": obligation.get("missing_facts"),
+                    }
+                )
+                continue
+            previous: dict[str, Any] | None = previous_by_obligation.get(obligation.get("id"))
+            task_id: str = self._task_id(obligation.get("id"), rule_numbers, previous, previous_tasks)
+            task: dict[str, Any] = self._keep_progress(
+                self._to_task(task_id, obligation, when, date_calc, warnings), previous
+            )
+            if date.fromisoformat(task.get("due_date")) < when[2]:
+                warnings.append(f"{task.get('org')} was due on {task.get('due_date')}: do it as soon as possible.")
+            tasks.append(task)
+        tasks.sort(key=lambda task: (task.get("due_date"), not task.get("legal_requirement")))
+        return tasks, needs_review, warnings
 
     @staticmethod
     def _division(sly_data: dict[str, Any]) -> str:
@@ -186,7 +215,7 @@ class BuildTimeline(CaseTool):
             anchor: date = exchange if date_basis == "exchange" else completion
             offset: int = int(timing.get("offset_days", 0))
             due = date_calc.offset(anchor, offset, bool(timing.get("working_days")))
-            # Organisations are closed on weekends and bank holidays: "before" deadlines move earlier, others later.
+            # Organizations are closed on weekends and bank holidays: "before" deadlines move earlier, others later.
             due = date_calc.nearest_working_day(due, forward=timing.get("window") != "before")
         return {
             "task_id": task_id,

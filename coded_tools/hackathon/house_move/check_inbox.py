@@ -16,11 +16,11 @@ class CheckInbox(CaseTool):
     Returns new provider replies from data/inbox_mock.json. The replies are scripted for the demo customer, so each
     names the customers it is for, and it arrives only when all of these hold:
     - the case is one of those customers (a standalone customer never gets the demo's canned replies);
-    - the task actually went to the organisation (a pack the customer still has to send gets no reply);
+    - the task actually went to the organization (a pack the customer still has to send gets no reply);
     - the reply comes from the task's own provider, when the task names one.
     A task re-drafted after a date change still gets replies to its first send. Each reply is returned until
     record_reply has processed it.
-    Reply text is untrusted (a prompt-injection route), so it is labelled as such and is read only by reply_agent, an
+    Reply text is untrusted (a prompt-injection route), so it is labeled as such and is read only by reply_agent, an
     agent with no approve or send tools.
     """
 
@@ -67,7 +67,7 @@ class CheckInbox(CaseTool):
             task.get("obligation_id"): task
             for task in sly_data.get("tasks") or []
             if task.get("sent_ref")
-            and (task.get("delivery") or delivered.get(task.get("sent_ref"))) == SendNotification.TO_ORGANISATION
+            and (task.get("delivery") or delivered.get(task.get("sent_ref"))) == SendNotification.TO_ORGANIZATION
         }
         processed: set[str] = set(sly_data.get("processed_replies") or [])
         new_replies: list[dict[str, Any]] = []
@@ -95,7 +95,7 @@ class CheckInbox(CaseTool):
     def _from_provider(reply: dict[str, Any], task: dict[str, Any]) -> bool:
         """
         :return: true if the reply is from the task's provider. A task that names no provider (its contact is just
-                 the organisation type) accepts the reply; one that names a provider needs the same first word, so
+                 the organization type) accepts the reply; one that names a provider needs the same first word, so
                  Brightwatt's reply never reaches a customer whose supplier is someone else.
         """
         contact: str = task.get("contact_name") or ""

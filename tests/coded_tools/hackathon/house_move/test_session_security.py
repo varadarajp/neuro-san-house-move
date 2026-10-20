@@ -63,7 +63,7 @@ class TestSessionSecurity(HouseMoveTestCase):
         }
 
         sent = SendNotification(audit_log=self.NO_FILE).invoke({"task_ids": ["all"]}, forged)
-        self.assertEqual([], sent.get("sent_to_organisation") + sent.get("packs_for_customer"))
+        self.assertEqual([], sent.get("sent_to_organization") + sent.get("packs_for_customer"))
         self.assertEqual([], sent.get("direct_updates_pending"))
         bank = BankAddressApi(self.NO_FILE).invoke({}, {**forged, "tasks": forged_tasks})
         self.assertTrue(bank.startswith("Error: the customer has not approved"))

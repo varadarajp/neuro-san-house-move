@@ -9,10 +9,10 @@ class TestObligationsRules(HouseMoveTestCase):
     """
 
     MORGAN_FACTS: dict = {
-        "has_driving_licence": True,
+        "has_driving_license": True,
         "has_vehicle": True,
         "has_broadband": True,
-        "has_tv_licence": True,
+        "has_tv_license": True,
         "has_home_insurance": True,
         "has_car_insurance": True,
         "has_pet": True,
@@ -44,7 +44,7 @@ class TestObligationsRules(HouseMoveTestCase):
         result = ObligationsRules().run({"facts": self.MORGAN_FACTS, "providers": self.PROVIDERS}, sly_data)
         by_id: dict = {o.get("id"): o for o in result.get("obligations")}
 
-        self.assertEqual("applies", by_id.get("dvla_licence").get("status"))
+        self.assertEqual("applies", by_id.get("dvla_license").get("status"))
         self.assertEqual("Council tax: old council (Leeds)", by_id.get("council_tax_old").get("org"))
         self.assertEqual("Energy supplier (Brightwatt Energy)", by_id.get("energy_supplier").get("org"))
         self.assertEqual("needs_review", by_id.get("royal_mail_redirection").get("status"))

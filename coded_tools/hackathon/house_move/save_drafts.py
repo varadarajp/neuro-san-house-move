@@ -44,7 +44,6 @@ class SaveDrafts(CaseTool):
             return f"Error: the letter templates could not be read ({error})."
 
         renderer: DraftRenderer = DraftRenderer(customer_supplied)
-        drafts: dict[str, Any] = sly_data.setdefault("drafts", {})
         saved: list[dict[str, Any]] = []
         rejected: list[str] = []
         for draft in args.get("drafts") or []:
@@ -52,27 +51,37 @@ class SaveDrafts(CaseTool):
             if task is None:
                 rejected.append(f"{draft.get('task_id')}: no such task")
                 continue
-            # Rendered only to find gaps and unknown placeholders: the filled-in text is never stored.
-            _, subject_gaps, subject_unknown = renderer.render(draft.get("subject", ""), task, sly_data)
-            _, body_gaps, body_unknown = renderer.render(draft.get("body", ""), task, sly_data)
-            unknown: list[str] = sorted(set(subject_unknown + body_unknown))
-            if unknown:
-                rejected.append(f"{task.get('task_id')}: unknown placeholders {unknown}")
-                continue
-
-            draft_id: str = task.get("task_id").replace("T-", "D-")
-            gaps: list[str] = sorted(set(subject_gaps + body_gaps))
-            drafts[draft_id] = {
-                "draft_id": draft_id,
-                "task_id": task.get("task_id"),
-                "org": task.get("org"),
-                "channel": task.get("channel"),
-                "subject": draft.get("subject"),
-                "body": draft.get("body"),
-                "gaps_for_customer": gaps,
-            }
-            task["draft_id"] = draft_id
-            task["status"] = "awaiting_approval"
-            task.setdefault("history", []).append(f"draft {draft_id} saved")
-            saved.append({"draft_id": draft_id, "task_id": task.get("task_id"), "gaps_for_customer": gaps})
+            outcome: dict[str, Any] | str = self._save_one(draft, task, renderer, sly_data)
+            (rejected if isinstance(outcome, str) else saved).append(outcome)
         return {"saved": saved, "rejected": rejected}
+
+    @staticmethod
+    def _save_one(
+        draft: dict[str, Any], task: dict[str, Any], renderer: DraftRenderer, sly_data: dict[str, Any]
+    ) -> dict[str, Any] | str:
+        """
+        Checks one draft's placeholders and saves it with its placeholders (never filled in), marking the task as
+        awaiting approval.
+        :return: {"draft_id", "task_id", "gaps_for_customer"}, or why it was rejected.
+        """
+        # Rendered only to find gaps and unknown placeholders: the filled-in text is never stored.
+        _, subject_gaps, subject_unknown = renderer.render(draft.get("subject", ""), task, sly_data)
+        _, body_gaps, body_unknown = renderer.render(draft.get("body", ""), task, sly_data)
+        unknown: list[str] = sorted(set(subject_unknown + body_unknown))
+        if unknown:
+            return f"{task.get('task_id')}: unknown placeholders {unknown}"
+        draft_id: str = task.get("task_id").replace("T-", "D-")
+        gaps: list[str] = sorted(set(subject_gaps + body_gaps))
+        sly_data.setdefault("drafts", {})[draft_id] = {
+            "draft_id": draft_id,
+            "task_id": task.get("task_id"),
+            "org": task.get("org"),
+            "channel": task.get("channel"),
+            "subject": draft.get("subject"),
+            "body": draft.get("body"),
+            "gaps_for_customer": gaps,
+        }
+        task["draft_id"] = draft_id
+        task["status"] = "awaiting_approval"
+        task.setdefault("history", []).append(f"draft {draft_id} saved")
+        return {"draft_id": draft_id, "task_id": task.get("task_id"), "gaps_for_customer": gaps}

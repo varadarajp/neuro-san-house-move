@@ -16,7 +16,7 @@ class TestTaskStore(HouseMoveTestCase):
         sly_data: dict = HouseMoveTestState.planned()
         government = ListTasks().run({"agent": "government_agent"}, sly_data)
         self.assertEqual(
-            {"dvla_licence", "dvla_v5c", "council_tax_old", "council_tax_new", "electoral_register"},
+            {"dvla_license", "dvla_v5c", "council_tax_old", "council_tax_new", "electoral_register"},
             {task.get("obligation_id") for task in government.get("tasks")},
         )
         self.assertEqual([], ListTasks().run({"status": "sent"}, sly_data).get("tasks"))

@@ -1,0 +1,23 @@
+# Data-driven integration test for hackathon/house_move, run by tests/integration/test_house_move_hocons.py.
+# Format: https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/test_case_hocon_reference.md
+#
+# A signed-in guest with no case is not a bank customer: the assistant points them to the app's start form, where
+# names, addresses and the move date are kept out of the chat. The test module issues a fresh guest session into
+# HOUSE_MOVE_TEST_GUEST_SESSION.
+{
+    "agent": "hackathon/house_move",
+    "timeout_in_seconds": 180,
+    "success_ratio": "1/1",
+    "connections": ["direct"],
+    "interactions": [
+        {
+            "text": "I'm moving house and I don't bank with you",
+            "sly_data": {"session_token": ${HOUSE_MOVE_TEST_GUEST_SESSION}},
+            "response": {
+                "text": {
+                    "keywords": ["/start"],
+                }
+            }
+        },
+    ]
+}

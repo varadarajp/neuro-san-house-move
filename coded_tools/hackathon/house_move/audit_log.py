@@ -10,7 +10,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
-class AuditLog:
+class AuditLog:  # pylint: disable=too-few-public-methods  # one job: record
     """
     Records every approval, send, direct action, replan and reply.
     Each entry goes into sly_data["audit_log"] (shown in the audit view) and, unless disabled, is appended as one JSON

@@ -1,4 +1,4 @@
-"""GP practices near the new address, from the NHS Organisation Data Service (live)."""
+"""GP practices near the new address, from the NHS Organization Data Service (live)."""
 
 import asyncio
 import json
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 class GpFinder(CaseTool):
     """
     Lists the GP practices nearest a postcode in England or Wales, with address, phone and straight-line distance.
-    Practices come from the NHS Organisation Data Service (ODS), searched by postcode district; their locations come
+    Practices come from the NHS Organization Data Service (ODS), searched by postcode district; their locations come
     from postcodes.io. Whether a practice covers the address or is taking new patients is not in ODS, so the result
     points to the NHS service search for that. Falls back to demo data if the services cannot be reached.
     """

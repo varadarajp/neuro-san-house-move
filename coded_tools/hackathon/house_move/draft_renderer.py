@@ -5,14 +5,14 @@ from datetime import date
 from typing import Any
 
 
-class DraftRenderer:
+class DraftRenderer:  # pylint: disable=too-few-public-methods  # one job: render
     """
     Replaces profile and task placeholders with real values, and customer-supplied ones with a visible gap
     such as "[add your account number]". Any other placeholder is reported as unknown.
     A profile value that is missing or blank is a gap too, never an empty string: a letter without a name, street
-    or email must go to the customer to complete, not to the organisation. An address counts only with its street.
+    or email must go to the customer to complete, not to the organization. An address counts only with its street.
     When the bank holds a Direct Debit mandate with the task's provider, the mandate's payer reference fills that
-    provider's account, policy or licence number, so the customer does not have to look it up.
+    provider's account, policy or license number, so the customer does not have to look it up.
     Used when a draft is saved, and again by the Tracker when it is sent.
     """
 

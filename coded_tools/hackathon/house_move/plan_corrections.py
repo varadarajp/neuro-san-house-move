@@ -9,7 +9,7 @@ from coded_tools.hackathon.house_move.case_tool import CaseTool
 class PlanCorrections(CaseTool):
     """
     After build_timeline has rebuilt the plan for a new date, sorts every task into:
-    - needs_correction: already sent with the old date, so the organisation must be told the new one.
+    - needs_correction: already sent with the old date, so the organization must be told the new one.
     - needs_rebooking: already sent and tied to a booking (broadband install, post redirection, the bank's own
       scheduled update), so the booking must move.
     - updated_automatically: moved but not yet sent; its draft picks up the new date when it is sent.
