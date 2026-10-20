@@ -1,6 +1,7 @@
 from build_scripts.reset_house_move_demo import DemoReset
 from coded_tools.hackathon.house_move.case_store import CaseStore
 from coded_tools.hackathon.house_move.import_statement import ImportStatement
+from coded_tools.hackathon.house_move.session_tokens import SessionTokens
 from tests.coded_tools.hackathon.house_move.house_move_test_case import HouseMoveTestCase
 from tests.coded_tools.hackathon.house_move.house_move_test_state import HouseMoveTestState
 
@@ -35,3 +36,23 @@ class TestDemoReset(HouseMoveTestCase):
         self.assertTrue(saved.load_case_state(HouseMoveTestState.OWNER, "C-10042").get("tasks"))
         self.assertTrue((backup / "uploads" / upload.name / "s.csv").exists())
         self.assertTrue((backup / "audit.jsonl").exists())
+
+    def test_reset_one_customer_leaves_the_others(self):
+        """
+        Resetting C-10042 clears that customer's plan and open case only; another customer's plan is kept, and the
+        backup still holds the reset customer's plan.
+        """
+        HouseMoveTestState.drafted_session()
+        other: str = SessionTokens.bank_owner_id("C-20001")
+        CaseStore().save_case_state(other, "C-20001", {"tasks": [{"task_id": "T-01"}]})
+        CaseStore().set_active(other, "C-20001")
+
+        backup = DemoReset().reset_customer("C-10042")
+
+        store: CaseStore = CaseStore()
+        self.assertEqual({}, store.load_case_state(HouseMoveTestState.OWNER, "C-10042"))
+        self.assertIsNone(store.get_active(HouseMoveTestState.OWNER))
+        self.assertEqual([{"task_id": "T-01"}], store.load_case_state(other, "C-20001").get("tasks"))
+        self.assertEqual("C-20001", store.get_active(other))
+        saved: CaseStore = CaseStore(db_path=backup / "cases.sqlite")
+        self.assertTrue(saved.load_case_state(HouseMoveTestState.OWNER, "C-10042").get("tasks"))

@@ -251,6 +251,12 @@ It is moved to `case_data/backups/` first, so a reset can be undone:
 venv/bin/python -m build_scripts.reset_house_move_demo --yes
 ```
 
+To start just one demo customer again (for example Priya Shah, C-20001), leaving the others as they are:
+
+```bash
+venv/bin/python -m build_scripts.reset_house_move_demo --customer C-20001 --yes
+```
+
 **First, sign in** on the app and choose a demo bank customer (for example C-10042) or "I'm not a customer
 (guest)". The demo sign-in stands in for the bank's own login: it opens only that customer's record, or only the
 cases a guest creates. A bank customer's sign-in cannot start a separate move for someone else; sign in as a guest
@@ -328,7 +334,7 @@ House_Move_Agent.pptx                         pitch deck
 venv/bin/python -m pytest tests/coded_tools/hackathon tests/apps/house_move_upload -q
 ```
 
-125 tests cover the rules engine (including Scotland, Wales and Northern Ireland), working-day dates, the approval
+126 tests cover the rules engine (including Scotland, Wales and Northern Ireland), working-day dates, the approval
 gate, mock sending, replanning, replies, the case store and encryption, statement parsing, the portal, and the GP,
 school and water finders. `test_session_security.py` replays the review's attacks through the real session path:
 forged approved state, opening another customer's record, missing or tampered tokens, guessing case IDs, reading
