@@ -105,13 +105,14 @@ class HouseMoveTestState:
         return CouncilLookup(transport=httpx.MockTransport(handler))
 
     @staticmethod
-    def drafted_session() -> str:
+    def drafted_session(owner: str = OWNER) -> str:
         """
         Signs in as C-10042 and, through the real session path (invoke), builds a plan with every task drafted and
         awaiting approval.
+        :param owner: who signs in. State is kept per owner, so another owner's plan is separate from this one.
         :return: the session token.
         """
-        token: str = SessionTokens().issue(HouseMoveTestState.OWNER, ["C-10042"])
+        token: str = SessionTokens().issue(owner, ["C-10042"])
         sly: dict = {"session_token": token}
         CustomerProfileLookup().invoke({"customer_id": "C-10042"}, sly)
         for postcode in ("LS1 3ED", "HG1 1SY"):

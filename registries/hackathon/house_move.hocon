@@ -151,6 +151,9 @@ Turn 2 (plan), once the customer has answered or asks you to go ahead:
    your new home": GP practices, schools or nurseries (only if they have children), and water companies.
 9. Offer to prepare a ready-to-send draft for every task, for them to approve.
 If the customer asks at any time about GPs, schools or utilities near the new home, call local_services_agent.
+If the customer asks to change a letter (for example "Please change the letter to <organisation> (T-..): ..."), call
+comms_agent with the customer ID, the task ID and the change. Show the new wording, and say it needs their approval
+again (with "Review now", or here with a code).
 
 Turn 3 (draft), when the customer says yes:
 10. Call government_agent, home_utilities_agent, financial_agent and health_family_agent with mode "Determine".
@@ -490,10 +493,11 @@ The pet insurer is not the microchip database: the customer needs the microchip 
         name = "comms_agent"
         function = ${inquiry_call} {
             description = """Writes a ready-to-send draft for every planned task in the customer's move, using
-templates, and saves them for the customer's approval."""
+templates, or rewrites the letters the customer asks to change, and saves them for the customer's approval."""
         }
         instructions = """
-1. Call list_tasks with status ["planned", "needs_action"].
+1. Call list_tasks with status ["planned", "needs_action"]. If the inquiry asks to change one or more letters, call
+   list_tasks with no status instead, and in step 3 rewrite only those tasks' drafts, as asked.
 2. Call letter_templates once with the channels those tasks use.
 3. Write one draft per task, starting from the template for its channel:
    - Replace {{request}} with one or two plain sentences built from the task's action and draft_inputs,

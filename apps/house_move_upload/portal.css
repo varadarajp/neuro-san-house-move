@@ -388,6 +388,12 @@ input[type=date] { width: 100%; min-height: 50px; padding: 12px 14px; border-rad
 .sheet .facts .legal b { color: var(--accent); }
 .sheet .foot-row { display: flex; gap: 10px; }
 .sheet .foot-row .btn.grow { flex: 2; }
+.sheet .foot-row .btn.secondary.grow { flex: 1; }
+.approve-list { display: grid; gap: 10px; margin: 8px 0 14px; }
+.approve-list details { padding: 12px 14px; margin: 0; }
+.approve-list summary { cursor: pointer; list-style: none; }
+.approve-list summary::-webkit-details-marker { display: none; }
+.approve-list details[open] summary { margin-bottom: 10px; }
 .sheet .foot-row .btn.ghost { flex: 1; }
 .sheet .done-state { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px;
                      padding: 26px 6px 6px; }

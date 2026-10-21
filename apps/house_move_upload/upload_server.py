@@ -51,6 +51,7 @@ from coded_tools.hackathon.house_move.import_statement import ImportStatement
 from coded_tools.hackathon.house_move.personal_details import PersonalDetails
 from coded_tools.hackathon.house_move.send_notification import SendNotification
 from coded_tools.hackathon.house_move.session_tokens import SessionTokens
+from coded_tools.hackathon.house_move.skip_on_portal import SkipOnPortal
 from coded_tools.hackathon.house_move.statement_parser import StatementParser
 
 logger = logging.getLogger(__name__)
@@ -263,6 +264,23 @@ class StatementUploadServer:  # pylint: disable=too-many-instance-attributes  # 
             result: dict[str, Any] | str = await ApproveOnPortal(audit_log=self._audit_log).async_invoke(
                 args, sly_data
             )
+            if isinstance(result, str):
+                status: int = 401 if "not signed in" in result else 400
+                return JSONResponse({"error": result.removeprefix("Error: ")}, status_code=status)
+            return JSONResponse(result)
+
+        @app.post("/skip")
+        async def skip(request: Request) -> JSONResponse:
+            if not self._same_origin(request):
+                return JSONResponse({"error": "refused"}, status_code=403)
+            try:
+                body: Any = await request.json()
+            except json.JSONDecodeError:
+                return JSONResponse({"error": "expected JSON"}, status_code=400)
+            body = body if isinstance(body, dict) else {}
+            sly_data: dict[str, Any] = {"session_token": request.cookies.get(StatementUploadServer.COOKIE)}
+            args: dict[str, Any] = {"skip": body.get("skip"), "confirm_legal": body.get("confirm_legal") is True}
+            result: dict[str, Any] | str = await SkipOnPortal(audit_log=self._audit_log).async_invoke(args, sly_data)
             if isinstance(result, str):
                 status: int = 401 if "not signed in" in result else 400
                 return JSONResponse({"error": result.removeprefix("Error: ")}, status_code=status)

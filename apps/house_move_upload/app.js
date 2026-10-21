@@ -106,25 +106,92 @@ const HM = (() => {
     return box;
   }
 
-  // ----- Review: one letter at a time, Approve and next -----
-  async function review() {
+  // ----- After approving: send now, or back to the move -----
+  function reviewDone(approved, skipped) {
+    const done = el("div", undefined, "done-state");
+    done.appendChild(icon("m5 12 5 5 9-10"));
+    done.appendChild(el("b", approved + (approved === 1 ? " letter approved" : " letters approved")));
+    if (skipped) done.appendChild(el("p", skipped + (skipped === 1 ? " letter skipped." : " letters skipped."), "muted"));
+    done.appendChild(el("p", approved ? "Send them now? Complete letters go to the organisation; any still missing "
+      + "a reference come back to you as a ready-made pack." : "Nothing approved this time. They stay on your plan.",
+      "muted"));
+    const send = approved ? button("Send them now", "btn block", () => { close(); act({type: "send"}); }) : null;
+    open("Review done", "All letters reviewed", [done], [send, button("Back to my move", "btn ghost block", close)],
+      () => HM.refresh && HM.refresh());
+  }
+
+  // ----- Approve all: every routine letter in one go; legal requirements stay one at a time -----
+  async function approveAll() {
     const status = (await json("/status.json")).body;
-    const queue = (status.awaiting_approval || []).map(t => t.task_id);
+    const ids = (status.awaiting_approval || []).map(t => t.task_id);
+    if (!ids.length) { toast("No letters are waiting for you."); return; }
+    open("Approve all", "Loading your letters…", [el("div", "", "skeleton")], []);
+    const drafts = (await Promise.all(ids.map(id => json("/draft/" + encodeURIComponent(id) + ".json"))))
+      .filter(r => r.ok).map(r => r.body);
+    const routine = drafts.filter(d => !d.legal_requirement), legal = drafts.filter(d => d.legal_requirement);
+    const list = el("div", undefined, "approve-list");
+    routine.forEach(d => {
+      // Each letter can be opened and read here: approving sends back the fingerprint of exactly this wording.
+      const item = el("details", undefined, "card");
+      const summary = el("summary");
+      summary.appendChild(el("b", d.org));
+      summary.appendChild(el("span", " · due " + day(d.due_date) + " · " + channel(d.channel), "small muted"));
+      item.appendChild(summary);
+      item.appendChild(letter(d));
+      list.appendChild(item);
+    });
+    const body = [el("p", routine.length ? "Tap a letter to read it. Highlighted details are filled in from your "
+      + "record when it is sent." : "Every letter waiting is a legal requirement.", "small muted"), list];
+    if (legal.length) {
+      body.push(el("b", legal.length + (legal.length === 1 ? " legal requirement" : " legal requirements")
+        + ", approved one at a time", "group-title"));
+      const names = el("ul", undefined, "plain-list");
+      legal.forEach(d => names.appendChild(el("li", d.org)));
+      body.push(names);
+    }
+    const legalBtn = legal.length ? button("Review the legal ones", "btn secondary block",
+      () => review(legal.map(d => d.task_id))) : null;
+    const go = routine.length ? button("Approve " + routine.length + (routine.length === 1 ? " letter" : " letters"),
+      "btn block", async () => {
+        go.disabled = true;
+        const res = await post("/approve", {approve: routine.map(d => ({task_id: d.task_id,
+          draft_hash: d.draft_hash}))});
+        if (!res.ok) { toast("Not approved: " + (res.body.error || res.status), true); go.disabled = false; return; }
+        if ((res.body.not_applied || []).length) toast("Not approved: " + res.body.not_applied.join("; "), true);
+        if (legal.length) { toast((res.body.approved || []).length + " approved. Now the legal ones."); review(
+          legal.map(d => d.task_id)); return; }
+        reviewDone((res.body.approved || []).length, 0);
+      }) : null;
+    const oneByOne = button("Review one by one instead", "btn ghost block", () => review());
+    open("Approve all", drafts.length + (drafts.length === 1 ? " letter" : " letters") + " waiting", body,
+      [go, legalBtn, oneByOne], () => HM.refresh && HM.refresh());
+  }
+
+  // ----- Change: tell the assistant what to rewrite; the new wording needs approving again -----
+  function change(d, after) {
+    const label = el("label", "What should change?", "field");
+    label.htmlFor = "change-text";
+    const text = el("textarea");
+    text.id = "change-text";
+    text.placeholder = "For example: ask them to close the account on the move date, not before.";
+    const sendBtn = button("Ask the assistant", "btn block", () => {
+      if (!text.value.trim()) return;
+      close();
+      act({type: "text", text: "Please change the letter to " + d.org + " (" + d.task_id + "): " + text.value.trim()});
+    });
+    open("Change", d.org, [label, text, el("p", "The assistant rewrites it; you approve the new wording before it "
+      + "goes.", "small muted")], [sendBtn, button("Back", "btn ghost block", after)]);
+  }
+
+  // ----- Review: one letter at a time: approve, change, skip, or leave for later -----
+  async function review(only) {
+    const status = (await json("/status.json")).body;
+    const waiting = (status.awaiting_approval || []).map(t => t.task_id);
+    const queue = only ? waiting.filter(id => only.includes(id)) : waiting;
     if (!queue.length) { toast("No letters are waiting for you."); return; }
-    let index = 0, approved = 0;
-    const showDone = () => {
-      const done = el("div", undefined, "done-state");
-      done.appendChild(icon("m5 12 5 5 9-10"));
-      done.appendChild(el("b", approved + (approved === 1 ? " letter approved" : " letters approved")));
-      done.appendChild(el("p", approved ? "Send them now? Complete letters go to the organisation; any still missing "
-        + "a reference come back to you as a ready-made pack." : "Nothing approved this time. They stay on your plan.",
-        "muted"));
-      const send = approved ? button("Send them now", "btn block", () => { close(); act({type: "send"}); }) : null;
-      open("Review done", "All letters reviewed", [done], [send, button("Back to my move", "btn ghost block", close)],
-        () => HM.refresh && HM.refresh());
-    };
+    let index = 0, approved = 0, skipped = 0;
     const show = async () => {
-      if (index >= queue.length) { showDone(); return; }
+      if (index >= queue.length) { reviewDone(approved, skipped); return; }
       const r = await json("/draft/" + encodeURIComponent(queue[index]) + ".json");
       if (!r.ok) { index += 1; show(); return; }
       const d = r.body;
@@ -142,10 +209,22 @@ const HM = (() => {
         else toast("Not approved: " + (res.body.error || (res.body.not_applied || []).join("; ")), true);
         index += 1; show();
       });
-      const skip = button("Not now", "btn ghost", () => { index += 1; show(); });
+      const later = button("Not now", "btn ghost", () => { index += 1; show(); });
       const row = el("div", undefined, "foot-row");
-      row.appendChild(skip); row.appendChild(approve);
-      open("Letter " + (index + 1) + " of " + queue.length, d.org, [dots, facts, letter(d), note], [row],
+      row.appendChild(later); row.appendChild(approve);
+      const edit = button("Change", "btn secondary grow", () => change(d, show));
+      const skip = button("Skip", "btn secondary grow", async () => {
+        const warning = d.legal_requirement ? "This is a legal requirement. If you skip it, you must tell "
+          + d.org + " yourself. Skip it anyway?" : "Skip this letter? It will not be sent.";
+        if (!confirm(warning)) return;
+        const res = await post("/skip", {skip: [d.task_id], confirm_legal: !!d.legal_requirement});
+        if (res.ok && (res.body.skipped || []).length) skipped += 1;
+        else toast("Not skipped: " + (res.body.error || (res.body.not_applied || []).join("; ")), true);
+        index += 1; show();
+      });
+      const more = el("div", undefined, "foot-row");
+      more.appendChild(edit); more.appendChild(skip);
+      open("Letter " + (index + 1) + " of " + queue.length, d.org, [dots, facts, letter(d), note], [row, more],
         () => HM.refresh && HM.refresh());
     };
     show();
@@ -238,7 +317,11 @@ const HM = (() => {
   function act(action, next) {
     if (!action) return;
     if (action.type === "link") { location.href = action.target; return; }
-    if (action.type === "sheet") { action.sheet === "review" ? review() : upload(); return; }
+    if (action.type === "sheet") {
+      const sheets = {review: () => review(), approve_all: approveAll, upload: upload};
+      (sheets[action.sheet] || upload)();
+      return;
+    }
     if (action.type === "reply") { reply((next || {}).asks); return; }
     if (action.type === "send") { sendNow(); return; }
     if (action.type === "say" || action.type === "text") {
@@ -266,6 +349,7 @@ const HM = (() => {
   }
   async function next() { return (await json("/next.json")).body; }
 
-  return {el, button, icon, day, channel, json, post, open, close, review, upload, reply, sendNow, act, card, next,
+  return {el, button, icon, day, channel, json, post, open, close, review, approveAll, upload, reply, sendNow, act, card,
+    next,
     refresh: null};
 })();
