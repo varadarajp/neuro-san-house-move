@@ -43,6 +43,18 @@
         "category": "pet_insurance",
         "placeholder": "policy_number",
         "reference": "PW-30019"
+      },
+      {
+        "service_user": "Northway Building Society",
+        "category": "mortgage",
+        "placeholder": "account_number",
+        "reference": "NW-MTG-117420"
+      },
+      {
+        "service_user": "Amberline Card Services",
+        "category": "credit_card",
+        "placeholder": "account_number",
+        "reference": "AMB-5521-0042"
       }
     ],
     "C-20001": [

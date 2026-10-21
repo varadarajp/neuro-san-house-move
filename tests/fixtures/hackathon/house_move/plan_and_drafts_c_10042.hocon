@@ -7,7 +7,8 @@
 # Ground truth, from coded_tools/hackathon/house_move/data/obligations_rules.json with the facts the customer states
 # in turn 2: the legal requirements are council tax at the old council (Leeds) and the new council (North
 # Yorkshire), DVLA for the driving licence and for the vehicle log book (V5C), TV Licensing and the pet microchip
-# database. The only money amounts the rules give are the DVLA fine of up to £1,000, the £70 council tax penalty and
+# database. Each lender (Northway Building Society, Amberline Card Services) has its own task (issue #8).
+# The only money amounts the rules give are the DVLA fine of up to £1,000, the £70 council tax penalty and
 # the fine of up to £500 for an unchipped dog or cat; the bank's indicative home insurance price is the only other.
 # Drafts keep dates and personal details as {{placeholders}}, filled in only when a draft is sent.
 #
@@ -38,6 +39,8 @@ with the plan.""",
                         """The reply gives a dated move plan in which each of these is marked as a legal requirement:
 council tax at the old council (Leeds), council tax at the new council (North Yorkshire), DVLA for the driving
 licence, DVLA for the vehicle log book (V5C), TV Licensing, and the pet microchip database.""",
+                        """The plan includes a task to update the address with Northway Building Society (mortgage)
+and a task to update it with Amberline Card Services (credit card).""",
                         """The reply does not mark any of these as a legal requirement: energy, water, broadband,
 mobile, home or car insurance, Royal Mail redirection, GP, nursery, or the customer's bank.""",
                         """Any money amount in the reply is one of: a fine of up to £1,000 (DVLA), a £70 council tax

@@ -5,7 +5,8 @@
 # coded_tools/hackathon/house_move/data/transactions.json:
 # - providers: Brightwatt Energy, NVW Water Services, Fibrely Broadband, Voxmobile, TV Licensing, DVLA vehicle tax,
 #   Shieldmotor Insurance (car), Hearthguard Home Insurance, Pawsure Pet Insurance, Little Acorns Nursery, PulseGym
-#   and the Hopewell Trust (charity). Northway BS is their own mortgage, not something to notify.
+#   and the Hopewell Trust (charity). Their lenders need the new address too (issue #8): Northway Building Society
+#   (mortgage) and Amberline Card Services (credit card).
 # - life facts: a pet (pet insurance, vet, pet shop), a young child (nursery) and a car (vehicle tax, car insurance).
 #
 # Providers are checked by keyword where the LLM writes the name consistently, and by `gist` where it may change the
@@ -24,6 +25,8 @@
                 "text": {
                     "keywords": ["Brightwatt", "Fibrely", "TV Licen", "DVLA", "Little Acorns"],
                     "gist": [
+                        """The reply lists Northway Building Society (a mortgage) and Amberline Card Services (a
+credit card) among the organizations to tell, not as payments left out.""",
                         """The reply names the providers Shieldmotor, Hearthguard and Pawsure among the organizations
 found. Capitalization and the words after the brand (for example Insurance, Policy or Mobile) do not matter.""",
                         """The reply says the customer has, or probably has, a pet (for example because they pay for
