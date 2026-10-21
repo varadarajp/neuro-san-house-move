@@ -38,6 +38,7 @@ class CaseStore(CaseDatabase):
         "case_state",
         "active_cases",
         "pending_actions",
+        "resume_codes",
     )
     OWNER_TABLES: tuple[str, ...] = (
         "case_state",
