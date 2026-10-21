@@ -245,7 +245,9 @@ state and goes there. There are three tabs:
 | **Chat** | The assistant. Your sign-in is attached on the server, and under each reply a card offers the next step |
 | **Account** | Who is signed in, your details, statements, the nsflow session and sign-out |
 
-Tasks open where you are, as sheets: **Review** (one letter at a time, Approve and next, then "Send them now"),
+Tasks open where you are, as sheets: **Approve all letters** (every routine letter, each one readable, approved in
+one go; legal requirements then follow one at a time), **Review one by one** (Approve, Change, which asks the
+assistant to rewrite it, Skip, or Not now, then "Send them now"),
 **Upload** (a statement, then the assistant is told), and **Reply** (answer what a provider asked for). A new guest
 starts on **Start your move**: names, email, both full addresses and the move date, stored encrypted and never typed in
 the chat; saving it starts the case and carries straight on in the chat.
@@ -282,7 +284,8 @@ for that. The app then takes you to each step in turn.
 3. "Yes please, prepare the drafts." Four AAOSA specialists and Comms produce a draft per task.
 4. "Approve all of them." The agent lists what will be approved, names the legal-requirement drafts that must be
    approved one by one, and shows a 6-digit code. Reply with the code (and name any legal drafts first). Or press
-   **Review now** on the card and approve one letter at a time, then **Send them now**. Emails
+   **Approve all letters** on the card (or **Review one by one** to approve, change or skip each), then **Send them
+   now**. Emails
    with known references then go to providers; the rest become pre-filled packs; the bank's own address update
    is made directly.
 5. "Completion has moved to 11 December." The Tracker sorts every task: needs correction, needs rebooking,

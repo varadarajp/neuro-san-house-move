@@ -1,0 +1,30 @@
+# Data-driven integration test for hackathon/house_move, run by tests/integration/test_house_move_hocons.py.
+# Format: https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/test_case_hocon_reference.md
+#
+# Changing a letter (issue #14): the app's review sheet sends "Please change the letter to <organisation> (T-..):
+# <what to change>". C-10042's plan is already fully drafted (the test module builds it without the LLM, under a
+# separate test owner, and puts its session in HOUSE_MOVE_TEST_DRAFTED_SESSION). The assistant has comms_agent
+# rewrite just that letter, shows the new wording and says it needs approving again.
+{
+    "agent": "hackathon/house_move",
+    "timeout_in_seconds": 600,
+    "success_ratio": "1/1",
+    "connections": ["direct"],
+    "interactions": [
+        {
+            "text": """Please change the letter to Energy supplier (Brightwatt Energy) (T-06): ask them to close the
+account on the move date and send the final bill to my new address.""",
+            "sly_data": {"session_token": ${HOUSE_MOVE_TEST_DRAFTED_SESSION}},
+            "response": {
+                "text": {
+                    "keywords": ["Brightwatt"],
+                    "gist": [
+                        """The reply shows a rewritten letter or email to Brightwatt Energy that asks them to close
+the account on the move date and to send the final bill to the new address.""",
+                        """The reply says the changed letter needs the customer's approval before it is sent.""",
+                    ]
+                }
+            }
+        },
+    ]
+}

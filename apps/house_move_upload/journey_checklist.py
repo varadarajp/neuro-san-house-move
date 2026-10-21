@@ -31,6 +31,13 @@ class JourneyChecklist:
         "replies": "Has anyone replied yet?",
     }
 
+    # The other way to take a step, shown as a second button: listing providers instead of uploading, or reviewing
+    # letters one by one instead of approving them all.
+    SECONDARY: dict[str, dict[str, str]] = {
+        "share": {"type": "say", "say": "list", "label": "List them in the chat instead"},
+        "review": {"type": "sheet", "sheet": "review", "label": "Review one by one"},
+    }
+
     def __init__(self, records: DiscoveryRecords, status: CaseStatus):
         """
         :param records: says which statements and providers a case holds.
@@ -92,17 +99,24 @@ class JourneyChecklist:
                     "A letter or form for every organisation. It takes a few minutes.",
                     {"type": "say", "say": "draft"},
                     "Prepare my letters",
-                    status.get("stage_index", 0) >= CaseStatus.STAGES.index("Drafts ready")
-                    and counts.get("planned", 0) == 0,
+                    # Letters waiting for approval come first, even if a task is still without a letter: one
+                    # undrafted task must not hide letters that are ready. Once none are waiting, any left over
+                    # brings this step back.
+                    waiting > 0
+                    or (
+                        status.get("stage_index", 0) >= CaseStatus.STAGES.index("Drafts ready")
+                        and counts.get("planned", 0) == 0
+                    ),
                 ),
                 self._step(
                     "review",
-                    f"Read and approve {waiting} letter{'s' if waiting != 1 else ''}"
+                    f"Approve your {waiting} letter{'s' if waiting != 1 else ''}"
                     if waiting
                     else "Approve your letters",
-                    "One at a time. Legal requirements are marked.",
-                    {"type": "sheet", "sheet": "review"},
-                    "Review now",
+                    "Approve them all at once, or go through them one by one to approve, change or skip each. Legal "
+                    "requirements are approved one at a time." + self._undrafted(counts.get("planned", 0)),
+                    {"type": "sheet", "sheet": "approve_all"},
+                    "Approve all letters",
                     planned and not waiting and (went_out > 0 or counts.get("approved", 0) > 0),
                 ),
                 self._step(
@@ -135,9 +149,7 @@ class JourneyChecklist:
         )
         result: dict[str, Any] = {
             **current,
-            "secondary": {"type": "say", "say": "list", "label": "List them in the chat instead"}
-            if current.get("key") == "share"
-            else None,
+            "secondary": JourneyChecklist.SECONDARY.get(current.get("key")),
             "progress": {"done": sum(1 for s in steps if s.get("done")), "total": len(steps)},
             "asks": [],
         }
@@ -175,6 +187,18 @@ class JourneyChecklist:
             {"type": "sheet", "sheet": "upload"},
             "Upload a statement",
             done,
+        )
+
+    @staticmethod
+    def _undrafted(planned: int) -> str:
+        """
+        :return: a sentence about tasks still without a letter, or nothing.
+        """
+        if not planned:
+            return ""
+        return (
+            f" {planned} task{' has' if planned == 1 else 's have'} no letter yet: ask the assistant to draft "
+            f"{'it' if planned == 1 else 'them'}."
         )
 
     def _shared(self, case: dict[str, Any] | None) -> bool:
