@@ -411,7 +411,7 @@ the reply.
 | Bank holidays | [gov.uk/bank-holidays.json](https://www.gov.uk/bank-holidays.json) | England and Wales, Scotland, Northern Ireland |
 | GP practices | NHS Organization Data Service | Live, no key |
 | Schools | Department for Education, Get Information About Schools | 26,483 open schools in England; Open Government Licence v3.0 |
-| Water companies | Checked table by postcode district, plus the [CCW checker](https://www.ccw.org.uk/faq/which-water-company-supplies-my-area/) | No public API exists; entries are marked confirmed or not |
+| Water companies | Ofwat's appointed water supply and sewerage areas (v1.5, April 2024), queried live from the [Stream open data hub](https://www.streamwaterdata.co.uk/), plus the [CCW checker](https://www.ccw.org.uk/faq/which-water-company-supplies-my-area/) for an exact address | Open Government Licence. If the service is down, a checked table by postcode district answers, marked confirmed or not |
 
 ## Known limitations
 

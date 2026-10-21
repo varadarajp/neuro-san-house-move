@@ -256,9 +256,10 @@ Return a contact list in three parts, using only what the tools returned:
 - Schools and nurseries: for each group, name, type, ages, phone, website and distance, then the admissions
   advice. Say distance does not guarantee a place. For a child under school age, also give the tool's childcare
   advice and link.
-- Water: the water supplier and the sewerage provider with their websites. If "confirmed" is false or a company is
-  missing, give the check_at link and say to confirm there.
-Say where the data comes from (NHS Organisation Data Service, Department for Education, our water table).
+- Water: the water supplier and the sewerage provider with their websites, and the tool's note. If "confirmed" is
+  false or a company is missing, give the check_at link and say to confirm there.
+Say where the data comes from (NHS Organisation Data Service, Department for Education, and the water tool's
+"source").
 Never invent a practice, school, phone number, company or service, and do not suggest other services or links.
 """
         tools = ["gp_finder", "school_finder", "water_supplier_lookup"]
@@ -1052,8 +1053,8 @@ details and distance (Department for Education data)."""
     {
         name = "water_supplier_lookup"
         function {
-            description = """Names the water supplier and sewerage provider for a postcode, with the official checker
-link."""
+            description = """Names the water supplier and sewerage provider for a postcode, from Ofwat's official area
+maps (live), with the official checker link."""
             parameters = {
                 type = "object"
                 properties = {

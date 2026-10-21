@@ -1,5 +1,5 @@
 {
-  "_note": "Water and sewerage companies by postcode district for the demo addresses, checked 2026-10-18. Supply areas do not follow council boundaries and can split within a district: always confirm with the official checker. 'confirmed' says whether a current source was found for that entry.",
+  "_note": "Company names for the live lookup of Ofwat's appointed areas (OfwatAreaLookup): ofwat_names maps Ofwat's company names to companies, and trading_names covers areas where a company trades under another name. districts is the fallback table by postcode district for the demo addresses, checked 2026-10-18, used only when the live lookup is unavailable. Supply areas do not follow council boundaries and can split within a district. 'confirmed' says whether a current source was found for that table entry.",
   "checker_url": "https://www.ccw.org.uk/faq/which-water-company-supplies-my-area/",
   "companies": {
     "yorkshire": {"name": "Yorkshire Water", "website": "https://www.yorkshirewater.com"},
@@ -11,7 +11,22 @@
     "wessex": {"name": "Wessex Water", "website": "https://www.wessexwater.co.uk"},
     "welsh": {"name": "Dŵr Cymru Welsh Water", "website": "https://www.dwrcymru.com"},
     "scottish": {"name": "Scottish Water", "website": "https://www.scottishwater.co.uk"},
-    "ni": {"name": "NI Water", "website": "https://www.niwater.com"}
+    "ni": {"name": "NI Water", "website": "https://www.niwater.com"},
+    "south_west": {"name": "South West Water", "website": "https://www.southwestwater.co.uk"}
+  },
+  "ofwat_names": {
+    "Yorkshire Water": "yorkshire",
+    "Anglian Water": "anglian",
+    "Northumbrian Water": "northumbrian",
+    "Severn Trent Water": "severn_trent",
+    "Wessex Water": "wessex",
+    "D\u0175r Cymru": "welsh",
+    "South West Water": "south_west"
+  },
+  "trading_names": {
+    "Northumbrian Water|Essex": "essex_suffolk",
+    "Northumbrian Water|Suffolk": "essex_suffolk",
+    "South West Water|Bristol": "bristol"
   },
   "districts": {
     "LS1": {"water": "yorkshire", "sewerage": "yorkshire", "confirmed": false},
