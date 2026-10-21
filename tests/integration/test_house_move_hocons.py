@@ -21,6 +21,7 @@ from coded_tools.hackathon.house_move.key_folder import KeyFolder
 from coded_tools.hackathon.house_move.personal_data_vault import PersonalDataVault
 from coded_tools.hackathon.house_move.session_tokens import SessionTokens
 from neuro_san_studio.commands.project_environment import ProjectEnvironment
+from tests.coded_tools.hackathon.house_move.house_move_test_state import HouseMoveTestState
 
 
 class TestHouseMoveHocons(TestCase):
@@ -52,6 +53,7 @@ class TestHouseMoveHocons(TestCase):
         "HOUSE_MOVE_TEST_GUEST_SESSION",
         "HOUSE_MOVE_TEST_FORM_GUEST_SESSION",
         "HOUSE_MOVE_TEST_FORM_CASE",
+        "HOUSE_MOVE_TEST_DRAFTED_SESSION",
         *(f"HOUSE_MOVE_TEST_SESSION_{customer.replace('-', '_')}" for customer in BANK_CUSTOMERS),
         "AGENT_TOOL_PATH",
         "MCP_SERVERS_INFO_FILE",
@@ -105,7 +107,8 @@ class TestHouseMoveHocons(TestCase):
         Gives each fixture an empty case database in the temporary folder. Every House Move tool opens the database
         named in the environment when it runs, so the sessions issued for the class stay valid.
         Then starts a case for the form guest, as the app's start form does (through create_case), and puts its
-        reference in HOUSE_MOVE_TEST_FORM_CASE.
+        reference in HOUSE_MOVE_TEST_FORM_CASE; and builds a fully drafted plan for C-10042 under a separate test owner
+        (no LLM), whose session goes in HOUSE_MOVE_TEST_DRAFTED_SESSION.
         """
         os.environ[CaseDatabase.DB_ENV] = str(TestHouseMoveHocons.folder / f"{self.id().rsplit('.', 1)[-1]}.sqlite")
         move: dict[str, Any] = {
@@ -119,6 +122,8 @@ class TestHouseMoveHocons(TestCase):
         )
         self.assertIsInstance(case, dict, case)
         os.environ["HOUSE_MOVE_TEST_FORM_CASE"] = case.get("case_id")
+        # Not C-10042's own owner, whose discovery fixtures must start with no plan.
+        os.environ["HOUSE_MOVE_TEST_DRAFTED_SESSION"] = HouseMoveTestState.drafted_session("bank:C-10042:drafted")
 
     @parameterized.expand(
         DynamicHoconUnitTests.from_hocon_list(
@@ -134,6 +139,7 @@ class TestHouseMoveHocons(TestCase):
                 "hackathon/house_move/discovery_c_20004.hocon",
                 "hackathon/house_move/plan_c_20004.hocon",
                 "hackathon/house_move/plan_and_drafts_c_10042.hocon",
+                "hackathon/house_move/change_a_letter.hocon",
             ]
         ),
         skip_on_empty=True,

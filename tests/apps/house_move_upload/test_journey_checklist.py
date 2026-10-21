@@ -59,7 +59,7 @@ class TestJourneyChecklist(HouseMoveTestCase):
         }
         review: dict = self.next_step(waiting)
         self.assertEqual(
-            ("Read and approve 2 letters", {"type": "sheet", "sheet": "review"}),
+            ("Approve your 2 letters", {"type": "sheet", "sheet": "approve_all"}),
             (review.get("title"), review.get("action")),
         )
         approved: dict = {
@@ -120,3 +120,31 @@ class TestJourneyChecklist(HouseMoveTestCase):
             ("confirm_statement", None, None), (confirm.get("key"), confirm.get("action"), confirm.get("secondary"))
         )
         self.assertIn("code", confirm.get("hint"))
+
+    def test_letters_waiting_come_first_even_with_one_undrafted(self):
+        """
+        Issue #13: with letters waiting, the next step is to approve them all (or review one by one), even if a task
+        still has no letter; the hint says so. With none waiting and one left undrafted, drafting comes back.
+        """
+        status: dict = {
+            "case": {"reference": "C-10042"},
+            "stage_index": 3,
+            "awaiting_approval": [{"task_id": "T-01"}, {"task_id": "T-02"}],
+            "groups": [
+                {"status": "awaiting_approval", "tasks": [{}, {}]},
+                {"status": "planned", "tasks": [{}]},
+            ],
+        }
+        step: dict = self.next_step(status)
+        self.assertEqual(
+            ("review", {"type": "sheet", "sheet": "approve_all"}, "Approve all letters"),
+            (step.get("key"), step.get("action"), step.get("label")),
+        )
+        self.assertEqual({"type": "sheet", "sheet": "review", "label": "Review one by one"}, step.get("secondary"))
+        self.assertIn("1 task has no letter yet", step.get("hint"))
+        leftover: dict = {
+            **status,
+            "awaiting_approval": [],
+            "groups": [{"status": "approved", "tasks": [{}, {}]}, {"status": "planned", "tasks": [{}]}],
+        }
+        self.assertEqual("draft", self.next_step(leftover).get("key"))

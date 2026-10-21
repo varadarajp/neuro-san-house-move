@@ -163,6 +163,29 @@ class TestStatementUploadServer(HouseMoveTestCase):
         self.client.cookies.clear()
         self.assertEqual(401, self.client.post("/approve", json=body).status_code)
 
+    def test_skip_from_the_review_sheet(self):
+        """
+        Issue #13: skipping needs a same-origin JSON request from the signed-in owner, and a legal requirement only
+        goes with confirm_legal.
+        """
+        self.sign_in("C-10042")
+        HouseMoveTestState.drafted_session()
+        waiting: list = self.client.get("/status.json").json().get("awaiting_approval")
+        routine: str = next(t.get("task_id") for t in waiting if not t.get("legal_requirement"))
+        legal: str = next(t.get("task_id") for t in waiting if t.get("legal_requirement"))
+        cross: dict = {"Origin": "https://evil.test"}
+        self.assertEqual(403, self.client.post("/skip", json={"skip": [routine]}, headers=cross).status_code)
+        self.assertEqual(
+            {"skipped": [routine], "not_applied": []}, self.client.post("/skip", json={"skip": [routine]}).json()
+        )
+        self.assertEqual([], self.client.post("/skip", json={"skip": [legal]}).json().get("skipped"))
+        self.assertEqual(
+            [legal], self.client.post("/skip", json={"skip": [legal], "confirm_legal": True}).json().get("skipped")
+        )
+        self.client.post("/signout")
+        self.client.cookies.clear()
+        self.assertEqual(401, self.client.post("/skip", json={"skip": [routine]}).status_code)
+
     def test_details_form_starts_a_guests_move_and_echoes_nothing(self):
         """
         A guest's first save of Details (names, email, both full addresses, move date) starts their case, with the
@@ -362,7 +385,7 @@ class TestStatementUploadServer(HouseMoveTestCase):
         self.assertEqual(("tell", {"type": "say", "say": "start"}), (first.get("key"), first.get("action")))
         HouseMoveTestState.drafted_session()
         step: dict = self.client.get("/next.json").json()
-        self.assertEqual(("review", {"type": "sheet", "sheet": "review"}), (step.get("key"), step.get("action")))
+        self.assertEqual(("review", {"type": "sheet", "sheet": "approve_all"}), (step.get("key"), step.get("action")))
         self.assertIn("Please send my approved letters.", self.client.get("/chat").text)
 
     def test_upload_sheet_stores_the_statement_and_names_it(self):
