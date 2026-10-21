@@ -294,12 +294,15 @@ for that. The app then takes you to each step in turn.
 
 1. Sign in as "I'm not a customer (guest)". The app opens **Start your move**: enter the synthetic details Jordan
    Lee, jordan.lee@example.com; current home 8 Cotham Vale, Bristol, BS6 6RB (sold); new home 21 Lenton Boulevard,
-   Nottingham, NG7 2NF; move date 11 December 2026. Saving starts the case and opens the chat, which carries on
-   without asking again.
+   Nottingham, NG7 2NF; move date 11 December 2026. Saving starts the case and shows your case reference and a
+   resume code, once: keep both. **Continue to the chat** carries on without asking again.
 2. Press **Upload a statement** on the card and choose
    `coded_tools/hackathon/house_move/data/sample_statements/jordan_lee_bristol.csv`. The assistant is told and shows
    a code; reply with it to let the statement be read.
-3. Continue as above. Later, with the same sign-in, the app picks up wherever you left off.
+3. Continue as above. Later, with the same sign-in, the app picks up wherever you left off. After signing out,
+   choose **Continue my move** on the sign-in screen and enter the case reference and resume code to get back to
+   the same move. Five wrong codes lock the code; while signed in, **Account** makes a new one (the old one stops
+   working). Only a salted hash of the code is stored.
 
 The same journeys run from the command line, passing the session from Home's "Chatting in nsflow instead?":
 
@@ -348,7 +351,7 @@ House_Move_Agent.pptx                         pitch deck
 venv/bin/python -m pytest tests/coded_tools/hackathon tests/apps/house_move_upload -q
 ```
 
-130 tests cover the rules engine (including Scotland, Wales and Northern Ireland), working-day dates, the approval
+136 tests cover the rules engine (including Scotland, Wales and Northern Ireland), working-day dates, the approval
 gate, mock sending, replanning, replies, the case store and encryption, statement parsing, the portal, and the GP,
 school and water finders. `test_session_security.py` replays the review's attacks through the real session path:
 forged approved state, opening another customer's record, missing or tampered tokens, guessing case IDs, reading
