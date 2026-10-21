@@ -49,6 +49,7 @@ from coded_tools.hackathon.house_move.discovery_records import DiscoveryRecords
 from coded_tools.hackathon.house_move.house_move_data_store import HouseMoveDataStore
 from coded_tools.hackathon.house_move.import_statement import ImportStatement
 from coded_tools.hackathon.house_move.personal_details import PersonalDetails
+from coded_tools.hackathon.house_move.resume_codes import ResumeCodes
 from coded_tools.hackathon.house_move.send_notification import SendNotification
 from coded_tools.hackathon.house_move.session_tokens import SessionTokens
 from coded_tools.hackathon.house_move.statement_parser import StatementParser
@@ -191,24 +192,53 @@ class StatementUploadServer:  # pylint: disable=too-many-instance-attributes  # 
             landing: str = (
                 "/" if claims.get("customers") or self._own_standalone_case(claims.get("sub", "")) else "/start"
             )
-            response: RedirectResponse = RedirectResponse(landing, status_code=303)
-            response.set_cookie(
-                StatementUploadServer.COOKIE,
-                token,
-                httponly=True,
-                samesite="strict",
-                max_age=SessionTokens.LIFETIME_SECONDS,
+            return self._signed_in(token, landing)
+
+        @app.post("/resume", response_class=HTMLResponse)
+        async def resume(request: Request, case_reference: str = Form(""), resume_code: str = Form("")) -> Response:
+            if not self._from_this_site(request):
+                return HTMLResponse(self._home(None, self._error("Please sign in from this page.")), status_code=403)
+            case_id: str = case_reference.strip()
+            owner: str | None = await asyncio.to_thread(ResumeCodes().redeem, case_id, resume_code)
+            if owner is None:
+                message: str = (
+                    "That case reference and resume code do not match. Check both and try again: after "
+                    f"{ResumeCodes.MAX_FAILURES} wrong codes a case's code stops working."
+                )
+                return HTMLResponse(self._home(None, self._error(message)), status_code=400)
+            # The same owner as before, so everything they started (case, plan, letters, chat) is theirs again.
+            await asyncio.to_thread(self._case_store().set_active, owner, case_id)
+            return self._signed_in(self._tokens.issue(owner, []), "/")
+
+        @app.post("/resume-code", response_class=HTMLResponse)
+        async def new_resume_code(request: Request) -> HTMLResponse:
+            token: str | None = request.cookies.get(StatementUploadServer.COOKIE)
+            claims: dict[str, Any] | None = self._tokens.verify(token)
+            if claims is None:
+                return HTMLResponse(self._home(None, self._error("Sign in first.")), status_code=401)
+            if not self._from_this_site(request):
+                return HTMLResponse(self._home(token, self._error("Ask for a code from this page.")), status_code=403)
+            case_id: str | None = await asyncio.to_thread(self._own_standalone_case, claims.get("sub", ""))
+            if claims.get("customers") or case_id is None:
+                return HTMLResponse(self._home(token, self._error("Only a guest's own move has a resume code.")), 400)
+            code: str = await asyncio.to_thread(ResumeCodes().issue, case_id)
+            return HTMLResponse(
+                await asyncio.to_thread(self._account_screen, token, claims, self._keep(case_id, code))
             )
-            return response
 
         @app.post("/signout", response_class=HTMLResponse)
         async def sign_out(request: Request) -> HTMLResponse:
             if not self._from_this_site(request):
                 return HTMLResponse(self._home(None, self._error("Please sign out from this page.")), status_code=403)
             claims: dict[str, Any] | None = self._tokens.verify(request.cookies.get(StatementUploadServer.COOKIE))
+            message: str = "Signed out."
             if claims is not None:
                 self._chat.forget(claims.get("sub"))
-            response: HTMLResponse = HTMLResponse(self._home(None, self._ok("Signed out.")))
+                if not claims.get("customers") and self._own_standalone_case(claims.get("sub", "")):
+                    message += (
+                        ' To come back, choose "Continue my move" and enter your case reference and resume code.'
+                    )
+            response: HTMLResponse = HTMLResponse(self._home(None, self._ok(message)))
             response.delete_cookie(StatementUploadServer.COOKIE)
             return response
 
@@ -342,8 +372,11 @@ class StatementUploadServer:  # pylint: disable=too-many-instance-attributes  # 
             form: dict[str, Any] = dict(await request.form())
             message, status, errors = await self._save_details(claims, token, form)
             if status == 201:
-                # The guest's move has just started: the chat carries on from it, without asking anything again.
-                return RedirectResponse("/chat?do=start", status_code=303)
+                # The guest's move has just started. They are shown how to come back once, then the chat carries on
+                # from the move without asking anything again.
+                case_id: str = await asyncio.to_thread(self._own_standalone_case, claims.get("sub", ""))
+                code: str = await asyncio.to_thread(ResumeCodes().issue, case_id)
+                return HTMLResponse(self._page(token, "/", self._started(case_id, code)), status_code=201)
             # On an error the typed values go back into the form; once saved, nothing personal is echoed back.
             typed: dict[str, Any] = form if errors else {}
             screen: str = await asyncio.to_thread(self._details_screen, token, message, errors, typed)
@@ -459,9 +492,11 @@ class StatementUploadServer:  # pylint: disable=too-many-instance-attributes  # 
         """
         return JourneyChecklist(DiscoveryRecords(), self._status)
 
-    def _account_screen(self, token: str, claims: dict[str, Any]) -> str:
+    def _account_screen(self, token: str, claims: dict[str, Any], message: str = "") -> str:
         """
-        The Account tab: who is signed in, their details and statements, the nsflow session, and sign-out.
+        The Account tab: who is signed in, their details and statements, a guest's resume code, the nsflow session,
+        and sign-out.
+        :param message: shown above the screen, for example a new resume code.
         """
         customers: list[str] = claims.get("customers") or []
         case_id, names = (
@@ -488,7 +523,7 @@ class StatementUploadServer:  # pylint: disable=too-many-instance-attributes  # 
         )
         sly: str = html.escape(json.dumps({"session_token": token}))
         body: str = f"""<div class="section-head"><h2>Account</h2></div>
-<div class="card"><h2 class="title">{who}</h2>{reference}</div>
+<div class="card"><h2 class="title">{who}</h2>{reference}{self._resume_form(customers, case_id)}</div>
 <ul class="list">
   {details}
   <li><a class="row" href="/upload"><span class="avatar">{PortalIcons.UPLOAD}</span><div class="main">
@@ -512,7 +547,7 @@ document.getElementById("copy").onclick = async () => {
   catch (e) { getSelection().selectAllChildren(document.getElementById("token")); toast("Selected: press Copy."); }
 };
 </script>"""
-        return self._page(token, "/account", body, script)
+        return self._page(token, "/account", message + body, script)
 
     def _chat_screen(self, token: str | None, claims: dict[str, Any]) -> str:  # pylint: disable=unused-argument
         """
@@ -558,6 +593,19 @@ document.getElementById("copy").onclick = async () => {
   </form>
   <p class="small muted" style="margin-top:12px">A bank customer can open only their own record; a guest can open
   only cases they create.</p>
+</div>
+<div class="card">
+  <h2 class="title">Continue my move</h2>
+  <p class="small muted">Started as a guest? Use the case reference and resume code you were given.</p>
+  <form class="form" action="/resume" method="post">
+    <label class="field" for="case_reference">Case reference</label>
+    <input type="text" name="case_reference" id="case_reference" autocomplete="off" spellcheck="false"
+      placeholder="S-..." required>
+    <label class="field" for="resume_code">Resume code</label>
+    <input type="text" name="resume_code" id="resume_code" autocomplete="off" spellcheck="false"
+      placeholder="XXXX-XXXX" required>
+    <button class="btn secondary block" type="submit" style="margin-top:14px">Continue my move</button>
+  </form>
 </div>
 {StatementUploadServer.DEMO_NOTE}"""
         return self._page(None, "", message + body)
@@ -836,6 +884,59 @@ document.getElementById("upload-form").onsubmit = () => { send.disabled = true; 
             target = folder / f"{Path(name).stem}-{counter}{Path(name).suffix}"
             counter += 1
         return target
+
+    @staticmethod
+    def _signed_in(token: str, landing: str) -> RedirectResponse:
+        """
+        :return: a redirect to the landing page that sets the session cookie.
+        """
+        response: RedirectResponse = RedirectResponse(landing, status_code=303)
+        response.set_cookie(
+            StatementUploadServer.COOKIE,
+            token,
+            httponly=True,
+            samesite="strict",
+            max_age=SessionTokens.LIFETIME_SECONDS,
+        )
+        return response
+
+    @staticmethod
+    def _keep(case_id: str, code: str) -> str:
+        """
+        :return: the case reference and resume code, shown once, with how to use them.
+        """
+        return (
+            '<div class="card"><h2 class="title">Keep these to come back</h2>'
+            f'<p>Case reference <code class="ref">{html.escape(case_id)}</code></p>'
+            f'<p>Resume code <code class="ref">{html.escape(code)}</code></p>'
+            '<p class="small muted">To come back after signing out, choose "Continue my move" on the sign-in screen '
+            "and enter both. This code is shown only now: write it down or save it in your password manager. You "
+            "can make a new one in Account while you are signed in.</p></div>"
+        )
+
+    def _started(self, case_id: str, code: str) -> str:
+        """
+        :return: the screen after a guest's move starts: how to come back, then on to the chat.
+        """
+        return (
+            self._ok("Your move has started. Your details are saved, encrypted.")
+            + self._keep(case_id, code)
+            + '<a class="btn block" href="/chat?do=start">Continue to the chat</a>'
+        )
+
+    @staticmethod
+    def _resume_form(customers: list[str], case_id: str | None) -> str:
+        """
+        :return: for a guest with a case, the button that makes a new resume code; nothing for anyone else.
+        """
+        if customers or not case_id:
+            return ""
+        return (
+            '<form action="/resume-code" method="post" style="margin-top:10px">'
+            '<button class="btn secondary block" type="submit">Make a new resume code</button></form>'
+            '<p class="small muted">Your old code stops working. You need the case reference and a resume code to come'
+            " back after signing out.</p>"
+        )
 
     @staticmethod
     def _ok(text: str) -> str:
