@@ -19,6 +19,7 @@ import json
 import logging
 import re
 from collections.abc import AsyncIterator
+from collections.abc import Callable
 from pathlib import Path
 from string import Template
 from typing import Any
@@ -44,10 +45,12 @@ from coded_tools.hackathon.house_move.audit_log import AuditLog
 from coded_tools.hackathon.house_move.bank_address_api import BankAddressApi
 from coded_tools.hackathon.house_move.case_status import CaseStatus
 from coded_tools.hackathon.house_move.case_store import CaseStore
+from coded_tools.hackathon.house_move.case_tool import CaseTool
 from coded_tools.hackathon.house_move.create_case import CreateCase
 from coded_tools.hackathon.house_move.discovery_records import DiscoveryRecords
 from coded_tools.hackathon.house_move.house_move_data_store import HouseMoveDataStore
 from coded_tools.hackathon.house_move.import_statement import ImportStatement
+from coded_tools.hackathon.house_move.mark_sent_on_portal import MarkSentOnPortal
 from coded_tools.hackathon.house_move.personal_details import PersonalDetails
 from coded_tools.hackathon.house_move.resume_codes import ResumeCodes
 from coded_tools.hackathon.house_move.send_notification import SendNotification
@@ -270,6 +273,22 @@ class StatementUploadServer:  # pylint: disable=too-many-instance-attributes  # 
                 return JSONResponse({"error": "no draft waiting for your approval"}, status_code=404)
             return JSONResponse(draft, headers={"Cache-Control": "no-store"})
 
+        @app.get("/pack/{task_id}.json")
+        async def pack_json(request: Request, task_id: str) -> JSONResponse:
+            pack: dict[str, Any] | None = await asyncio.to_thread(
+                self._status.pack, request.cookies.get(StatementUploadServer.COOKIE), task_id
+            )
+            if pack is None:
+                return JSONResponse({"error": "no letter waiting for you to send"}, status_code=404)
+            # Holds the customer's own details, filled in: never cached.
+            return JSONResponse(pack, headers={"Cache-Control": "no-store"})
+
+        @app.post("/pack-sent")
+        async def pack_sent(request: Request) -> JSONResponse:
+            return await self._case_action(
+                request, MarkSentOnPortal(audit_log=self._audit_log), lambda body: {"task_id": body.get("task_id")}
+            )
+
         @app.post("/send")
         async def send_approved(request: Request) -> JSONResponse:
             if self._tokens.verify(request.cookies.get(StatementUploadServer.COOKIE)) is None:
@@ -283,38 +302,42 @@ class StatementUploadServer:  # pylint: disable=too-many-instance-attributes  # 
 
         @app.post("/approve")
         async def approve(request: Request) -> JSONResponse:
-            if not self._same_origin(request):
-                return JSONResponse({"error": "refused"}, status_code=403)
-            try:
-                body: Any = await request.json()
-            except json.JSONDecodeError:
-                return JSONResponse({"error": "expected JSON"}, status_code=400)
-            sly_data: dict[str, Any] = {"session_token": request.cookies.get(StatementUploadServer.COOKIE)}
-            args: dict[str, Any] = {"approve": body.get("approve") if isinstance(body, dict) else None}
-            result: dict[str, Any] | str = await ApproveOnPortal(audit_log=self._audit_log).async_invoke(
-                args, sly_data
+            return await self._case_action(
+                request, ApproveOnPortal(audit_log=self._audit_log), lambda body: {"approve": body.get("approve")}
             )
-            if isinstance(result, str):
-                status: int = 401 if "not signed in" in result else 400
-                return JSONResponse({"error": result.removeprefix("Error: ")}, status_code=status)
-            return JSONResponse(result)
 
         @app.post("/skip")
         async def skip(request: Request) -> JSONResponse:
-            if not self._same_origin(request):
-                return JSONResponse({"error": "refused"}, status_code=403)
-            try:
-                body: Any = await request.json()
-            except json.JSONDecodeError:
-                return JSONResponse({"error": "expected JSON"}, status_code=400)
-            body = body if isinstance(body, dict) else {}
-            sly_data: dict[str, Any] = {"session_token": request.cookies.get(StatementUploadServer.COOKIE)}
-            args: dict[str, Any] = {"skip": body.get("skip"), "confirm_legal": body.get("confirm_legal") is True}
-            result: dict[str, Any] | str = await SkipOnPortal(audit_log=self._audit_log).async_invoke(args, sly_data)
-            if isinstance(result, str):
-                status: int = 401 if "not signed in" in result else 400
-                return JSONResponse({"error": result.removeprefix("Error: ")}, status_code=status)
-            return JSONResponse(result)
+            return await self._case_action(
+                request,
+                SkipOnPortal(audit_log=self._audit_log),
+                lambda body: {"skip": body.get("skip"), "confirm_legal": body.get("confirm_legal") is True},
+            )
+
+    async def _case_action(
+        self, request: Request, tool: CaseTool, to_args: Callable[[dict[str, Any]], dict[str, Any]]
+    ) -> JSONResponse:
+        """
+        Runs one of the portal's own case tools (approve, skip, mark a pack sent) for the signed-in owner, from a
+        same-origin JSON request. The tool runs through its CaseSession, so it checks the session and holds the
+        owner's lock like the agents' tools.
+        :param to_args: picks the tool's arguments out of the request body.
+        :return: the tool's result, 401 when not signed in, 400 for anything the tool refused, 403 cross-site.
+        """
+        if not self._same_origin(request):
+            return JSONResponse({"error": "refused"}, status_code=403)
+        try:
+            body: Any = await request.json()
+        except json.JSONDecodeError:
+            return JSONResponse({"error": "expected JSON"}, status_code=400)
+        sly_data: dict[str, Any] = {"session_token": request.cookies.get(StatementUploadServer.COOKIE)}
+        result: dict[str, Any] | str = await tool.async_invoke(
+            to_args(body if isinstance(body, dict) else {}), sly_data
+        )
+        if isinstance(result, str):
+            status: int = 401 if "not signed in" in result else 400
+            return JSONResponse({"error": result.removeprefix("Error: ")}, status_code=status)
+        return JSONResponse(result)
 
     async def _send_approved(self, token: str | None) -> tuple[dict[str, Any] | None, str | None]:
         """

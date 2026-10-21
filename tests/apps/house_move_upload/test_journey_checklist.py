@@ -42,7 +42,7 @@ class TestJourneyChecklist(HouseMoveTestCase):
         case: dict = {"reference": "C-10042"}
         first: dict = self.next_step({"case": None})
         self.assertEqual(("tell", {"type": "say", "say": "start"}), (first.get("key"), first.get("action")))
-        self.assertEqual({"done": 1, "total": 7}, first.get("progress"))
+        self.assertEqual({"done": 1, "total": 8}, first.get("progress"))
         planned: dict = {
             "case": case,
             "stage": "Plan ready",
@@ -148,3 +148,21 @@ class TestJourneyChecklist(HouseMoveTestCase):
             "groups": [{"status": "approved", "tasks": [{}, {}]}, {"status": "planned", "tasks": [{}]}],
         }
         self.assertEqual("draft", self.next_step(leftover).get("key"))
+
+    def test_packs_to_send_yourself_come_before_replies(self):
+        """
+        Issue #16: once letters have gone out, any pre-filled packs the customer still has to send are the next step,
+        opening the packs sheet; with none left, the journey moves on to replies.
+        """
+        status: dict = {
+            "case": {"reference": "C-10042"},
+            "stage_index": 4,
+            "groups": [{"status": "sent", "tasks": [{}]}, {"status": "with_customer", "tasks": [{}, {}]}],
+        }
+        step: dict = self.next_step(status)
+        self.assertEqual(
+            ("packs", "Send 2 letters yourself", {"type": "sheet", "sheet": "packs"}),
+            (step.get("key"), step.get("title"), step.get("action")),
+        )
+        sent: dict = {**status, "groups": [{"status": "sent", "tasks": [{}, {}, {}]}]}
+        self.assertEqual("follow", self.next_step(sent).get("key"))

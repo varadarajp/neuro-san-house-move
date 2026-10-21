@@ -92,6 +92,16 @@ function render(status, next) {
       main.appendChild(meta);
       if (t.follow_up && t.follow_up.length) main.appendChild(el("div", "Asked for: " + t.follow_up.join(", "), "ask"));
       li.appendChild(main);
+      if (t.status === "with_customer") {
+        // A pack the customer sends themselves: the row opens it, filled in, with how to send it.
+        li.classList.add("tappable");
+        li.tabIndex = 0;
+        li.setAttribute("role", "button");
+        li.setAttribute("aria-label", "Open the letter to " + t.org);
+        li.onclick = () => HM.pack(t.task_id);
+        li.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); HM.pack(t.task_id); } };
+        li.appendChild(HM.icon("m9 6 6 6-6 6"));
+      }
       list.appendChild(li);
     });
     box.appendChild(list);

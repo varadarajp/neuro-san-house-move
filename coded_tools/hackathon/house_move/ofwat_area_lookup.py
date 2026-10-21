@@ -9,7 +9,7 @@ import httpx
 logger = logging.getLogger(__name__)
 
 
-class OfwatAreaLookup:
+class OfwatAreaLookup:  # pylint: disable=too-few-public-methods  # one lookup
     """
     Finds which company is appointed to supply water, and which to provide sewerage, at a point in England or Wales.
 
