@@ -51,13 +51,23 @@ class ObligationsRules(CaseTool):
         not_applicable: list[str] = []
         for rule in rules:
             status, missing = self._evaluate(rule.get("applies_if", []), facts)
-            if status == ObligationsRules.NOT_APPLICABLE:
+            matching: list[dict[str, Any]] = self._providers_for(rule, providers)
+            if status == ObligationsRules.NOT_APPLICABLE or (rule.get("one_task_per_provider") and not matching):
                 not_applicable.append(rule.get("id"))
+            elif rule.get("one_task_per_provider"):
+                obligations.extend(
+                    self._to_provider_obligation(rule, status, missing, provider, number)
+                    for number, provider in enumerate(matching, start=1)
+                )
             else:
                 obligations.append(self._to_obligation(rule, status, missing, facts, providers))
 
         sly_data["obligations"] = obligations
-        used_categories: set[str] = {rule.get("provider_category") for rule in rules}
+        used_categories: set[str] = {
+            category
+            for rule in rules
+            for category in [rule.get("provider_category"), *rule.get("provider_categories", [])]
+        }
         logger.info("Evaluated %d rules: %d obligations", len(rules), len(obligations))
         return {
             "obligations": obligations,
@@ -135,6 +145,32 @@ class ObligationsRules(CaseTool):
         if missing:
             return ObligationsRules.NEEDS_REVIEW, missing
         return ObligationsRules.APPLIES, []
+
+    @staticmethod
+    def _providers_for(rule: dict[str, Any], providers: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """
+        :return: the discovered providers a one-task-per-provider rule covers, in the order discovery listed them.
+        """
+        categories: list[str] = rule.get("provider_categories") or []
+        return [p for p in providers if p.get("category") in categories and p.get("provider_name")]
+
+    @staticmethod
+    def _to_provider_obligation(
+        rule: dict[str, Any], status: str, missing: list[str], provider: dict[str, Any], number: int
+    ) -> dict[str, Any]:
+        """
+        One obligation for one provider of a one-task-per-provider rule, for example each lender the customer repays,
+        so each gets its own task and letter. The ID "<rule>:<n>" keeps its task under the rule's number (T-25-1).
+        """
+        category: str = provider.get("category")
+        name: str = provider.get("provider_name")
+        return {
+            **ObligationsRules._to_obligation(rule, status, missing, {}, []),
+            "id": f"{rule.get('id')}:{number}",
+            "org": f"{name} ({category.replace('_', ' ')})",
+            "contact_name": name,
+            "provider_category": category,
+        }
 
     @staticmethod
     def _to_obligation(

@@ -341,8 +341,9 @@ descriptor, payment types, a count and evidence dates.
 For every payee that is a provider the customer would need to tell about a move, return a DiscoveredProvider:
   {"category", "provider_name", "confidence", "evidence", "implies", "needs_confirmation"}
 - category is one of: energy, water, council_tax, broadband, mobile, tv_license, vehicle_tax, car_insurance,
-  home_insurance, pet_insurance, mortgage, childcare, gym, subscription, charity, other.
-  Northern Ireland domestic rates (for example "LPS RATES") count as council_tax.
+  home_insurance, pet_insurance, mortgage, credit_card, loan, childcare, gym, subscription, charity, other.
+  Northern Ireland domestic rates (for example "LPS RATES") count as council_tax. Repayments to a mortgage lender,
+  credit card or loan company are mortgage, credit_card or loan: each lender needs the new address too.
 - provider_name: a tidy, human-readable name, for example "BRIGHTWATT EN" becomes "Brightwatt Energy".
 - confidence: 0 to 1. Repeated direct debits with a clear name score high. Guesses score low.
 - needs_confirmation: true when confidence is below 0.7.
@@ -353,7 +354,7 @@ If the tool returns customer_stated_providers (the customer listed them), includ
 and evidence ["customer stated"]; do not ask them to confirm it again.
 
 Ignore everyday spending such as groceries, fuel, restaurants and parking, unless it implies a life fact
-(a vet visit implies a pet, for example). Do not list the customer's own mortgage lender as something to notify.
+(a vet visit implies a pet, for example). Transfers to the customer's own accounts are not providers.
 
 Finish with:
 - providers: the DiscoveredProvider list.
@@ -454,7 +455,9 @@ service at the new address before an engineer is booked. Royal Mail redirection 
 home and car insurance."""
         }
         instructions = ${specialist_instructions} """
-Your agent name is financial_agent. Use provider_directory for the insurers.
+Your agent name is financial_agent. Use provider_directory for the insurers and lenders.
+Each mortgage, credit card or loan lender has its own task: the action is to update the address on that account
+from the move date, using the lender's channel and fields from the directory.
 The "Your bank (direct update)" task is the only task that may have channel direct: the bank changes the address itself once the customer
 approves. Only call bank_address_api if the inquiry says the customer has approved that task. The tool refuses
 otherwise.

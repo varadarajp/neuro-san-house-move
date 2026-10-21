@@ -39,7 +39,8 @@ out late, and then contact their bank and providers to fix the gaps.
 ## What it does
 
 1. **Discovers** who the customer pays from their own transactions, including the ones they forgot
-   (for example: "you pay for pet insurance, so you need to update your pet's microchip").
+   (for example: "you pay for pet insurance, so you need to update your pet's microchip"), and every mortgage,
+   credit card or loan lender they repay, each with its own address-change task.
 2. **Plans** a dated task list against the completion date, from rules with official sources, using UK working
    days and the bank holidays of the country they are moving to.
 3. **Drafts** every notification with placeholders, so personal data is filled in by code, not by the LLM.
@@ -313,7 +314,7 @@ are fictional.
 
 | ID | Move | What it exercises |
 |---|---|---|
-| C-10042 Sam and Alex Morgan | Leeds LS1 3ED → Harrogate HG1 1SY | The main demo: pet insurance discovery, nursery, car, date slip, replies |
+| C-10042 Sam and Alex Morgan | Leeds LS1 3ED → Harrogate HG1 1SY | The main demo: pet insurance discovery, nursery, car, a credit card and an old mortgage lender, date slip, replies |
 | C-20001 Priya Shah | Halifax HX1 5LZ → Chelmsford CM1 1FR | England to England, different councils and water companies, no car |
 | C-20002 Callum and Morag Reid | Glasgow G12 8QQ → Darlington DL3 9LP | Scotland to England: no old water account; completion on a Scottish-only bank holiday |
 | C-20003 Rhys Evans | Cardiff CF24 3PY → Edinburgh EH7 4LB | Wales to Scotland: close the Welsh water account; water billed with council tax; no TV license |
@@ -347,7 +348,7 @@ House_Move_Agent.pptx                         pitch deck
 venv/bin/python -m pytest tests/coded_tools/hackathon tests/apps/house_move_upload -q
 ```
 
-128 tests cover the rules engine (including Scotland, Wales and Northern Ireland), working-day dates, the approval
+130 tests cover the rules engine (including Scotland, Wales and Northern Ireland), working-day dates, the approval
 gate, mock sending, replanning, replies, the case store and encryption, statement parsing, the portal, and the GP,
 school and water finders. `test_session_security.py` replays the review's attacks through the real session path:
 forged approved state, opening another customer's record, missing or tampered tokens, guessing case IDs, reading
@@ -383,7 +384,7 @@ obligation rules), and each fixture's header comment lists it in full.
 
 | Customer | Providers discovery must find | Life facts it must infer |
 |---|---|---|
-| C-10042 | Brightwatt Energy, NVW Water Services, Fibrely Broadband, Voxmobile, TV Licensing, DVLA, Shieldmotor, Hearthguard, Pawsure, Little Acorns Nursery | Pet, young child, car |
+| C-10042 | Brightwatt Energy, NVW Water Services, Fibrely Broadband, Voxmobile, TV Licensing, DVLA, Shieldmotor, Hearthguard, Pawsure, Little Acorns Nursery, Northway Building Society (mortgage), Amberline Card Services (credit card) | Pet, young child, car |
 | C-20001 | Northgate Energy, Pennine Water, Lumen Fibre, Talkmore Mobile, TV Licensing, Hearthguard, council tax (Calderdale) | No pet, child or car |
 | C-20002 | Brightwatt Energy, Fibrely Broadband, Clyde Home Cover, TV Licensing, DVLA, Shieldmotor, Pawsure, council tax (Glasgow) | Pet, child, car |
 | C-20003 | Northgate Energy, Taff Valley Water, Lumen Fibre, DVLA, Shieldmotor, Hearthguard, council tax (Cardiff) | Car; no TV Licensing payment |
