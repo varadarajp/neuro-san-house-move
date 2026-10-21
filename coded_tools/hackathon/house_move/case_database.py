@@ -21,8 +21,9 @@ logger = logging.getLogger(__name__)
 class CaseDatabase:  # pylint: disable=too-few-public-methods  # base class: the stores add the methods
     """
     The database behind every session (see CaseSession), and the base of the stores that use it: CaseStore (cases,
-    personal details, plan state), PendingActions (confirmation codes) and DiscoveryRecords (statements, providers,
-    consents). Each opens the same file; this class owns the file, its schema, its encryption and its locks.
+    personal details, plan state), PendingActions (confirmation codes), DiscoveryRecords (statements, providers,
+    consents) and ResumeCodes (a guest's way back to their case). Each opens the same file; this class owns the
+    file, its schema, its encryption and its locks.
     The database file and its folder are owner-only (0600 and 0700), and the keys live elsewhere (KeyFolder).
     Every connection uses SQLite's secure delete, so erased data is overwritten rather than left in free pages.
     """
@@ -51,6 +52,8 @@ class CaseDatabase:  # pylint: disable=too-few-public-methods  # base class: the
             owner_id TEXT PRIMARY KEY, text TEXT, at TEXT);
         CREATE TABLE IF NOT EXISTS pending_intake (
             owner_id TEXT PRIMARY KEY, token BLOB, at TEXT);
+        CREATE TABLE IF NOT EXISTS resume_codes (
+            case_id TEXT PRIMARY KEY, salt BLOB, code_hash BLOB, failures INTEGER, created_at TEXT);
         CREATE TABLE IF NOT EXISTS pending_actions (
             action_id TEXT PRIMARY KEY, owner_id TEXT, case_id TEXT, kind TEXT, code_hash TEXT, payload_json TEXT,
             created_at TEXT, expires_at TEXT);

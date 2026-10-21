@@ -13,6 +13,7 @@ from coded_tools.hackathon.house_move.case_store import CaseStore
 from coded_tools.hackathon.house_move.create_case import CreateCase
 from coded_tools.hackathon.house_move.import_statement import ImportStatement
 from coded_tools.hackathon.house_move.personal_details import PersonalDetails
+from coded_tools.hackathon.house_move.resume_codes import ResumeCodes
 from coded_tools.hackathon.house_move.session_tokens import SessionTokens
 from tests.apps.house_move_upload.fake_agent_session import FakeAgentSession
 from tests.coded_tools.hackathon.house_move.house_move_test_case import HouseMoveTestCase
@@ -190,10 +191,13 @@ class TestStatementUploadServer(HouseMoveTestCase):
         self.assertIn("21 Lenton Boulevard", bad.text)
 
         saved = self.client.post("/details", data=form, follow_redirects=False)
-        self.assertEqual((303, "/chat?do=start"), (saved.status_code, saved.headers.get("location")), saved.text)
+        self.assertEqual(201, saved.status_code, saved.text)
+        self.assertIn('href="/chat?do=start"', saved.text)
         store: CaseStore = CaseStore()
         case_id: str = store.get_active(owner)
         self.assertTrue(case_id.startswith("S-"))
+        self.assertIn(case_id, saved.text)
+        self.assertIn("Resume code", saved.text)
         self.assertEqual(sorted(PersonalDetails.LABELS), store.personal_on_file(case_id))
         profile: dict = store.get_customer(case_id)
         self.assertEqual(
@@ -217,6 +221,69 @@ class TestStatementUploadServer(HouseMoveTestCase):
         self.sign_in("C-10042")
         self.assertIn("Already on file", self.client.get("/details").text)
         self.assertEqual(400, self.client.post("/details", data=form).status_code)
+
+    def start_guest_move(self) -> tuple[str, str, str]:
+        """
+        Signs in as a new guest and starts their move on the start form.
+        :return: (owner, case reference, resume code shown once).
+        """
+        owner: str = SessionTokens().verify(self.sign_in("guest")).get("sub")
+        form: dict = {
+            "full_names": "Jordan Lee",
+            "email": "jordan.lee@example.com",
+            "old_address_line1": "8 Cotham Vale",
+            "old_town": "Bristol",
+            "old_postcode": "BS6 6RB",
+            "old_property": "sold",
+            "new_address_line1": "21 Lenton Boulevard",
+            "new_town": "Nottingham",
+            "new_postcode": "NG7 2NF",
+            "move_date": "2026-12-11",
+        }
+        started: str = self.client.post("/details", data=form).text
+        case_id: str = CaseStore().get_active(owner)
+        code: str = re.search(r"Resume code <code class=\"ref\">([A-Z2-9-]{9})</code>", started).group(1)
+        return owner, case_id, code
+
+    def test_a_guest_comes_back_with_their_reference_and_resume_code(self):
+        """
+        Issue #10: after signing out, a guest gets back to their own move only with its reference and resume code.
+        A new guest sign-in cannot see it, wrong codes are refused, and a new code from Account replaces the old one.
+        """
+        owner, case_id, code = self.start_guest_move()
+        self.assertIn("Continue my move", self.client.post("/signout").text)
+        self.sign_in("guest")
+        self.assertNotIn(case_id, self.client.get("/").text)
+        self.client.post("/signout")
+
+        wrong = self.client.post("/resume", data={"case_reference": case_id, "resume_code": "AAAA-AAAA"})
+        self.assertEqual(400, wrong.status_code)
+        self.assertIsNone(self.client.cookies.get(StatementUploadServer.COOKIE))
+        back = self.client.post(
+            "/resume", data={"case_reference": case_id, "resume_code": code}, follow_redirects=False
+        )
+        self.assertEqual((303, "/"), (back.status_code, back.headers.get("location")))
+        self.assertEqual(
+            owner, SessionTokens().verify(self.client.cookies.get(StatementUploadServer.COOKIE)).get("sub")
+        )
+        self.assertIn(f"{case_id} · Jordan Lee", self.client.get("/").text)
+
+        account: str = self.client.post("/resume-code").text
+        fresh: str = re.search(r"Resume code <code class=\"ref\">([A-Z2-9-]{9})</code>", account).group(1)
+        self.assertIsNone(ResumeCodes().redeem(case_id, code))
+        self.assertEqual(owner, ResumeCodes().redeem(case_id, fresh))
+
+    def test_resume_is_refused_from_another_site_and_for_bank_customers(self):
+        """
+        A resume posted from another site is refused, and a bank customer has no resume code to make.
+        """
+        _, case_id, code = self.start_guest_move()
+        self.client.post("/signout")
+        cross: dict = {"origin": "https://evil.example"}
+        refused = self.client.post("/resume", data={"case_reference": case_id, "resume_code": code}, headers=cross)
+        self.assertEqual(403, refused.status_code)
+        self.sign_in("C-10042")
+        self.assertEqual(400, self.client.post("/resume-code").status_code)
 
     def test_form_posts_from_another_site_are_refused(self):
         """
