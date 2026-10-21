@@ -2,6 +2,7 @@ import httpx
 
 from coded_tools.hackathon.house_move.council_lookup import CouncilLookup
 from coded_tools.hackathon.house_move.gp_finder import GpFinder
+from coded_tools.hackathon.house_move.ofwat_area_lookup import OfwatAreaLookup
 from coded_tools.hackathon.house_move.school_finder import SchoolFinder
 from coded_tools.hackathon.house_move.water_supplier_lookup import WaterSupplierLookup
 from tests.coded_tools.hackathon.house_move.house_move_test_case import HouseMoveTestCase
@@ -113,11 +114,87 @@ class TestLocalServices(HouseMoveTestCase):
         self.assertEqual({}, scotland.get("groups"))
         self.assertIn("education department", scotland.get("admissions"))
 
+    @staticmethod
+    def ofwat_mock(request: httpx.Request) -> httpx.Response:
+        """
+        Answers the Ofwat area layers: Northumbrian Water's Essex area (water) and Anglian Water (sewerage), plus a
+        new appointee's site inside the regional water area at one test point.
+        """
+        url: str = str(request.url)
+        if "SewerageServicesAreas" in url:
+            features: list = [
+                {
+                    "attributes": {
+                        "COMPANY": "Anglian Water",
+                        "AreaServed": "Anglian Water",
+                        "CoType": "regional water and sewerage company",
+                    }
+                }
+            ]
+        else:
+            features = [
+                {
+                    "attributes": {
+                        "COMPANY": "Northumbrian Water",
+                        "AreaServed": "Essex",
+                        "CoType": "regional water and sewerage company",
+                    }
+                }
+            ]
+            if request.url.params.get("geometry", "").startswith("-1.1"):
+                features.append(
+                    {
+                        "attributes": {
+                            "COMPANY": "Example Utilities",
+                            "AreaServed": "New Village",
+                            "CoType": "new appointee",
+                        }
+                    }
+                )
+        return httpx.Response(200, json={"features": features})
+
+    def test_water_companies_come_from_ofwat_areas(self):
+        """
+        Issue #12: in England and Wales both companies come from Ofwat's appointed areas at the postcode, named as
+        customers know them, and are confirmed; a new appointee's site inside a regional area names the appointee.
+        Scotland needs no live lookup.
+        """
+        ofwat = OfwatAreaLookup(transport=httpx.MockTransport(self.ofwat_mock))
+        tool = WaterSupplierLookup(council_lookup=self.offline(), area_lookup=ofwat)
+        chelmsford = tool.run({"postcode": "CM1 1FR"}, {})
+        self.assertEqual(
+            ("Essex & Suffolk Water", "Anglian Water", True),
+            (
+                chelmsford.get("water_supplier").get("name"),
+                chelmsford.get("sewerage_provider").get("name"),
+                chelmsford.get("confirmed"),
+            ),
+        )
+        self.assertIn("Ofwat", chelmsford.get("source"))
+        nottingham = tool.run({"postcode": "NG7 2NF"}, {})
+        self.assertEqual({"name": "Example Utilities", "website": None}, nottingham.get("water_supplier"))
+        self.assertEqual("national company", tool.run({"postcode": "EH7 4LB"}, {}).get("source"))
+
+    def test_ofwat_error_reply_falls_back_to_the_table(self):
+        """
+        An ArcGIS error body (HTTP 200 with "error") counts as unavailable, so the table answers.
+        """
+
+        def handler(request: httpx.Request) -> httpx.Response:  # pylint: disable=unused-argument
+            # Nested: MockTransport needs a plain callable.
+            return httpx.Response(200, json={"error": {"code": 400, "message": "Invalid query"}})
+
+        ofwat = OfwatAreaLookup(transport=httpx.MockTransport(handler))
+        tool = WaterSupplierLookup(council_lookup=self.offline(), area_lookup=ofwat)
+        self.assertIn("our table", tool.run({"postcode": "HG1 1SY"}, {}).get("source"))
+
     def test_water_supplier_lookup(self):
         """
-        Known districts name both companies; Scotland needs no account; unknown districts get the checker only.
+        With the Ofwat service down, known districts name both companies from the table; Scotland needs no account;
+        unknown districts get the checker only.
         """
-        tool = WaterSupplierLookup(council_lookup=self.offline())
+        ofwat = OfwatAreaLookup(transport=self.outage())
+        tool = WaterSupplierLookup(council_lookup=self.offline(), area_lookup=ofwat)
         chelmsford = tool.run({"postcode": "CM1 1FR"}, {})
         self.assertEqual("Essex & Suffolk Water", chelmsford.get("water_supplier").get("name"))
         self.assertEqual("Anglian Water", chelmsford.get("sewerage_provider").get("name"))
