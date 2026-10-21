@@ -248,7 +248,9 @@ state and goes there. There are three tabs:
 Tasks open where you are, as sheets: **Approve all letters** (every routine letter, each one readable, approved in
 one go; legal requirements then follow one at a time), **Review one by one** (Approve, Change, which asks the
 assistant to rewrite it, Skip, or Not now, then "Send them now"),
-**Upload** (a statement, then the assistant is told), and **Reply** (answer what a provider asked for). A new guest
+**Upload** (a statement, then the assistant is told), **Ready for you to send** (tap the row: the letter filled in
+with your details, what to add, the organization's link with Open and Copy text, then "I've sent it"), and **Reply**
+(answer what a provider asked for). A new guest
 starts on **Start your move**: names, email, both full addresses and the move date, stored encrypted and never typed in
 the chat; saving it starts the case and carries straight on in the chat.
 
@@ -286,7 +288,8 @@ for that. The app then takes you to each step in turn.
    approved one by one, and shows a 6-digit code. Reply with the code (and name any legal drafts first). Or press
    **Approve all letters** on the card (or **Review one by one** to approve, change or skip each), then **Send them
    now**. Emails
-   with known references then go to providers; the rest become pre-filled packs; the bank's own address update
+   with known references then go to providers; the rest become pre-filled packs ("Ready for you to send": tap one to
+   open it, send it yourself, then tap "I've sent it"); the bank's own address update
    is made directly.
 5. "Completion has moved to 11 December." The Tracker sorts every task: needs correction, needs rebooking,
    updated automatically, unchanged.
@@ -354,7 +357,7 @@ House_Move_Agent.pptx                         pitch deck
 venv/bin/python -m pytest tests/coded_tools/hackathon tests/apps/house_move_upload -q
 ```
 
-136 tests cover the rules engine (including Scotland, Wales and Northern Ireland), working-day dates, the approval
+148 tests cover the rules engine (including Scotland, Wales and Northern Ireland), working-day dates, the approval
 gate, mock sending, replanning, replies, the case store and encryption, statement parsing, the portal, and the GP,
 school and water finders. `test_session_security.py` replays the review's attacks through the real session path:
 forged approved state, opening another customer's record, missing or tampered tokens, guessing case IDs, reading
