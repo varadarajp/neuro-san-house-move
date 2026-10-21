@@ -174,12 +174,15 @@ class BuildTimeline(CaseTool):
     ) -> str:
         """
         The obligation's existing task ID if it already has a task; otherwise one from its rule's position in the
-        rules file. Plans saved before IDs were stable may already use that number for another obligation, so a
-        clash takes the next number above every rule.
+        rules file, with the provider's number for a rule that has one task per provider. Plans saved before IDs
+        were stable may already use that number for another obligation, so a clash takes the next number above every
+        rule.
         """
         if previous is not None:
             return previous.get("task_id")
-        task_id: str = f"T-{rule_numbers.get(obligation_id, 0):02d}"
+        # A rule with one task per provider gives obligations "<rule>:<n>", numbered under the rule (T-25-1, T-25-2).
+        rule_id, _, part = obligation_id.partition(":")
+        task_id: str = f"T-{rule_numbers.get(rule_id, 0):02d}" + (f"-{part}" if part else "")
         taken: set[str] = {t.get("task_id") for t in previous_tasks}
         number: int = len(rule_numbers) + 1
         while task_id in taken or task_id == "T-00":

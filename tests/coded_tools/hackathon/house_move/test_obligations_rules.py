@@ -1,4 +1,8 @@
+from datetime import date
+
+from coded_tools.hackathon.house_move.build_timeline import BuildTimeline
 from coded_tools.hackathon.house_move.customer_profile_lookup import CustomerProfileLookup
+from coded_tools.hackathon.house_move.draft_renderer import DraftRenderer
 from coded_tools.hackathon.house_move.obligations_rules import ObligationsRules
 from tests.coded_tools.hackathon.house_move.house_move_test_case import HouseMoveTestCase
 
@@ -79,3 +83,55 @@ class TestObligationsRules(HouseMoveTestCase):
         CustomerProfileLookup().run({"customer_id": "C-10042"}, sly_data)
         result = ObligationsRules().run({"facts": self.MORGAN_FACTS}, sly_data)
         self.assertTrue(result.startswith("Error: call council_lookup"))
+
+    def test_each_lender_gets_its_own_task(self):
+        """
+        Issue #8: every mortgage, credit card or loan lender in the customer's payments gets its own dated task and
+        letter, numbered under the lenders rule, and none is left in other_providers.
+        """
+        lenders: list = [
+            {"category": "mortgage", "provider_name": "Northway Building Society"},
+            {"category": "credit_card", "provider_name": "Amberline Card Services"},
+            {"category": "credit_card", "provider_name": "Second Card Co"},
+        ]
+        sly_data: dict = self.sly_data_for("England")
+        sly_data["mandates"] = [
+            {
+                "service_user": "Amberline Card Services",
+                "category": "credit_card",
+                "placeholder": "account_number",
+                "reference": "AMB-1",
+            },
+            {
+                "service_user": "Second Card Co",
+                "category": "credit_card",
+                "placeholder": "account_number",
+                "reference": "SEC-2",
+            },
+        ]
+        result = ObligationsRules().run({"facts": self.MORGAN_FACTS, "providers": lenders}, sly_data)
+        self.assertEqual([], result.get("other_providers"))
+        BuildTimeline(today=date(2026, 10, 17)).run({}, sly_data)
+        tasks: dict = {
+            t.get("task_id"): t for t in sly_data.get("tasks") if t.get("obligation_id").startswith("other")
+        }
+        self.assertEqual(
+            {
+                "T-25-1": "Northway Building Society (mortgage)",
+                "T-25-2": "Amberline Card Services (credit card)",
+                "T-25-3": "Second Card Co (credit card)",
+            },
+            {task_id: task.get("org") for task_id, task in tasks.items()},
+        )
+        self.assertEqual("2026-11-27", tasks.get("T-25-1").get("due_date"))
+        rendered, _, _ = DraftRenderer([]).render("{{org_name}} {{account_number}}", tasks.get("T-25-3"), sly_data)
+        self.assertEqual("Second Card Co SEC-2", rendered)
+
+    def test_no_lenders_no_lender_task(self):
+        """
+        With no lender among the payments, the lenders rule does not apply.
+        """
+        result = ObligationsRules().run(
+            {"facts": self.MORGAN_FACTS, "providers": self.PROVIDERS}, self.sly_data_for("England")
+        )
+        self.assertIn("other_lenders", result.get("not_applicable"))

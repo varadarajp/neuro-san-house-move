@@ -219,6 +219,7 @@ class CaseStatus:
                 items.append(payload.get("file_name"))
             pending.append(
                 {
+                    "kind": action.get("kind"),
                     "what": CaseStatus.PENDING_LABELS.get(action.get("kind"), action.get("kind")),
                     "items": items,
                     "skips": [orgs.get(task_id, task_id) for task_id in payload.get("skip") or []],

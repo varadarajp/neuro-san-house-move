@@ -631,6 +631,32 @@
       "source_url": "https://www.legislation.gov.uk/ukpga/1992/14/schedule/3",
       "verify_hint": "Tell the council once, using its change-of-address or moving-within-the-area form, giving both addresses and the date. In Scotland this bill also collects water and sewerage charges.",
       "verified": true
+    },
+    {
+      "id": "other_lenders",
+      "org": "Lenders",
+      "category": "financial",
+      "applies_if": [],
+      "provider_category": null,
+      "provider_categories": [
+        "mortgage",
+        "credit_card",
+        "loan"
+      ],
+      "one_task_per_provider": true,
+      "legal_requirement": false,
+      "penalty_note": "None, but statements, cards and security checks use the address on file. If the old home is being sold, the conveyancer usually repays its mortgage at completion; tell the lender where to send any final statement.",
+      "timing": {
+        "anchor": "completion",
+        "offset_days": 0,
+        "working_days": false,
+        "window": "on_or_after"
+      },
+      "timing_basis": "recommendation",
+      "agent": "financial_agent",
+      "source_url": "internal",
+      "verify_hint": "No official rule: lenders' terms ask customers to keep their address up to date. One task per mortgage, credit card or loan lender found in the customer's payments.",
+      "verified": false
     }
   ]
 }
