@@ -347,7 +347,7 @@ House_Move_Agent.pptx                         pitch deck
 venv/bin/python -m pytest tests/coded_tools/hackathon tests/apps/house_move_upload -q
 ```
 
-127 tests cover the rules engine (including Scotland, Wales and Northern Ireland), working-day dates, the approval
+128 tests cover the rules engine (including Scotland, Wales and Northern Ireland), working-day dates, the approval
 gate, mock sending, replanning, replies, the case store and encryption, statement parsing, the portal, and the GP,
 school and water finders. `test_session_security.py` replays the review's attacks through the real session path:
 forged approved state, opening another customer's record, missing or tampered tokens, guessing case IDs, reading
@@ -364,7 +364,8 @@ needed. Each run uses temporary keys, and each fixture gets its own empty case d
 venv/bin/python -m pytest tests/integration/test_house_move_hocons.py -m integration -v
 ```
 
-- Smoke tests: sign-in required, a guest sent to the start form, and a bank customer's discovery.
+- Smoke tests: sign-in required, a guest sent to the start form, a guest whose case started on the form is given
+  their case reference, and a bank customer's discovery.
 - Discovery accuracy (`discovery_c_*.hocon`): one fixture per bank customer checks that "I'm moving house" finds
   their providers (by keyword) and the life facts their payments imply (by `gist`).
 - Plan quality (`plan_c_20004.hocon`, and turn 2 of `plan_and_drafts_c_10042.hocon`): the plan marks exactly the

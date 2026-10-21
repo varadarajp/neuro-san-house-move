@@ -191,8 +191,9 @@ class TestStandalone(HouseMoveTestCase):
     def test_plan_is_saved_and_resumed_in_a_new_session(self):
         """
         Through the real session path: rules and timeline run as for a bank customer, with "your banks" instead of
-        the bank's direct update. A new session for the same owner gets the profile and saved plan back; another
-        owner cannot open the case.
+        the bank's direct update. Before the plan, the lookup tells the assistant to give the case reference (issue
+        #7). A new session for the same owner gets the profile and saved plan back; another owner cannot open the
+        case.
         """
         token: str = SessionTokens().issue(self.OWNER, [])
         sly_data: dict = {"session_token": token, "intake_form": dict(self.FORM)}
@@ -211,6 +212,8 @@ class TestStandalone(HouseMoveTestCase):
         ids: set = {o.get("id") for o in rules.get("obligations")}
         self.assertIn("own_bank_accounts", ids)
         self.assertNotIn("bank_address", ids)
+        started = CustomerProfileLookup().invoke({}, {"session_token": token})
+        self.assertIn(case_id, started.get("next"))
         planned = BuildTimeline(today=date(2026, 10, 18)).invoke({}, sly_data)
 
         new_session: dict = {"session_token": token}
@@ -218,6 +221,7 @@ class TestStandalone(HouseMoveTestCase):
         self.assertEqual(["Jordan"], view.get("first_names"))
         self.assertTrue(view.get("move_date_is_estimate"))
         self.assertEqual(len(planned.get("tasks")), view.get("saved_plan").get("tasks"))
+        self.assertNotIn("next", view)
         self.assertNotIn("Lenton", str(view))
 
         stranger: dict = {"session_token": SessionTokens().issue(SessionTokens.new_guest_id(), [])}

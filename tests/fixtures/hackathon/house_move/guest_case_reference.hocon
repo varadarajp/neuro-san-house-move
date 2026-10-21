@@ -1,0 +1,28 @@
+# Data-driven integration test for hackathon/house_move, run by tests/integration/test_house_move_hocons.py.
+# Format: https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/test_case_hocon_reference.md
+#
+# A guest who started their move on the app's start form (Halifax to Chelmsford) says they are moving: the assistant
+# gives their case reference (issue #7), does not ask again for what the form already holds, and asks how they want to
+# share who they pay. The test module starts the case through create_case, as the start form does, puts its reference
+# in HOUSE_MOVE_TEST_FORM_CASE and the guest's session in HOUSE_MOVE_TEST_FORM_GUEST_SESSION.
+{
+    "agent": "hackathon/house_move",
+    "timeout_in_seconds": 300,
+    "success_ratio": "1/1",
+    "connections": ["direct"],
+    "interactions": [
+        {
+            "text": "I'm moving house",
+            "sly_data": {"session_token": ${HOUSE_MOVE_TEST_FORM_GUEST_SESSION}},
+            "response": {
+                "text": {
+                    "keywords": [${HOUSE_MOVE_TEST_FORM_CASE}],
+                    "gist": [
+                        """The reply does not ask for names, postcodes, addresses or the move date, and offers a way to
+share who the customer pays (uploading a bank statement or listing their providers).""",
+                    ]
+                }
+            }
+        },
+    ]
+}

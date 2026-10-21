@@ -104,3 +104,19 @@ class TestJourneyChecklist(HouseMoveTestCase):
         self.assertEqual(("share", {"type": "sheet", "sheet": "upload"}), (share.get("key"), share.get("action")))
         self.assertEqual("list", share.get("secondary").get("say"))
         self.assertIn(share.get("secondary").get("say"), JourneyChecklist.SAY)
+
+    def test_an_uploaded_statement_waits_for_the_code(self):
+        """
+        Issue #7: after a guest uploads a statement, the next step asks for the assistant's code instead of offering
+        the upload again. It has no button, because only the customer's own message can confirm.
+        """
+        guest: dict = {"sub": "guest:x", "customers": []}
+        status: dict = {
+            "case": {"reference": "S-none"},
+            "pending_confirmations": [{"kind": "import_statement", "what": "Reading your uploaded statement"}],
+        }
+        confirm: dict = self.next_step(status, guest)
+        self.assertEqual(
+            ("confirm_statement", None, None), (confirm.get("key"), confirm.get("action"), confirm.get("secondary"))
+        )
+        self.assertIn("code", confirm.get("hint"))
