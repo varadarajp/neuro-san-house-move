@@ -95,8 +95,10 @@ B. When the case exists, give them their case reference (S-...) so they can come
    created it, say their full names, street addresses and email go in the app's Account tab, under Your details,
    not in this chat.
    If profile_agent returns a standalone case (customer ID starting S-) with no saved_plan, they started it on the
-   app's start form: never ask again for names, postcodes, addresses or the move date. Confirm the move in one line
-   (the two towns and the date) and go straight to step C.
+   app's start form: never ask again for names, postcodes, addresses or the move date. Start your reply with their
+   case reference, the S-... customer ID from profile_agent, written out in full: "Your case reference is S-...,
+   so you can come back to your move any time." Then confirm the move in one line (the two towns and the date) and
+   go straight to step C.
 C. Ask how they would like to share who they pay: upload a recent bank statement (CSV or OFX) with the "Upload a
    statement" card under your reply (it is read once and then deleted, and never goes through this chat), or
    simply list their providers (offer to go through a short checklist: energy, water, council
@@ -125,7 +127,8 @@ Turn 1 (intake and discover):
 1. Greet the customer: "Congratulations on the move. I can sort out who needs telling." Call profile_agent for the
    signed-in customer (with their customer ID or case reference if they gave one). If it says no bank customer is
    signed in, they are a guest: use the standalone start above. If it returns a standalone case (S-...) with no
-   saved_plan, follow standalone step B, then C.
+   saved_plan, follow its "next" and standalone steps B and C, and end your reply there: call discovery_agent only
+   once they have uploaded a statement or listed who they pay.
 2. From profile_agent's answer, take the customer ID and use it in every later step. Show what the bank already
    knows (move date and the two towns) in two or three lines.
 3. Call discovery_agent with the customer ID. Present what it found as a short list grouped by category
@@ -309,11 +312,13 @@ Call customer_profile_lookup with the customer ID or case reference from the inq
 one (for example "the signed-in customer"), call it with no customer_id: it looks up who is signed in. If it says no
 bank customer is signed in, return that message unchanged.
 Return:
+- customer_id: the customer ID or case reference (S-...) exactly as the tool returned it.
 - known: the facts the bank holds (first names, old and new town and postcode, completion and exchange dates,
   number of adults, products held).
 - gaps: the missing facts from the tool's "gaps" list. Facts already in "known_facts" are not gaps.
 - for a standalone case, say whether the move date is an estimate.
 - saved_plan: if the tool returns one, include it unchanged and skip the questions.
+- next: if the tool returns one, include it unchanged.
 - questions: at most 3 short, friendly questions that would fill the most important gaps.
 
 If the inquiry contains free-text answers from the customer, turn them into structured facts. For example,
@@ -336,8 +341,9 @@ descriptor, payment types, a count and evidence dates.
 For every payee that is a provider the customer would need to tell about a move, return a DiscoveredProvider:
   {"category", "provider_name", "confidence", "evidence", "implies", "needs_confirmation"}
 - category is one of: energy, water, council_tax, broadband, mobile, tv_license, vehicle_tax, car_insurance,
-  home_insurance, pet_insurance, mortgage, childcare, gym, subscription, charity, other.
-  Northern Ireland domestic rates (for example "LPS RATES") count as council_tax.
+  home_insurance, pet_insurance, mortgage, credit_card, loan, childcare, gym, subscription, charity, other.
+  Northern Ireland domestic rates (for example "LPS RATES") count as council_tax. Repayments to a mortgage lender,
+  credit card or loan company are mortgage, credit_card or loan: each lender needs the new address too.
 - provider_name: a tidy, human-readable name, for example "BRIGHTWATT EN" becomes "Brightwatt Energy".
 - confidence: 0 to 1. Repeated direct debits with a clear name score high. Guesses score low.
 - needs_confirmation: true when confidence is below 0.7.
@@ -348,7 +354,7 @@ If the tool returns customer_stated_providers (the customer listed them), includ
 and evidence ["customer stated"]; do not ask them to confirm it again.
 
 Ignore everyday spending such as groceries, fuel, restaurants and parking, unless it implies a life fact
-(a vet visit implies a pet, for example). Do not list the customer's own mortgage lender as something to notify.
+(a vet visit implies a pet, for example). Transfers to the customer's own accounts are not providers.
 
 Finish with:
 - providers: the DiscoveredProvider list.
@@ -449,7 +455,9 @@ service at the new address before an engineer is booked. Royal Mail redirection 
 home and car insurance."""
         }
         instructions = ${specialist_instructions} """
-Your agent name is financial_agent. Use provider_directory for the insurers.
+Your agent name is financial_agent. Use provider_directory for the insurers and lenders.
+Each mortgage, credit card or loan lender has its own task: the action is to update the address on that account
+from the move date, using the lender's channel and fields from the directory.
 The "Your bank (direct update)" task is the only task that may have channel direct: the bank changes the address itself once the customer
 approves. Only call bank_address_api if the inquiry says the customer has approved that task. The tool refuses
 otherwise.

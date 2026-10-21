@@ -64,16 +64,7 @@ class JourneyChecklist:
                     case is not None,
                 )
             )
-            steps.append(
-                self._step(
-                    "share",
-                    "Share who you pay",
-                    "Upload a recent bank statement (CSV or OFX). It is read once to find who you pay, then deleted.",
-                    {"type": "sheet", "sheet": "upload"},
-                    "Upload a statement",
-                    planned or self._shared(case),
-                )
-            )
+            steps.append(self._share(status, planned or self._shared(case)))
         else:
             steps.append(
                 self._step(
@@ -158,6 +149,33 @@ class JourneyChecklist:
                 for task in group.get("tasks") or []
             ]
         return result
+
+    def _share(self, status: dict[str, Any], done: bool) -> dict[str, Any]:
+        """
+        A guest's step for sharing who they pay. Once a statement is uploaded, nothing is read until the customer types
+        the assistant's code in the chat, so while that import waits the step asks for the code (with no button, since
+        only the customer's own message can confirm) instead of offering another upload.
+        """
+        waiting_for_code: bool = any(
+            action.get("kind") == "import_statement" for action in status.get("pending_confirmations") or []
+        )
+        if waiting_for_code and not done:
+            return self._step(
+                "confirm_statement",
+                "Let the assistant read your statement",
+                "Reply in the chat with the 6-digit code the assistant showed you. Nothing is read until you do.",
+                None,
+                "",
+                False,
+            )
+        return self._step(
+            "share",
+            "Share who you pay",
+            "Upload a recent bank statement (CSV or OFX). It is read once to find who you pay, then deleted.",
+            {"type": "sheet", "sheet": "upload"},
+            "Upload a statement",
+            done,
+        )
 
     def _shared(self, case: dict[str, Any] | None) -> bool:
         """

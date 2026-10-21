@@ -2,6 +2,8 @@ import os
 import secrets
 import shutil
 import tempfile
+from datetime import date
+from datetime import timedelta
 from pathlib import Path
 from typing import Any
 from unittest import TestCase
@@ -14,6 +16,7 @@ from neuro_san.test.unittest.dynamic_hocon_unit_tests import DynamicHoconUnitTes
 from parameterized import parameterized
 
 from coded_tools.hackathon.house_move.case_database import CaseDatabase
+from coded_tools.hackathon.house_move.create_case import CreateCase
 from coded_tools.hackathon.house_move.key_folder import KeyFolder
 from coded_tools.hackathon.house_move.personal_data_vault import PersonalDataVault
 from coded_tools.hackathon.house_move.session_tokens import SessionTokens
@@ -47,6 +50,8 @@ class TestHouseMoveHocons(TestCase):
         KeyFolder.DIR_ENV,
         "HOUSE_MOVE_TEST_SESSION",
         "HOUSE_MOVE_TEST_GUEST_SESSION",
+        "HOUSE_MOVE_TEST_FORM_GUEST_SESSION",
+        "HOUSE_MOVE_TEST_FORM_CASE",
         *(f"HOUSE_MOVE_TEST_SESSION_{customer.replace('-', '_')}" for customer in BANK_CUSTOMERS),
         "AGENT_TOOL_PATH",
         "MCP_SERVERS_INFO_FILE",
@@ -73,6 +78,7 @@ class TestHouseMoveHocons(TestCase):
                 SessionTokens.bank_owner_id(customer), [customer]
             )
         os.environ["HOUSE_MOVE_TEST_GUEST_SESSION"] = tokens.issue(SessionTokens.new_guest_id(), [])
+        os.environ["HOUSE_MOVE_TEST_FORM_GUEST_SESSION"] = tokens.issue(SessionTokens.new_guest_id(), [])
         # The stock judge's model is a constructor default, and the evaluator factory passes no judge, so the default
         # is swapped for the whole class: (negate, discriminator_agent, connection_type).
         defaults: tuple[Any, ...] = (False, str(TestHouseMoveHocons.GIST_JUDGE), "direct")
@@ -98,14 +104,28 @@ class TestHouseMoveHocons(TestCase):
         """
         Gives each fixture an empty case database in the temporary folder. Every House Move tool opens the database
         named in the environment when it runs, so the sessions issued for the class stay valid.
+        Then starts a case for the form guest, as the app's start form does (through create_case), and puts its
+        reference in HOUSE_MOVE_TEST_FORM_CASE.
         """
         os.environ[CaseDatabase.DB_ENV] = str(TestHouseMoveHocons.folder / f"{self.id().rsplit('.', 1)[-1]}.sqlite")
+        move: dict[str, Any] = {
+            "first_names": ["Jamie"],
+            "old_postcode": "HX1 5LZ",
+            "new_postcode": "CM1 1FR",
+            "move_date": (date.today() + timedelta(days=60)).isoformat(),
+        }
+        case: dict[str, Any] | str = CreateCase().invoke(
+            move, {"session_token": os.environ.get("HOUSE_MOVE_TEST_FORM_GUEST_SESSION")}
+        )
+        self.assertIsInstance(case, dict, case)
+        os.environ["HOUSE_MOVE_TEST_FORM_CASE"] = case.get("case_id")
 
     @parameterized.expand(
         DynamicHoconUnitTests.from_hocon_list(
             [
                 "hackathon/house_move/sign_in_required.hocon",
                 "hackathon/house_move/guest_starts_on_the_form.hocon",
+                "hackathon/house_move/guest_case_reference.hocon",
                 "hackathon/house_move/bank_customer_discovery.hocon",
                 "hackathon/house_move/discovery_c_10042.hocon",
                 "hackathon/house_move/discovery_c_20001.hocon",

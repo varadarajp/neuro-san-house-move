@@ -407,6 +407,27 @@
         "descriptor": "PAWSURE LTD 4810415 PETPOL",
         "amount": -19.85,
         "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0059",
+        "date": "2026-07-22",
+        "descriptor": "AMBERLINE CARD DD 107422",
+        "amount": -150.0,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0060",
+        "date": "2026-08-22",
+        "descriptor": "AMBERLINE CARD DD 238422",
+        "amount": -150.0,
+        "type": "DD"
+      },
+      {
+        "transaction_id": "TX-0061",
+        "date": "2026-09-22",
+        "descriptor": "AMBERLINE CARD DD 369422",
+        "amount": -150.0,
+        "type": "DD"
       }
     ],
     "C-20001": [

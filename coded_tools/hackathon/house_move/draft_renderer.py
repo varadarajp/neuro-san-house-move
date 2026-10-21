@@ -74,9 +74,17 @@ class DraftRenderer:  # pylint: disable=too-few-public-methods  # one job: rende
             "org_name": task.get("contact_name") or task.get("org", ""),
             "url": task.get("contact_url") or "",
         }
-        for mandate in sly_data.get("mandates") or []:
-            if task.get("provider_category") and mandate.get("category") == task.get("provider_category"):
-                values[mandate.get("placeholder")] = mandate.get("reference")
+        same_category: list[dict[str, Any]] = [
+            mandate
+            for mandate in sly_data.get("mandates") or []
+            if task.get("provider_category") and mandate.get("category") == task.get("provider_category")
+        ]
+        # Two lenders of one kind (say two credit cards) share a category, so the provider's own mandate comes first.
+        same_provider: list[dict[str, Any]] = [
+            mandate for mandate in same_category if mandate.get("service_user") == task.get("contact_name")
+        ]
+        for mandate in same_provider or same_category:
+            values[mandate.get("placeholder")] = mandate.get("reference")
         return values
 
     @staticmethod

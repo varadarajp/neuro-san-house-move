@@ -1,5 +1,5 @@
 {
-  "_note": "Mock provider directory. Brightwatt, NVW, Fibrely, Shieldmotor, Hearthguard, Pawsure and Little Acorns are fictional. TV Licensing and Royal Mail links checked on 2026-10-18.",
+  "_note": "Mock provider directory. Brightwatt, NVW, Fibrely, Shieldmotor, Hearthguard, Pawsure, Little Acorns, Northway and Amberline are fictional. TV Licensing and Royal Mail links checked on 2026-10-18.",
   "providers": [
     {
       "name": "Brightwatt Energy",
@@ -296,6 +296,38 @@
         "forwarding address"
       ],
       "notes": "Serves the old address only."
+    },
+    {
+      "name": "Northway Building Society",
+      "aliases": [
+        "NORTHWAY BS",
+        "NORTHWAY BS MTG"
+      ],
+      "category": "mortgage",
+      "contact_channel": "online_form",
+      "url": "https://northway.example/change-address",
+      "fields_required": [
+        "mortgage account number",
+        "new correspondence address",
+        "date of change"
+      ],
+      "notes": "If the old home is being sold, the conveyancer usually repays this mortgage at completion."
+    },
+    {
+      "name": "Amberline Card Services",
+      "aliases": [
+        "AMBERLINE",
+        "AMBERLINE CARD"
+      ],
+      "category": "credit_card",
+      "contact_channel": "online_form",
+      "url": "https://amberline.example/my-details",
+      "fields_required": [
+        "card account number",
+        "new address",
+        "date of change"
+      ],
+      "notes": "Can usually be changed in the card's app or online account."
     }
   ]
 }
