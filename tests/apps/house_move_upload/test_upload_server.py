@@ -14,13 +14,14 @@ from coded_tools.hackathon.house_move.create_case import CreateCase
 from coded_tools.hackathon.house_move.import_statement import ImportStatement
 from coded_tools.hackathon.house_move.personal_details import PersonalDetails
 from coded_tools.hackathon.house_move.resume_codes import ResumeCodes
+from coded_tools.hackathon.house_move.save_drafts import SaveDrafts
 from coded_tools.hackathon.house_move.session_tokens import SessionTokens
 from tests.apps.house_move_upload.fake_agent_session import FakeAgentSession
 from tests.coded_tools.hackathon.house_move.house_move_test_case import HouseMoveTestCase
 from tests.coded_tools.hackathon.house_move.house_move_test_state import HouseMoveTestState
 
 
-class TestStatementUploadServer(HouseMoveTestCase):
+class TestStatementUploadServer(HouseMoveTestCase):  # pylint: disable=too-many-public-methods  # one per feature
     """
     Unit tests for the House Move portal: demo sign-in, session tokens and per-owner statement uploads.
     """
@@ -185,6 +186,41 @@ class TestStatementUploadServer(HouseMoveTestCase):
         self.client.post("/signout")
         self.client.cookies.clear()
         self.assertEqual(401, self.client.post("/skip", json={"skip": [routine]}).status_code)
+
+    def test_packs_open_for_their_owner_and_can_be_marked_sent(self):
+        """
+        Issue #16: a letter that went back to the customer as a pack opens filled in for its owner only, and "I've
+        sent it" needs a same-origin JSON request.
+        """
+        self.sign_in("C-10042")
+        token: str = HouseMoveTestState.drafted_session()
+        sly: dict = {"session_token": token}
+        task_id: str = next(
+            t.get("task_id")
+            for t in self.client.get("/status.json").json().get("awaiting_approval")
+            if not t.get("legal_requirement")
+        )
+        SaveDrafts().invoke({"drafts": [{"task_id": task_id, "subject": "Moving", "body": "{{meter_readings}}"}]}, sly)
+        draft: dict = self.client.get(f"/draft/{task_id}.json").json()
+        self.client.post("/approve", json={"approve": [{"task_id": task_id, "draft_hash": draft.get("draft_hash")}]})
+        self.assertEqual(
+            [task_id], [p.get("task_id") for p in self.client.post("/send", json={}).json().get("packs_for_customer")]
+        )
+
+        pack = self.client.get(f"/pack/{task_id}.json")
+        self.assertEqual((200, "no-store"), (pack.status_code, pack.headers.get("cache-control")))
+        self.assertEqual(["meter readings"], pack.json().get("to_add"))
+        cross: dict = {"Origin": "https://evil.test"}
+        self.assertEqual(403, self.client.post("/pack-sent", json={"task_id": task_id}, headers=cross).status_code)
+        self.assertEqual(
+            {"task_id": task_id, "status": "sent"}, self.client.post("/pack-sent", json={"task_id": task_id}).json()
+        )
+        self.assertEqual(404, self.client.get(f"/pack/{task_id}.json").status_code)
+        self.assertEqual(400, self.client.post("/pack-sent", json={"task_id": task_id}).status_code)
+
+        self.client.post("/signout")
+        self.client.cookies.clear()
+        self.assertEqual(404, self.client.get(f"/pack/{task_id}.json").status_code)
 
     def test_details_form_starts_a_guests_move_and_echoes_nothing(self):
         """

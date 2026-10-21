@@ -230,6 +230,79 @@ const HM = (() => {
     show();
   }
 
+  // ----- Packs: letters the app could not send itself, filled in for the customer to send -----
+  async function packs() {
+    const status = (await json("/status.json")).body;
+    const group = (status.groups || []).find(g => g.status === "with_customer");
+    const items = group ? group.tasks : [];
+    if (!items.length) { toast("Nothing is waiting for you to send."); return; }
+    if (items.length === 1) { pack(items[0].task_id); return; }
+    const list = el("ul", undefined, "list");
+    items.forEach(t => {
+      const li = el("li");
+      const row = button("", "row pack-pick", () => pack(t.task_id));
+      const main = el("div", undefined, "main");
+      main.appendChild(el("div", t.org, "name"));
+      main.appendChild(el("div", "Due " + day(t.due_date) + " · " + channel(t.channel), "small muted"));
+      row.appendChild(main);
+      li.appendChild(row);
+      list.appendChild(li);
+    });
+    open("Send yourself", items.length + " letters ready for you", [el("p", "Each one is filled in with your details. "
+      + "Open it, add anything missing, and send it the way shown.", "small muted"), list],
+      [button("Back to my move", "btn ghost block", close)], () => HM.refresh && HM.refresh());
+  }
+
+  async function pack(taskId) {
+    const r = await json("/pack/" + encodeURIComponent(taskId) + ".json");
+    if (!r.ok) { toast(r.body.error || "That letter is not waiting for you.", true); return; }
+    const p = r.body;
+    const facts = el("div", undefined, "facts");
+    [["Due", day(p.due_date)], ["How", channel(p.channel)], ["Type", p.legal_requirement ? "Legal" : "Routine"]]
+      .forEach(([k, v]) => { const f = el("div", undefined, k === "Type" && p.legal_requirement ? "legal" : "");
+        f.appendChild(el("span", k)); f.appendChild(el("b", v)); facts.appendChild(f); });
+    const body = [facts];
+    const toAdd = (p.to_add || []).concat(p.what_customer_needs || []);
+    if (toAdd.length) {
+      body.push(el("b", "Add before you send", "group-title"));
+      const ul = el("ul", undefined, "plain-list");
+      [...new Set(toAdd)].forEach(t => ul.appendChild(el("li", t)));
+      body.push(ul);
+    }
+    // The filled-in letter, with each "[add your ...]" gap highlighted. Built from text nodes only.
+    const box = el("div", undefined, "letter");
+    box.appendChild(el("div", p.subject || "(no subject)", "subject"));
+    const pre = el("pre");
+    (p.body || "").split(/(\[add your [^\]]+\])/).forEach(part => {
+      pre.appendChild(/^\[add your [^\]]+\]$/.test(part) ? el("span", part, "placeholder")
+        : document.createTextNode(part));
+    });
+    box.appendChild(pre);
+    body.push(box);
+    const link = /^https:\/\//.test(p.contact_url || "") ? p.contact_url : null;
+    body.push(el("p", link ? "Send it with " + p.org + "'s own form or contact page: copy the text, open the page and "
+      + "paste or type it in." : "Contact " + p.org + " the way shown, with the text above: no web address is on "
+      + "file for it.", "small muted"));
+    const copy = button("Copy text", "btn secondary grow", async () => {
+      try { await navigator.clipboard.writeText((p.subject ? p.subject + "\n\n" : "") + p.body); toast("Copied."); }
+      catch (e) { getSelection().selectAllChildren(pre); toast("Selected: press Copy."); }
+    });
+    const visit = link ? button("Open " + new URL(link).hostname, "btn secondary grow",
+      () => window.open(link, "_blank", "noopener")) : null;
+    const tools = el("div", undefined, "foot-row");
+    tools.appendChild(copy);
+    if (visit) tools.appendChild(visit);
+    const done = button("I've sent it", "btn block", async () => {
+      if (!confirm("Mark the letter to " + p.org + " as sent? Only do this once it has gone.")) return;
+      done.disabled = true;
+      const res = await post("/pack-sent", {task_id: p.task_id});
+      if (!res.ok) { toast("Not updated: " + (res.body.error || res.status), true); done.disabled = false; return; }
+      toast("Marked as sent.");
+      close();
+    });
+    open("Ready for you to send", p.org, body, [tools, done], () => HM.refresh && HM.refresh());
+  }
+
   // ----- Upload: a statement into the signed-in person's own folder, then tell the assistant -----
   function upload() {
     const input = el("input");
@@ -318,7 +391,7 @@ const HM = (() => {
     if (!action) return;
     if (action.type === "link") { location.href = action.target; return; }
     if (action.type === "sheet") {
-      const sheets = {review: () => review(), approve_all: approveAll, upload: upload};
+      const sheets = {review: () => review(), approve_all: approveAll, packs: packs, upload: upload};
       (sheets[action.sheet] || upload)();
       return;
     }
@@ -349,7 +422,8 @@ const HM = (() => {
   }
   async function next() { return (await json("/next.json")).body; }
 
-  return {el, button, icon, day, channel, json, post, open, close, review, approveAll, upload, reply, sendNow, act, card,
+  return {el, button, icon, day, channel, json, post, open, close, review, approveAll, packs, pack, upload, reply,
+    sendNow, act, card,
     next,
     refresh: null};
 })();
