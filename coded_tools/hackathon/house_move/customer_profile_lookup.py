@@ -86,6 +86,15 @@ class CustomerProfileLookup(CaseTool):
         logger.info("Loaded profile for %s", customer_id)
         view: dict[str, Any] = self._redacted_view(customer)
         view["saved_plan"] = self._plan_summary(sly_data)
+        if CaseStore.is_case(customer_id) and view.get("saved_plan") is None:
+            # Said by the tool, not left to the prompt: in testing the coordinator sometimes skipped the start-form
+            # step and never gave the reference (issue #7).
+            view["next"] = (
+                f"This case was started on the app's start form. Begin the reply by telling the customer their case "
+                f"reference, {customer_id}, written in full, so they can come back to their move. Then ask how they "
+                f"want to share who they pay. Do not call discovery_agent until they have uploaded a statement or "
+                f"listed their providers."
+            )
         return view
 
     @staticmethod
