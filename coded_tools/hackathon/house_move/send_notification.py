@@ -30,6 +30,8 @@ class SendNotification(CaseTool):
     ORG_CHANNELS: frozenset[str] = frozenset({"email", "letter"})
     TO_ORGANIZATION: str = "mock email or letter sent to the organisation"
     TO_CUSTOMER: str = "pre-filled pack sent to the customer to complete and submit"
+    # Set by MarkSentOnPortal when the customer says they sent a pack themselves.
+    BY_CUSTOMER: str = "sent to the organisation by the customer"
 
     def __init__(
         self,

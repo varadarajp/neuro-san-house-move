@@ -58,6 +58,7 @@ class JourneyChecklist:
         planned: bool = bool(counts)
         waiting: int = len(status.get("awaiting_approval") or [])
         went_out: int = sum(counts.get(key, 0) for key in ("sent", "with_customer", "confirmed", "needs_action"))
+        packs: int = counts.get("with_customer", 0)
 
         steps: list[dict[str, Any]] = [self._step("signin", "Sign in", "You are signed in.", None, "", True)]
         if guest:
@@ -126,6 +127,15 @@ class JourneyChecklist:
                     {"type": "send"},
                     "Send them now",
                     went_out > 0,
+                ),
+                self._step(
+                    "packs",
+                    f"Send {packs} letter{'s' if packs != 1 else ''} yourself" if packs else "Send your own letters",
+                    "Pre-filled for you. Open each one, add anything missing, send it with the link shown, then tap "
+                    '"I\'ve sent it".',
+                    {"type": "sheet", "sheet": "packs"},
+                    "Open my letters",
+                    went_out > 0 and not packs,
                 ),
                 self._follow_up(status, counts),
             ]

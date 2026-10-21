@@ -1,13 +1,19 @@
 """Workflow status of a customer's move, for the portal's "My move" page."""
 
+import json
+import logging
 from typing import Any
 
 from coded_tools.hackathon.house_move.case_session import CaseSession
 from coded_tools.hackathon.house_move.case_store import CaseStore
 from coded_tools.hackathon.house_move.draft_fingerprint import DraftFingerprint
+from coded_tools.hackathon.house_move.draft_renderer import DraftRenderer
+from coded_tools.hackathon.house_move.house_move_data_store import HouseMoveDataStore
 from coded_tools.hackathon.house_move.pending_actions import PendingActions
 from coded_tools.hackathon.house_move.send_notification import SendNotification
 from coded_tools.hackathon.house_move.session_tokens import SessionTokens
+
+logger = logging.getLogger(__name__)
 
 
 class CaseStatus:
@@ -48,6 +54,7 @@ class CaseStatus:
         "approved": "Approved",
         "skipped": "Skipped",
         "sent": "Sent",
+        "sent_by_customer": "Sent by you",
         "direct_update": "Bank address updated",
         "replan": "Plan updated for a new date",
         "reply": "Reply received",
@@ -66,15 +73,18 @@ class CaseStatus:
         store: CaseStore | None = None,
         tokens: SessionTokens | None = None,
         pending: PendingActions | None = None,
+        data_store: HouseMoveDataStore | None = None,
     ):
         """
         :param store: the case store. Defaults to the SQLite store.
         :param tokens: verifies session tokens. Defaults to the shared secret.
         :param pending: confirmations waiting for a code. Defaults to the SQLite database.
+        :param data_store: holds the letter templates' customer-supplied placeholders, for filling in packs.
         """
         self._store: CaseStore = store or CaseStore()
         self._pending_actions: PendingActions = pending or PendingActions()
         self._tokens: SessionTokens = tokens or SessionTokens()
+        self._data_store: HouseMoveDataStore = data_store or HouseMoveDataStore()
 
     def build(self, token: str | None) -> dict[str, Any] | None:
         """
@@ -122,6 +132,42 @@ class CaseStatus:
             "subject": draft.get("subject"),
             "body": draft.get("body"),
             "draft_hash": DraftFingerprint.of(draft),
+        }
+
+    def pack(self, token: str | None, task_id: str) -> dict[str, Any] | None:
+        """
+        One pre-filled pack waiting for its owner to send it themselves, filled in with their details now, the same
+        way send_notification filled it when it was handed to them. The filled-in text is returned to the owner's own
+        signed-in browser only, and never saved (see CaseSession._without_rendered_text).
+        :return: the pack: subject, body, what the customer must add, and where to send it; or None if the token is
+                 not valid or the task is not a pack waiting for the customer.
+        """
+        view: dict[str, Any] | None = CaseSession(store=self._store, tokens=self._tokens).read_only_view(token)
+        if view is None or not view.get("case_id"):
+            return None
+        shown: list[dict[str, Any]] = self._with_delivery(view.get("tasks") or [], view.get("outbox") or [])
+        task: dict[str, Any] | None = next((t for t in shown if t.get("task_id") == task_id), None)
+        draft: dict[str, Any] | None = (view.get("drafts") or {}).get((task or {}).get("draft_id"))
+        if task is None or task.get("status") != "with_customer" or not draft:
+            return None
+        try:
+            supplied: list[str] = (
+                self._data_store.get_section(SendNotification.TEMPLATES_FILE, "customer_supplied_placeholders") or []
+            )
+        except (OSError, json.JSONDecodeError) as error:
+            logger.error("Could not read the letter templates to show pack %s: %s", task_id, error)
+            return None
+        renderer: DraftRenderer = DraftRenderer(supplied)
+        subject, subject_gaps, _ = renderer.render(draft.get("subject", ""), task, view)
+        body, body_gaps, _ = renderer.render(draft.get("body", ""), task, view)
+        return {
+            **self._line(task),
+            "subject": subject,
+            "body": body,
+            "to_add": sorted(set(subject_gaps + body_gaps)),
+            "what_customer_needs": task.get("what_customer_needs") or [],
+            "contact_url": task.get("contact_url") or "",
+            "sent_ref": task.get("sent_ref"),
         }
 
     @staticmethod

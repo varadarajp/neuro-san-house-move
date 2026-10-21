@@ -369,6 +369,10 @@ input[type=date] { width: 100%; min-height: 50px; padding: 12px 14px; border-rad
 .plan-row .date-col .mon { font-size: .7rem; text-transform: uppercase; color: var(--muted); }
 .plan-row .date-col b { font-size: 1.15rem; }
 .plan-row .main { flex: 1; min-width: 0; }
+.plan-row.tappable { cursor: pointer; }
+.plan-row.tappable:hover, .plan-row.tappable:focus-visible { background: var(--surface-2); }
+.plan-row.tappable > svg { width: 18px; height: 18px; flex: none; color: var(--muted); }
+.pack-pick { width: 100%; text-align: left; background: none; border: 0; font: inherit; color: inherit; }
 .plan-row .name { font-weight: 600; }
 .plan-row .meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
 .chip.warn { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
