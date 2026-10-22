@@ -60,6 +60,7 @@ class CaseStatus:
         "reply": "Reply received",
         "case_deleted": "Case deleted",
     }
+    PACK_LABEL: str = "Ready for you to send"
     ACTIVITY_LIMIT: int = 8
     # A status still present holds the case at this stage, in this order (planned tasks are handled first).
     WAITING_STAGES: tuple[tuple[str, str], ...] = (
@@ -283,8 +284,19 @@ class CaseStatus:
         return [
             {
                 "at": entry.get("at"),
-                "event": CaseStatus.EVENT_LABELS.get(entry.get("event"), entry.get("event")),
+                "event": CaseStatus._event_label(entry),
                 "org": orgs.get(entry.get("task_id")),
             }
             for entry in reversed(audit_log[-CaseStatus.ACTIVITY_LIMIT :])
         ]
+
+    @staticmethod
+    def _event_label(entry: dict[str, Any]) -> str:
+        """
+        The activity label for one audit event. Every send is audited as "sent", but one that came back to the
+        customer as a pack has not reached the organization (send_notification records the delivery in the detail),
+        so it reads as waiting for them, like the plan.
+        """
+        if entry.get("event") == "sent" and SendNotification.TO_CUSTOMER in (entry.get("detail") or ""):
+            return CaseStatus.PACK_LABEL
+        return CaseStatus.EVENT_LABELS.get(entry.get("event"), entry.get("event"))
