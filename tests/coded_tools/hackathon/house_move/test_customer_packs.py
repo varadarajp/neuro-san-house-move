@@ -61,6 +61,23 @@ class TestCustomerPacks(HouseMoveTestCase):
         self.assertIsNone(CaseStatus().pack(other, self.pack_id))
         self.assertIsNone(CaseStatus().pack(None, self.pack_id))
 
+    def test_activity_shows_a_pack_as_ready_not_sent(self):
+        """
+        Issue #20: in Recent activity, a letter that went to its organization reads "Sent", and one that came back as
+        a pack reads "Ready for you to send", like the plan.
+        """
+        activity: list = CaseStatus().build(self.token).get("activity")
+        orgs: dict = {
+            t.get("task_id"): t.get("org")
+            for g in CaseStatus().build(self.token).get("groups")
+            for t in g.get("tasks")
+        }
+        events: dict = {}
+        for entry in activity:  # newest first: keep each organization's latest event
+            events.setdefault(entry.get("org"), entry.get("event"))
+        self.assertEqual("Ready for you to send", events.get(orgs.get(self.pack_id)))
+        self.assertEqual("Sent", events.get(orgs.get(self.complete_id)))
+
     def test_marking_a_pack_sent(self):
         """
         "I've sent it" moves the pack from waiting for the customer to sent, records it in the activity, and works
