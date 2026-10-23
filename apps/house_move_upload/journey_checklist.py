@@ -31,6 +31,22 @@ class JourneyChecklist:
         "replies": "Has anyone replied yet?",
     }
 
+    # Short, stable names for the journey overview on the Move tab, so the whole flow reads clearly however the
+    # live step titles change (for example "Approve your 15 letters"). Keyed by step key.
+    SHORT_TITLES: dict[str, str] = {
+        "signin": "Sign in",
+        "start": "Start your move",
+        "share": "Share who you pay",
+        "tell": "Tell us you're moving",
+        "plan": "Get your dated plan",
+        "draft": "Draft the letters",
+        "confirm_statement": "Confirm your statement",
+        "review": "Approve the letters",
+        "send": "Send the approved letters",
+        "packs": "Send your own letters",
+        "follow": "Replies and follow-ups",
+    }
+
     # The other way to take a step, shown as a second button: listing providers instead of uploading, or reviewing
     # letters one by one instead of approving them all.
     SECONDARY: dict[str, dict[str, str]] = {
@@ -161,6 +177,15 @@ class JourneyChecklist:
             **current,
             "secondary": JourneyChecklist.SECONDARY.get(current.get("key")),
             "progress": {"done": sum(1 for s in steps if s.get("done")), "total": len(steps)},
+            "steps": [
+                {
+                    "key": step.get("key"),
+                    "title": JourneyChecklist.SHORT_TITLES.get(step.get("key"), step.get("title")),
+                    "done": bool(step.get("done")),
+                    "current": bool(step.get("next")),
+                }
+                for step in steps
+            ],
             "asks": [],
         }
         if current.get("key") == "follow":
