@@ -26,8 +26,16 @@ class PendingActions(CaseDatabase):
     def record_customer_message(self, owner_id: str, text: str) -> None:
         """
         Stores the owner's latest chat message, as typed by the customer. Called only by CustomerMessageMiddleware.
+        The middleware runs before every model call of a turn, so the same message arrives several times. It keeps the
+        time it was first recorded: otherwise a code issued during the turn would look older than the message that
+        started the turn, and that one message could confirm it without the customer ever seeing the code.
         """
         with self._transaction() as connection:
+            row: tuple | None = connection.execute(
+                "SELECT text FROM customer_messages WHERE owner_id = ?", (owner_id,)
+            ).fetchone()
+            if row is not None and row[0] == text:
+                return
             connection.execute(
                 "INSERT OR REPLACE INTO customer_messages VALUES (?, ?, ?)", (owner_id, text, self._precise_now())
             )
@@ -74,11 +82,13 @@ class PendingActions(CaseDatabase):
     def match_pending(self, owner_id: str, case_id: str, message: str, message_at: str) -> dict[str, Any] | None:
         """
         Finds the pending action whose code appears in the customer's message, if that message was typed after the
-        code was issued and before it expired. Codes are matched as whole 6-digit numbers.
+        code was issued and before it expired. Codes are matched as whole 6-digit numbers, and the message must hold
+        exactly one: a message listing many numbers (a pasted document, or every code from 000000 to 999999) must not
+        confirm whichever code happens to be pending.
         :return: {"action_id", "kind", "payload", "created_at"} or None.
         """
         typed: set[str] = {self._hash(code) for code in re.findall(r"(?<!\d)\d{6}(?!\d)", message or "")}
-        if not typed:
+        if len(typed) != 1:
             return None
         with self._reading() as connection:
             rows: list[tuple] = connection.execute(
