@@ -214,9 +214,18 @@ details.group[open] > summary .section-head .chev { transform: rotate(90deg); }
 .timeline .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--brand); margin-top: 6px; flex: none; }
 .timeline .when { color: var(--muted); font-size: .8rem; }
 
-/* Journey overview: the whole flow with the current step marked */
-.stepper { list-style: none; margin: 0; padding: 6px 16px; background: var(--surface); border-radius: var(--radius);
-           box-shadow: var(--shadow); }
+/* Journey overview: collapsible, the header showing the count and current step, the body the whole flow */
+details.journey { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+.journey-summary { display: flex; align-items: center; gap: 12px; padding: 14px 16px; cursor: pointer;
+                   list-style: none; }
+.journey-summary::-webkit-details-marker { display: none; }
+.journey-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.journey-now { font-size: 1rem; }
+.journey-count { font-weight: 700; color: var(--brand); font-variant-numeric: tabular-nums; }
+.journey-summary > svg { width: 20px; height: 20px; color: var(--muted); flex: none; transition: transform .2s; }
+details.journey[open] .journey-summary > svg { transform: rotate(180deg); }
+.journey-summary:hover { background: var(--surface-2); }
+.stepper { list-style: none; margin: 0; padding: 4px 16px 10px; border-top: 1px solid var(--line); }
 .step-item { display: flex; gap: 14px; padding: 10px 0; position: relative; align-items: flex-start; }
 .step-item + .step-item { border-top: 1px solid var(--line); }
 .step-item::before { content: ""; position: absolute; left: 12px; top: -1px; bottom: 50%; width: 2px;

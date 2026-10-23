@@ -8,6 +8,9 @@
 <script>
 // Everything from the case is rendered with textContent, through HM.el.
 const {el, day} = HM;
+// Whether the collapsible journey is open; kept across the 10s refresh and across visits.
+let journeyOpen = false;
+try { journeyOpen = localStorage.getItem("hm_journey_open") === "1"; } catch (e) { /* private window */ }
 const STATE = {
   awaiting_approval: ["Waiting for your approval", "warn"],
   approved: ["Approved, not sent yet", ""],
@@ -59,11 +62,24 @@ function render(status, next) {
   progress.appendChild(words);
   box.appendChild(progress);
 
-  // The whole journey, so it is clear where this step sits in the overall flow.
+  // The whole journey, collapsed by default: the header shows the count and the current step; opening it lists
+  // every step with its state. Native <details> so it works without extra scripting.
   if ((next.steps || []).length) {
-    const head = el("div", undefined, "section-head");
-    head.appendChild(el("h2", "Your journey"));
-    box.appendChild(head);
+    const current = next.steps.find(s => s.current);
+    const details = el("details", undefined, "journey");
+    details.open = journeyOpen;
+    details.ontoggle = () => {
+      journeyOpen = details.open;
+      try { localStorage.setItem("hm_journey_open", details.open ? "1" : "0"); } catch (e) { /* private window */ }
+    };
+    const summary = el("summary", undefined, "journey-summary");
+    const info = el("div", undefined, "journey-info");
+    info.appendChild(el("span", "Your journey", "kicker"));
+    info.appendChild(el("b", current ? current.title : "All steps done", "journey-now"));
+    summary.appendChild(info);
+    summary.appendChild(el("span", next.progress.done + "/" + next.progress.total, "journey-count"));
+    summary.appendChild(HM.icon("m6 9 6 6 6-6"));
+    details.appendChild(summary);
     const ol = el("ol", undefined, "stepper");
     next.steps.forEach(s => {
       const li = el("li", undefined, "step-item " + (s.done ? "done" : s.current ? "current" : "upcoming"));
@@ -76,7 +92,8 @@ function render(status, next) {
       li.appendChild(t);
       ol.appendChild(li);
     });
-    box.appendChild(ol);
+    details.appendChild(ol);
+    box.appendChild(details);
   }
 
   (status.pending_confirmations || []).forEach(a => {
