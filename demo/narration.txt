@@ -1,0 +1,55 @@
+House Move Agent: demo video narration
+
+[title]
+This is the House Move Agent: a multi-agent assistant, built on Neuro SAN, that helps a bank's mortgage customers tell everyone they're moving. On time, in the right order, and only with their approval.
+
+[problem]
+Moving home means telling fifteen to thirty organisations, and some of those are legal duties. Up to a thousand pounds for not telling the DVLA. Seventy pounds for not telling the council.
+
+[signin]
+Sam Morgan's mortgage completion date has just been set. Sam signs in to the House Move app. The sign-in, not the chat, decides whose record can be opened.
+
+[account]
+To watch the agents at work, we take Sam's signed session from the Account tab, and use it in nsflow, the Neuro SAN client.
+
+[nsflow_open]
+Here is the agent network: fourteen LLM agents and twenty-seven coded tools, with the move coordinator at the centre. Sam's session goes into SlyData, so every tool knows who is signed in.
+
+[turn1]
+Sam says: I'm moving house. Watch the graph. The coordinator asks the profile agent what the bank already knows, then hands over to the discovery agent, which reads ninety days of Sam's payments. This part is sped up.
+
+[turn1_reply]
+Discovery finds who Sam pays, and what that implies. Pet insurance means a dog whose microchip needs updating. There's a nursery, a car, a credit card, and the old mortgage lender. Anything uncertain is asked, not assumed.
+
+[turn1_internal]
+The Internal Chat tab shows every hand-off: which agent called which, and each call to a coded tool, with its arguments and result.
+
+[turn2]
+Sam answers, and asks for the plan. The obligations agent applies twenty-five sourced rules, and looks up both councils live. The timeline agent dates every task in UK working days. Local services finds GPs, schools, and the water company, from Ofwat's official maps. Deadlines, fees and legal duties always come from code, never from the model.
+
+[turn2_reply]
+The result is a dated plan, grouped by week, with the legal requirements marked.
+
+[turn3]
+Then the letters. Four specialist agents, for government, home and utilities, finance, and health and family, each decide which tasks are theirs, and how each should be done. The comms agent writes a letter for every task, with placeholders that code fills in only when it is sent.
+
+[move]
+Back in the app, the Move tab shows the whole journey, with Sam's place marked, and the next step: approve the letters.
+
+[approve_all]
+Sam can read every letter, then approve all the routine ones in one go. Legal requirements, like council tax and the DVLA, are approved one at a time.
+
+[send]
+Send them now. Complete emails go straight to the organisation. Anything the bank can't send itself becomes a pack, ready for Sam to send.
+
+[pack]
+Sam opens a pack. The letter is filled in, anything missing is highlighted, and there's a link to the organisation's own form. Once it's gone, Sam taps: I've sent it.
+
+[app_highlights]
+Every step happens in the app, one screen at a time: the move overview with the whole journey, approving the letters, and sending each pre-filled pack yourself.
+
+[evals]
+All of this is tested: a hundred and forty-eight unit tests, and live AI evaluations against ground truth for five customers. They even caught a real data leak, which is now fixed.
+
+[closing]
+The House Move Agent. Thank you.
