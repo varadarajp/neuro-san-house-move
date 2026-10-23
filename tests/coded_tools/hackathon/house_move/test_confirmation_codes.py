@@ -77,6 +77,42 @@ class TestConfirmationCodes(HouseMoveTestCase):
         self.assertTrue(confirm.run({}, sly_data).startswith("Error"))
         self.assertEqual({"awaiting_approval"}, {t.get("status") for t in sly_data.get("tasks")})
 
+    def test_a_message_listing_many_numbers_confirms_nothing(self):
+        """
+        A message holding every 6-digit number (for example a crafted document pasted into the chat) does not confirm
+        the pending code; the code typed on its own still does.
+        """
+        sly_data: dict = self.drafted()
+        code: str = RequestApproval().run({"approve": ["all"]}, sly_data).get("confirmation_code")
+        self.say(" ".join(f"{number:06d}" for number in range(1_000_000)))
+        self.assertTrue(ConfirmWithCode(audit_log=self.NO_FILE).run({}, sly_data).startswith("Error"))
+        self.say(f"my meter is 123456 and the code is {code}" if code != "123456" else "654321 and 123456")
+        self.assertTrue(ConfirmWithCode(audit_log=self.NO_FILE).run({}, sly_data).startswith("Error"))
+        self.assertEqual({"awaiting_approval"}, {t.get("status") for t in sly_data.get("tasks")})
+
+        self.say(code)
+        self.assertEqual("approve", ConfirmWithCode(audit_log=self.NO_FILE).run({}, sly_data).get("confirmed"))
+
+    def test_a_code_issued_during_the_turn_cannot_be_confirmed_by_that_turns_message(self):
+        """
+        The middleware records the same customer message before every model call of a turn. A code issued in the
+        middle of that turn stays newer than the message, so the message that started the turn cannot confirm it.
+        """
+        sly_data: dict = self.drafted()
+        self.say("approve everything")
+        RequestApproval().run({"approve": ["all"]}, sly_data)
+        stored: tuple = PendingActions().latest_customer_message(self.OWNER)
+        self.say("approve everything")  # the next model call of the same turn
+        self.assertEqual(stored, PendingActions().latest_customer_message(self.OWNER))
+
+        # Even a turn message that already holds the right digits is too old for a code issued after it.
+        sly_data = self.drafted()
+        self.say("approve everything")
+        code: str = RequestApproval().run({"approve": ["all"]}, sly_data).get("confirmation_code")
+        pending: PendingActions = PendingActions()
+        text, at = pending.latest_customer_message(self.OWNER)
+        self.assertIsNone(pending.match_pending(self.OWNER, sly_data.get("customer_id"), f"{text} {code}", at))
+
     def test_code_confirms_exactly_what_was_listed_once(self):
         """
         The customer's code approves and skips exactly the listed drafts, records their words, and works only once.

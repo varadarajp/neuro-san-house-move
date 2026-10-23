@@ -51,7 +51,7 @@ class ConfirmWithCode(CaseTool):
         if action is None:
             return (
                 "Error: the customer's latest message does not contain a valid, unexpired confirmation code. "
-                "Ask them to type the code they were shown. Nothing was done."
+                "Ask them to type the code they were shown, on its own. Nothing was done."
             )
 
         kind: str = action.get("kind")
