@@ -75,6 +75,51 @@ class TestObligationsRules(HouseMoveTestCase):
         result = ObligationsRules().run({"facts": facts}, self.sly_data_for("England"))
         self.assertIn("pet_microchip", result.get("not_applicable"))
 
+    def test_a_false_fact_cannot_hide_a_legal_requirement_the_payments_show(self):
+        """
+        Review finding 3: if the LLM says there is no pet while the customer pays for pet insurance, the microchip
+        rule is not dropped: it needs review, and the conflict is reported.
+        """
+        facts: dict = {**self.MORGAN_FACTS, "has_pet": False}
+        providers: list = [{"category": "pet_insurance", "provider_name": "Pawsure"}]
+        result = ObligationsRules().run({"facts": facts, "providers": providers}, self.sly_data_for("England"))
+        by_id: dict = {o.get("id"): o for o in result.get("obligations")}
+
+        self.assertNotIn("pet_microchip", result.get("not_applicable"))
+        self.assertEqual("needs_review", by_id.get("pet_microchip").get("status"))
+        self.assertEqual(["has_pet"], by_id.get("pet_microchip").get("missing_facts"))
+        self.assertEqual(1, len(result.get("fact_conflicts")))
+        self.assertIn("Pawsure", result.get("fact_conflicts")[0])
+
+    def test_a_false_fact_cannot_override_what_the_customer_put_on_the_form(self):
+        """
+        A fact the customer gave on the start form outweighs a false one from the LLM, and fills a fact the LLM left
+        out.
+        """
+        sly_data: dict = self.sly_data_for("England")
+        sly_data.get("customer_profile")["facts"] = {"has_driving_license": True, "has_vehicle": True}
+        facts: dict = {k: v for k, v in self.MORGAN_FACTS.items() if k != "has_vehicle"}
+        facts["has_driving_license"] = False
+        result = ObligationsRules().run({"facts": facts}, sly_data)
+        by_id: dict = {o.get("id"): o for o in result.get("obligations")}
+
+        self.assertEqual("needs_review", by_id.get("dvla_license").get("status"))
+        self.assertEqual("applies", by_id.get("dvla_v5c").get("status"))
+        self.assertIn("start form", result.get("fact_conflicts")[0])
+
+    def test_legal_requirements_ruled_out_by_a_fact_are_listed(self):
+        """
+        A legal requirement left out because of a household fact is reported with the reason, never dropped silently.
+        Rules left out for location reasons (Scotland, Northern Ireland) are not listed.
+        """
+        facts: dict = {**self.MORGAN_FACTS, "has_driving_license": False}
+        result = ObligationsRules().run({"facts": facts}, self.sly_data_for("England"))
+        excluded: dict = {item.get("id"): item for item in result.get("excluded_legal_requirements")}
+
+        self.assertEqual("has_driving_license is false", excluded.get("dvla_license").get("because"))
+        self.assertNotIn("ni_rates_old", excluded)
+        self.assertEqual([], result.get("fact_conflicts"))
+
     def test_requires_council_lookup(self):
         """
         Without council lookups for both postcodes, the tool asks for them.
