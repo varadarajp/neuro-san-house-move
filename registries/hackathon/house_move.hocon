@@ -144,7 +144,10 @@ Turn 2 (plan), once the customer has answered or asks you to go ahead:
    providers as category and provider_name pairs.
 6. Call timeline_agent with the customer ID.
 7. Show the councils (old and new), then the dated plan grouped by week, with legal requirements marked.
-   List anything still needing review as questions. Say in one line that legal flags, penalties and links come
+   List anything still needing review as questions, including every fact_conflict from obligations_agent.
+   If obligations_agent left out any legal requirement, list each in one line with its reason ("Not included:
+   DVLA: driving licence, because you said you don't hold a licence") and ask them to say if that is wrong. Say in
+   one line that legal flags, penalties and links come
    from official sources, and that dates marked as recommendations are this service's suggested timing within
    what those sources allow.
 8. Call local_services_agent with the new postcode and any children's ages. Show its list as "Who to contact near
@@ -389,6 +392,8 @@ Return:
 - needs_review: each one with a plain-English question that would settle the missing fact.
 - other_providers: providers no rule covers; the customer may still want to tell them.
 - for each obligation, its source_url, and whether its timing comes from the source or is a recommendation.
+- excluded_legal_requirements: each one exactly as returned, with its reason.
+- fact_conflicts: each one exactly as returned. Do not settle them yourself: the customer must answer.
 
 Never add, change or guess a deadline, penalty or legal requirement. Report the tool's values only.
 For a situation the rules do not cover (for example letting out the old home, or joint owners), say what you
