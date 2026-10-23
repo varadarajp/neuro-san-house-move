@@ -34,6 +34,38 @@ class TestJourneyChecklist(HouseMoveTestCase):
         """
         return JourneyChecklist(DiscoveryRecords(), StubStatus(status)).next_step("t", claims or self.BANK)
 
+    def test_steps_list_the_whole_journey_with_the_current_one_marked(self):
+        """
+        The next step carries the whole journey for the Move tab's overview: short stable titles, each marked done,
+        current or upcoming, with exactly one current step.
+        """
+        waiting: dict = {
+            "case": {"reference": "C-10042"},
+            "stage_index": 2,
+            "awaiting_approval": [{}, {}],
+            "groups": [{"status": "awaiting_approval", "tasks": [{}, {}]}],
+        }
+        steps: list = self.next_step(waiting).get("steps")
+        self.assertEqual(
+            [
+                "Sign in",
+                "Tell us you're moving",
+                "Get your dated plan",
+                "Draft the letters",
+                "Approve the letters",
+                "Send the approved letters",
+                "Send your own letters",
+                "Replies and follow-ups",
+            ],
+            [s.get("title") for s in steps],
+        )
+        current: list = [s for s in steps if s.get("current")]
+        self.assertEqual(["Approve the letters"], [s.get("title") for s in current])
+        self.assertEqual(
+            ["Sign in", "Tell us you're moving", "Get your dated plan", "Draft the letters"],
+            [s.get("title") for s in steps if s.get("done")],
+        )
+
     def test_each_stage_leads_to_the_right_action(self):
         """
         No case: tell the assistant. Plan built but nothing drafted: prepare the letters. Drafts waiting: the review

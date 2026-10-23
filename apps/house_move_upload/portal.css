@@ -214,6 +214,37 @@ details.group[open] > summary .section-head .chev { transform: rotate(90deg); }
 .timeline .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--brand); margin-top: 6px; flex: none; }
 .timeline .when { color: var(--muted); font-size: .8rem; }
 
+/* Journey overview: collapsible, the header showing the count and current step, the body the whole flow */
+details.journey { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+.journey-summary { display: flex; align-items: center; gap: 12px; padding: 14px 16px; cursor: pointer;
+                   list-style: none; }
+.journey-summary::-webkit-details-marker { display: none; }
+.journey-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.journey-now { font-size: 1rem; }
+.journey-count { font-weight: 700; color: var(--brand); font-variant-numeric: tabular-nums; }
+.journey-summary > svg { width: 20px; height: 20px; color: var(--muted); flex: none; transition: transform .2s; }
+details.journey[open] .journey-summary > svg { transform: rotate(180deg); }
+.journey-summary:hover { background: var(--surface-2); }
+.stepper { list-style: none; margin: 0; padding: 4px 16px 10px; border-top: 1px solid var(--line); }
+.step-item { display: flex; gap: 14px; padding: 10px 0; position: relative; align-items: flex-start; }
+.step-item + .step-item { border-top: 1px solid var(--line); }
+.step-item::before { content: ""; position: absolute; left: 12px; top: -1px; bottom: 50%; width: 2px;
+                     background: var(--line); }
+.step-item:first-child::before { display: none; }
+.step-mark { width: 26px; height: 26px; border-radius: 50%; flex: none; display: flex; align-items: center;
+             justify-content: center; background: var(--surface); border: 2px solid var(--line); color: var(--on-brand);
+             position: relative; z-index: 1; }
+.step-mark svg { width: 15px; height: 15px; }
+.step-item.done .step-mark { background: var(--brand); border-color: var(--brand); }
+.step-item.done::before { background: var(--brand); }
+.step-item.current .step-mark { border-color: var(--brand); box-shadow: 0 0 0 4px var(--brand-soft); }
+.step-item.current .step-mark::after { content: ""; width: 10px; height: 10px; border-radius: 50%;
+                                       background: var(--brand); }
+.step-text { padding-top: 2px; }
+.step-title { font-weight: 600; font-size: .92rem; }
+.step-item.upcoming .step-title { color: var(--muted); font-weight: 500; }
+.step-now { color: var(--brand); font-size: .76rem; font-weight: 700; margin-top: 1px; }
+
 .empty { text-align: center; padding: 36px 20px; }
 .empty svg { width: 48px; height: 48px; color: var(--brand); }
 

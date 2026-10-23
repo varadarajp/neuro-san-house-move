@@ -8,6 +8,9 @@
 <script>
 // Everything from the case is rendered with textContent, through HM.el.
 const {el, day} = HM;
+// Whether the collapsible journey is open; kept across the 10s refresh and across visits.
+let journeyOpen = false;
+try { journeyOpen = localStorage.getItem("hm_journey_open") === "1"; } catch (e) { /* private window */ }
 const STATE = {
   awaiting_approval: ["Waiting for your approval", "warn"],
   approved: ["Approved, not sent yet", ""],
@@ -58,6 +61,40 @@ function render(status, next) {
   words.appendChild(el("span", next.progress.done + " of " + next.progress.total + " steps done", "small muted"));
   progress.appendChild(words);
   box.appendChild(progress);
+
+  // The whole journey, collapsed by default: the header shows the count and the current step; opening it lists
+  // every step with its state. Native <details> so it works without extra scripting.
+  if ((next.steps || []).length) {
+    const current = next.steps.find(s => s.current);
+    const details = el("details", undefined, "journey");
+    details.open = journeyOpen;
+    details.ontoggle = () => {
+      journeyOpen = details.open;
+      try { localStorage.setItem("hm_journey_open", details.open ? "1" : "0"); } catch (e) { /* private window */ }
+    };
+    const summary = el("summary", undefined, "journey-summary");
+    const info = el("div", undefined, "journey-info");
+    info.appendChild(el("span", "Your journey", "kicker"));
+    info.appendChild(el("b", current ? current.title : "All steps done", "journey-now"));
+    summary.appendChild(info);
+    summary.appendChild(el("span", next.progress.done + "/" + next.progress.total, "journey-count"));
+    summary.appendChild(HM.icon("m6 9 6 6 6-6"));
+    details.appendChild(summary);
+    const ol = el("ol", undefined, "stepper");
+    next.steps.forEach(s => {
+      const li = el("li", undefined, "step-item " + (s.done ? "done" : s.current ? "current" : "upcoming"));
+      const mark = el("span", undefined, "step-mark");
+      if (s.done) mark.appendChild(HM.icon("m5 12 5 5 9-10"));
+      li.appendChild(mark);
+      const t = el("div", undefined, "step-text");
+      t.appendChild(el("div", s.title, "step-title"));
+      if (s.current) t.appendChild(el("div", "You are here", "step-now"));
+      li.appendChild(t);
+      ol.appendChild(li);
+    });
+    details.appendChild(ol);
+    box.appendChild(details);
+  }
 
   (status.pending_confirmations || []).forEach(a => {
     const b = el("div", undefined, "banner");
