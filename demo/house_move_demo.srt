@@ -1,0 +1,171 @@
+1
+00:00:00,000 --> 00:00:08,605
+This is the House Move Agent: a multi-agent assistant, built on Neuro SAN, that helps a bank's mortgage customers tell everyone they're moving.
+
+2
+00:00:08,605 --> 00:00:12,095
+On time, in the right order, and only with their approval.
+
+3
+00:00:13,000 --> 00:00:18,839
+Moving home means telling fifteen to thirty organisations, and some of those are legal duties.
+
+4
+00:00:18,839 --> 00:00:21,883
+Up to a thousand pounds for not telling the DVLA.
+
+5
+00:00:21,883 --> 00:00:24,555
+Seventy pounds for not telling the council.
+
+6
+00:00:25,467 --> 00:00:29,028
+Sam Morgan's mortgage completion date has just been set.
+
+7
+00:00:29,028 --> 00:00:31,254
+Sam signs in to the House Move app.
+
+8
+00:00:31,254 --> 00:00:35,197
+The sign-in, not the chat, decides whose record can be opened.
+
+9
+00:00:36,100 --> 00:00:43,823
+To watch the agents at work, we take Sam's signed session from the Account tab, and use it in nsflow, the Neuro SAN client.
+
+10
+00:00:44,733 --> 00:00:52,088
+Here is the agent network: fourteen LLM agents and twenty-seven coded tools, with the move coordinator at the centre.
+
+11
+00:00:52,088 --> 00:00:56,488
+Sam's session goes into SlyData, so every tool knows who is signed in.
+
+12
+00:00:57,400 --> 00:00:59,161
+Sam says: I'm moving house.
+
+13
+00:00:59,161 --> 00:01:00,204
+Watch the graph.
+
+14
+00:01:00,204 --> 00:01:09,987
+The coordinator asks the profile agent what the bank already knows, then hands over to the discovery agent, which reads ninety days of Sam's payments.
+
+15
+00:01:09,987 --> 00:01:11,356
+This part is sped up.
+
+16
+00:01:12,267 --> 00:01:15,865
+Discovery finds who Sam pays, and what that implies.
+
+17
+00:01:15,865 --> 00:01:19,809
+Pet insurance means a dog whose microchip needs updating.
+
+18
+00:01:19,809 --> 00:01:24,583
+There's a nursery, a car, a credit card, and the old mortgage lender.
+
+19
+00:01:24,583 --> 00:01:27,420
+Anything uncertain is asked, not assumed.
+
+20
+00:01:28,333 --> 00:01:36,389
+The Internal Chat tab shows every hand-off: which agent called which, and each call to a coded tool, with its arguments and result.
+
+21
+00:01:37,300 --> 00:01:39,706
+Sam answers, and asks for the plan.
+
+22
+00:01:39,706 --> 00:01:45,824
+The obligations agent applies twenty-five sourced rules, and looks up both councils live.
+
+23
+00:01:45,824 --> 00:01:49,605
+The timeline agent dates every task in UK working days.
+
+24
+00:01:49,605 --> 00:01:55,448
+Local services finds GPs, schools, and the water company, from Ofwat's official maps.
+
+25
+00:01:55,448 --> 00:02:00,741
+Deadlines, fees and legal duties always come from code, never from the model.
+
+26
+00:02:01,640 --> 00:02:06,514
+The result is a dated plan, grouped by week, with the legal requirements marked.
+
+27
+00:02:07,410 --> 00:02:08,488
+Then the letters.
+
+28
+00:02:08,488 --> 00:02:18,381
+Four specialist agents, for government, home and utilities, finance, and health and family, each decide which tasks are theirs, and how each should be done.
+
+29
+00:02:18,381 --> 00:02:25,104
+The comms agent writes a letter for every task, with placeholders that code fills in only when it is sent.
+
+30
+00:02:26,010 --> 00:02:33,060
+Back in the app, the Move tab shows the whole journey, with Sam's place marked, and the next step: approve the letters.
+
+31
+00:02:33,977 --> 00:02:38,751
+Sam can read every letter, then approve all the routine ones in one go.
+
+32
+00:02:38,751 --> 00:02:43,997
+Legal requirements, like council tax and the DVLA, are approved one at a time.
+
+33
+00:02:44,910 --> 00:02:45,809
+Send them now.
+
+34
+00:02:45,809 --> 00:02:48,892
+Complete emails go straight to the organisation.
+
+35
+00:02:48,892 --> 00:02:53,644
+Anything the bank can't send itself becomes a pack, ready for Sam to send.
+
+36
+00:02:54,543 --> 00:02:55,627
+Sam opens a pack.
+
+37
+00:02:55,627 --> 00:03:02,510
+The letter is filled in, anything missing is highlighted, and there's a link to the organisation's own form.
+
+38
+00:03:02,510 --> 00:03:04,995
+Once it's gone, Sam taps: I've sent it.
+
+39
+00:03:05,910 --> 00:03:15,155
+Every step happens in the app, one screen at a time: the move overview with the whole journey, approving the letters, and sending each pre-filled pack yourself.
+
+40
+00:03:16,050 --> 00:03:23,892
+All of this is tested: a hundred and forty-eight unit tests, and live AI evaluations against ground truth for five customers.
+
+41
+00:03:23,892 --> 00:03:27,280
+They even caught a real data leak, which is now fixed.
+
+42
+00:03:28,183 --> 00:03:29,662
+The House Move Agent.
+
+43
+00:03:29,662 --> 00:03:30,366
+Thank you.
