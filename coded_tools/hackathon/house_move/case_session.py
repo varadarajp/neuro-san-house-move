@@ -1,8 +1,8 @@
 """Server-side sessions: who is calling, which case they may open, and the case's real state."""
 
-import fcntl
 import json
 import logging
+import sys
 import threading
 from typing import Any
 from typing import TextIO
@@ -10,6 +10,13 @@ from typing import TextIO
 from coded_tools.hackathon.house_move.case_store import CaseStore
 from coded_tools.hackathon.house_move.house_move_data_store import HouseMoveDataStore
 from coded_tools.hackathon.house_move.session_tokens import SessionTokens
+
+# Cross-process file locking is platform specific: fcntl.flock on Unix, msvcrt.locking on Windows.
+# fcntl does not exist on Windows, so it is imported only where it is available.
+if sys.platform == "win32":
+    import msvcrt  # pylint: disable=import-error
+else:
+    import fcntl
 
 logger = logging.getLogger(__name__)
 
@@ -103,15 +110,33 @@ class CaseSession:
         if not lock.acquire(blocking=False):
             return False
         lock_file: TextIO = self._store.lock_path(self._owner).open("a", encoding="utf-8")
-        try:
-            fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
+        if not CaseSession._acquire_file_lock(lock_file):
             # Another process (the agent server or the portal) holds this owner's case.
             lock_file.close()
             lock.release()
             return False
         self._lock = lock
         self._lock_file = lock_file
+        return True
+
+    @staticmethod
+    def _acquire_file_lock(lock_file: TextIO) -> bool:
+        """
+        Takes a non-blocking exclusive cross-process lock on an open file. Closing the file releases it, on both
+        platforms. Uses fcntl.flock on Unix and msvcrt.locking on Windows, since fcntl does not exist on Windows.
+        :param lock_file: the open lock file to take the lock on.
+        :return: true if the lock is now held; false if another process already holds it.
+        """
+        try:
+            if sys.platform == "win32":
+                # Lock a single byte at offset 0. "a" mode leaves the position at end of file, so seek first.
+                lock_file.seek(0)
+                msvcrt.locking(lock_file.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            # BlockingIOError (Unix) and PermissionError (Windows) are both OSError: the lock is held elsewhere.
+            return False
         return True
 
     def load_active(self, sly_data: dict[str, Any], needs_case: bool) -> str | None:
