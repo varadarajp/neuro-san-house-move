@@ -1,5 +1,3 @@
-import fcntl
-
 from coded_tools.hackathon.house_move.approve_on_portal import ApproveOnPortal
 from coded_tools.hackathon.house_move.audit_log import AuditLog
 from coded_tools.hackathon.house_move.case_session import CaseSession
@@ -97,7 +95,8 @@ class TestApproveOnPortal(HouseMoveTestCase):
         session: CaseSession = CaseSession()
         session.verify({"session_token": self.token})
         with CaseStore().lock_path(HouseMoveTestState.OWNER).open("a", encoding="utf-8") as other_process:
-            fcntl.flock(other_process, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            # Hold the owner's file lock through the production helper so the test is cross-platform.
+            self.assertTrue(CaseSession._acquire_file_lock(other_process))  # pylint: disable=protected-access
             self.assertFalse(session.try_lock())
         self.assertTrue(session.try_lock())
         session.close({})
