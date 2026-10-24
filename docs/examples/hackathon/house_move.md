@@ -348,7 +348,7 @@ build_scripts/build_house_move_schools.py     builds the schools extract from GI
 tests/coded_tools/hackathon/house_move/       unit tests
 tests/apps/house_move_upload/                 portal tests
 tests/fixtures/hackathon/house_move/          integration fixtures (tests/integration/test_house_move_hocons.py)
-House_Move_Agent.pptx                         pitch deck
+House_Move_Agent_v2.pptx / .pdf                  pitch deck
 ```
 
 ## Tests
