@@ -1,4 +1,4 @@
-# House Move Agent: hackathon network. Spec: ../../../house-move-agent-spec.md
+# House Move Agent: hackathon network. Spec: ../../../House_Spec.md
 #
 # All 11 agents from the spec: coordinator, Profile, Discovery (AI moment #1), Obligations, Timeline, the four
 # specialists, Comms and Tracker (approve, send, replan corrections for AI moment #2, replies, audit).

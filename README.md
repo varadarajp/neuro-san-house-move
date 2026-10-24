@@ -40,7 +40,66 @@
   <img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki: Neuro SAN" /></a>
 </p>
 
-# Neuro SAN Studio
+# House Move Agent — EMEA Hackathon submission
+
+> This repository is a hackathon entry built on **Neuro SAN Studio** (a fork). The hackathon network lives at
+> [`registries/hackathon/house_move.hocon`](registries/hackathon/house_move.hocon). The original Neuro SAN Studio
+> README follows further down.
+
+A multi-agent assistant that helps a UK bank's mortgage customers **tell everyone who needs to know that they are
+moving house** — on time, in the right order, and only with the customer's approval. When a mortgage completes, the
+customer has 15 to 30 organizations to notify (councils, DVLA, energy, water, insurers, schools, the GP), and some
+are legal duties with real penalties. This assistant finds them from the customer's own payments, plans and drafts
+every notification, and sends nothing without approval. **Synthetic data only.**
+
+**Design principle — AI only where it adds value.** Everything with a deadline, fee or legal consequence is
+deterministic, auditable code; the LLM is used only for judgement a rules engine cannot do. An LLM never invents a
+deadline, fee or legal obligation.
+
+**Two AI moments:** (1) **Discovery** — from 90 days of transactions it finds who the customer pays and infers life
+facts a checklist cannot (pet insurance ⇒ a pet whose microchip needs updating; a nursery ⇒ a young child).
+(2) **Replanning** — when the move date slips, code rebuilds the dated plan and sorts every task into corrections,
+rebookings, automatic updates and unchanged.
+
+**At a glance:** 14 LLM agents · 27 coded tools · 25 sourced obligation rules (21 verified) · all four UK nations ·
+155 unit tests · 12 live-LLM evaluation fixtures checking discovery, legal flags and draft quality against ground
+truth. Trust is built into the code: server-held state, per-customer ownership checks, personal data kept out of the
+LLM, encryption at rest, and consent via one-time codes the LLM cannot fake.
+
+## Where to look
+
+| What | Where |
+|---|---|
+| **Network specification** — the architecture, for discussion | [House_Spec.md](House_Spec.md) |
+| **Full write-up** — run it, the agents, tests, data sources | [docs](docs/examples/hackathon/house_move.md) |
+| **Demo video and app screenshots** | [demo/](demo/) |
+| **Agent network definition** | [house_move.hocon](registries/hackathon/house_move.hocon) |
+| **Coded tools** | [coded_tools](coded_tools/hackathon/house_move) |
+| **The House Move app / portal** | [apps/house_move_upload](apps/house_move_upload) |
+
+## Quick start
+
+The network is disabled by default (it has optional dependencies). With Python 3.12 and an Anthropic API key in a
+git-ignored `.env`:
+
+```text
+ANTHROPIC_API_KEY="sk-ant-..."
+AGENT_MANIFEST_FILE=registries/manifest.hocon:registries/house_move_demo_manifest.hocon
+```
+
+Then, from the repository root (see
+[`docs/examples/hackathon/house_move.md`](docs/examples/hackathon/house_move.md) for the full setup):
+
+```bash
+venv/bin/python -m neuro_san_studio run                       # agent server (8080) + nsflow UI (http://localhost:4173)
+venv/bin/python -m apps.house_move_upload.upload_server       # House Move app (http://127.0.0.1:8090)
+```
+
+In nsflow, choose **hackathon → house_move**. Never commit real API keys; `.env` is git-ignored.
+
+---
+
+## Neuro SAN Studio
 
 **Your launchpad for building intelligent multi-agent systems.** Neuro SAN Studio is a hands-on playground for the
 [Neuro SAN](https://github.com/cognizant-ai-lab/neuro-san) framework, featuring ready-to-run examples, tutorials, and
