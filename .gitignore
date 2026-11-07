@@ -214,3 +214,7 @@ uploads/
 
 # Office lock files (a deck or document open in PowerPoint or Word)
 ~$*
+
+# House Move pitch deck (kept locally, not in the repo)
+House_Move_Agent_v2.pdf
+House_Move_Agent_v2.pptx
